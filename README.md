@@ -56,21 +56,15 @@ OrbStack의 Docker 엔진이 백그라운드에서 실행 중인지 확인한 �
 sh init.sh
 ```
 
-`init.sh`는 아래 Docker Compose 서비스를 백그라운드에서 시작하고, GOST UI가 준비되면 Chrome으로 관리 화면을 엽니다.
+`init.sh`는 아래 Docker Compose 서비스를 백그라운드에서 시작하고, GOST UI가 준비되면 Chrome으로 관리 화면을 엽니다. API 주소가 URL 파라미터로 전달되므로 별도의 로그인 입력 없이 관리 화면에 자동으로 연결됩니다.
 
 - Tailscale
 - GOST
 - GOST UI
 
-자동으로 열리지 않으면 Chrome에서 [http://localhost:18081/](http://localhost:18081/)을 직접 엽니다. 로그인 화면에는 다음 값을 입력합니다.
+자동으로 열리지 않으면 Chrome에서 [자동 연결 URL](http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080)을 직접 엽니다.
 
-| 항목 | 값 |
-| --- | --- |
-| API 주소 | `http://localhost:18080` |
-| 사용자 이름 | 입력하지 않음 |
-| 비밀번호 | 입력하지 않음 |
-
-두 주소 모두 이 Mac의 로컬 인터페이스에서만 접근할 수 있습니다.
+GOST UI와 API는 모두 이 Mac의 로컬 인터페이스에서만 접근할 수 있으며, API 인증은 별도로 사용하지 않습니다.
 
 ## 5. SSH 터널 추가
 

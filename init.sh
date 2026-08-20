@@ -4,7 +4,7 @@ set -eu
 
 docker compose up -d
 
-ui_url="http://localhost:18081/"
+ui_url="http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080"
 
 printf '\nGOST UI가 준비되기를 기다리는 중입니다.\n'
 attempt=0
