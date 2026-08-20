@@ -1,6 +1,10 @@
-# tailnet-forward 초기 설정
+# 코디세이 Tailscale 원격 환경 설정
 
-이 저장소는 `sudo` 사용이 제한된 macOS 환경에서 OrbStack의 Docker 실행 환경을 이용해 Tailscale과 GOST를 구동합니다. 아래 절차는 OrbStack이 이미 설치되어 있다는 전제입니다.
+이 저장소는 [코디세이](https://codyssey.kr/) 교육장에서 사용하는 macOS 장비에 Tailscale 기반 원격 접속 환경을 빠르게 다시 구성하기 위한 초기화 도구와 절차를 담고 있습니다.
+
+교육장에서는 자리를 옮겨 다른 장비를 사용하거나, 주 2회 진행되는 장비 초기화 이후 개발 환경을 다시 설정해야 합니다. 이 저장소를 복제하고 준비된 스크립트를 실행하면 매번 동일한 원격 환경을 간단히 재구성할 수 있습니다.
+
+교육장 macOS에서는 `sudo`를 사용할 수 없으므로, 미리 설치된 OrbStack의 Docker 실행 환경에서 Tailscale과 GOST를 구동합니다. Tailscale로 원격 장비가 속한 tailnet에 연결하고, GOST를 통해 SSH 등의 서비스를 로컬 포트로 전달합니다. 아래 절차는 OrbStack이 이미 설치되어 있다는 전제입니다.
 
 ## 1. OrbStack 최초 실행
 
