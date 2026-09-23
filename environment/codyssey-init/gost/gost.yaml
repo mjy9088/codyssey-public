@@ -1,0 +1,26 @@
+services:
+  - name: Screen Sharing (Sample)
+    addr: :4901
+    handler:
+      type: tcp
+      chain: tailnet
+    listener:
+      type: tcp
+    forwarder:
+      nodes:
+        - name: 100.66.142.251
+          addr: 100.66.142.251:5900
+chains:
+  - name: tailnet
+    hops:
+      - name: tailscale-userspace
+        nodes:
+          - name: tailscale-socks5
+            addr: 127.0.0.1:1055
+            connector:
+              type: socks5
+            dialer:
+              type: tcp
+api:
+  addr: 127.0.0.1:18080
+  accesslog: true

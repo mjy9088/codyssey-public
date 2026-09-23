@@ -1,0 +1,57 @@
+name: tailnet-forward
+
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailnet-forward-tailscale
+    hostname: mac-orbstack-tailnet
+    network_mode: host
+
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_AUTH_ONCE: "true"
+
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+
+      TS_SOCKS5_SERVER: "127.0.0.1:1055"
+
+      TS_ACCEPT_DNS: "true"
+      TS_EXTRA_ARGS: >-
+        --accept-routes=true
+        --shields-up=true
+
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+
+    restart: unless-stopped
+
+  gost:
+    image: gogost/gost:3.2.6
+    container_name: tailnet-forward-gost
+    network_mode: host
+
+    working_dir: /etc/gost
+    command:
+      - -C
+      - /etc/gost/gost.yaml
+
+    volumes:
+      - ./gost:/etc/gost
+
+    depends_on:
+      - tailscale
+
+    restart: unless-stopped
+
+  gost-ui:
+    image: gogost/gost-ui:b956f5ee
+    container_name: tailnet-forward-ui
+
+    ports:
+      - "127.0.0.1:18081:80"
+
+    restart: unless-stopped
+
+volumes:
+  tailscale-state:
