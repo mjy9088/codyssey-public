@@ -1,0 +1,11 @@
+.env
+volumes/
+
+# Runtime output is disposable. Submission artifacts promoted to tests/expected
+# are reviewed and tracked explicitly.
+.local/
+
+# Editor and OS noise
+.DS_Store
+.idea/
+.vscode/

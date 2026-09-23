@@ -1,0 +1,38 @@
+name: workstation-lab
+
+services:
+  workstation:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM docker:28-dind@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac
+        RUN apk add --no-cache \
+          bash=5.2.37-r0 \
+          coreutils=9.7-r1 \
+          curl=8.14.1-r3 \
+          file=5.46-r2 \
+          git=2.49.1-r0 \
+          jq=1.8.1-r0 \
+          shadow=4.17.3-r0
+        WORKDIR /workspace
+    privileged: true
+    working_dir: /workspace
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+      LAB_GIT_NAME: "${LAB_GIT_NAME:-workstation-student}"
+      LAB_GIT_EMAIL: "${LAB_GIT_EMAIL:-student@example.invalid}"
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    volumes:
+      - .:/workspace
+      - ./volumes/bind-mount:/mnt/host-bind-mount-volume
+      - dind-data:/var/lib/docker
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+volumes:
+  dind-data:
