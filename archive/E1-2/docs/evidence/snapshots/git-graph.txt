@@ -1,0 +1,69 @@
+$ git log --oneline --graph --decorate --all
+* 75e33c3 (HEAD -> main, tag: submission-v1.0, origin/main, origin/HEAD) Docs: VS Code 개발 환경 캡처 추가
+* c60de77 Docs: 실제 GitHub clone pull 실습 증거 갱신
+* d74e380 Docs: 새 렌더링 파이프라인 증거 갱신
+* c812169 Refactor: 제출 캡처를 PTY SVG 파이프라인으로 전환
+* 5ff8663 Build: 멀티아키텍처 SVG rasterizer 고정
+* f910973 Feat: 터미널 증거를 재현 가능한 SVG로 생성
+* 9fc0eaf Feat: 터미널 증거를 시나리오별로 분리
+* 9d83ae5 Feat: 실제 터미널 입력 증거 보존
+*   b77b2bb Merge branch 'feat/submission-automation'
+|\
+| * 3432a59 Docs: 재현 가능한 제출 스크린샷 추가
+| * b5d5ff6 Build: 태그 기준 제출 검증 절차 추가
+| * ff7b710 Refactor: clone pull 실습을 실제 GitHub 대상으로 전환
+|/
+*-.   abdf68d Merge diverged quiz play progress improvements
+|\ \
+| | * 46f9c32 Feat: 퀴즈 풀이 중 현재 점수 표시
+| |/
+|/|
+| * ddc4473 Feat: 퀴즈 문제별 진행률 표시
+|/
+*   531ab81 Merge branch 'docs/explain-nonobvious-design'
+|\
+| * 084076e Fix: PTY 한글 출력을 증분 디코딩
+| * 62f1b46 Docs: 초보자를 위한 핵심 개념과 테스트 안내 추가
+| * a601864 Docs: 비직관적인 코드와 스크립트 의도 설명
+|/
+*   da766b2 Merge branch 'refactor/remove-redundancy'
+|\
+| * a235a2a Refactor: Git 실습과 공개 접근 검증 의미 정리
+| * af54097 Refactor: 사용하지 않는 설정과 중복 코드 제거
+|/
+*   44b2546 Merge branch 'refactor/package-layout-and-docs'
+|\
+| * 7e833b8 Docs: 컴포넌트별 안내와 설계 문서 구성
+| * 7846937 Test: 퀴즈 게임 테스트를 책임별로 분리
+| * 133b778 Refactor: 퀴즈 게임을 src 패키지로 구성
+|/
+*---.   2bc1554 Merge reproducible Git and submission evidence tooling
+|\ \ \
+| | | * aaf0102 Test: 비인증 origin 공개 접근 검증
+| |_|/
+|/| |
+| | * 871e3ed Feat: 재현 가능한 TTY 제출 증거 생성
+| |/
+|/|
+| * 3456acb Feat: Docker 기반 clone pull 실습 자동화
+|/
+*   fdd198b Merge branch 'docs/complete-required-readme'
+|\
+| * 6098aae Docs: README 필수 항목과 상태 스키마 보완
+|/
+*   fde7e33 Merge branch 'fix/retry-unsaved-state'
+|\
+| * 284c4a6 Fix: 종료 전 미저장 상태 재시도
+|/
+*   4a25abd Merge branch 'refactor/simplify-persistence'
+|\
+| * 43ca249 Refactor: JSON 영속성 경계 단순화
+|/
+*   f781c20 Merge branch 'refactor/separate-default-catalog'
+|\
+| * 4bbd4e2 Refactor: 기본 퀴즈와 사용자 상태 분리
+|/
+*   c1982be Merge branch 'feat/define-score-policy'
+|\
+| * 5f62168 Feat: 최고 점수 비교 정책 명시
+|/

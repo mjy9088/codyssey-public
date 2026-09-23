@@ -1,0 +1,30 @@
+{
+  "quizzes": [
+    {
+      "question": "Python에서 함수를 정의할 때 사용하는 키워드는?",
+      "choices": ["func", "def", "function", "lambda"],
+      "answer": 2
+    },
+    {
+      "question": "리스트의 마지막 요소를 추가하는 메서드는?",
+      "choices": ["add", "push", "append", "insert_last"],
+      "answer": 3
+    },
+    {
+      "question": "조건문에 사용하는 키워드가 아닌 것은?",
+      "choices": ["if", "elif", "else", "when"],
+      "answer": 4
+    },
+    {
+      "question": "키와 값의 쌍을 저장하는 자료형은?",
+      "choices": ["list", "tuple", "dict", "set"],
+      "answer": 3
+    },
+    {
+      "question": "JSON 파일을 다룰 때 사용하는 표준 모듈은?",
+      "choices": ["json", "pickle", "csv", "pathlib"],
+      "answer": 1
+    }
+  ],
+  "best_score": null
+}

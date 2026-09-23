@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1928" viewBox="0 0 1280 1928">
+  <rect width="1280" height="1928" fill="#0b1020"/>
+  <text x="50" y="62" fill="#f8fafc" font-family="Noto Sans CJK KR" font-size="30" font-weight="700">퀴즈 플레이</text>
+  <text x="50" y="98" fill="#93c5fd" font-family="Noto Sans CJK KR" font-size="16">선택지, 실제 답안, 진행률과 현재 점수</text>
+  <rect x="50" y="126" width="1180" height="1748" rx="12" fill="#020617" stroke="#334155"/>
+  <text fill="#d1fae5" font-family="Noto Sans CJK KR" font-size="16">
+      <tspan x="72" y="166">$ python -m quiz_game</tspan>
+      <tspan x="72" y="190"></tspan>
+      <tspan x="72" y="214">=== Python 퀴즈 ===</tspan>
+      <tspan x="72" y="238">1. 퀴즈 풀기</tspan>
+      <tspan x="72" y="262">2. 퀴즈 추가</tspan>
+      <tspan x="72" y="286">3. 퀴즈 목록</tspan>
+      <tspan x="72" y="310">4. 최고 점수</tspan>
+      <tspan x="72" y="334">5. 종료</tspan>
+      <tspan x="72" y="358">선택: 1</tspan>
+      <tspan x="72" y="382"></tspan>
+      <tspan x="72" y="406">진행: 1/6</tspan>
+      <tspan x="72" y="430">문제: Python에서 함수를 정의할 때 사용하는 키워드는?</tspan>
+      <tspan x="72" y="454">  1. func</tspan>
+      <tspan x="72" y="478">  2. def</tspan>
+      <tspan x="72" y="502">  3. function</tspan>
+      <tspan x="72" y="526">  4. lambda</tspan>
+      <tspan x="72" y="550">정답: 2</tspan>
+      <tspan x="72" y="574">정답입니다!</tspan>
+      <tspan x="72" y="598">현재 점수: 1/1 | 진행: 1/6</tspan>
+      <tspan x="72" y="622"></tspan>
+      <tspan x="72" y="646">진행: 2/6</tspan>
+      <tspan x="72" y="670">문제: 리스트의 마지막 요소를 추가하는 메서드는?</tspan>
+      <tspan x="72" y="694">  1. add</tspan>
+      <tspan x="72" y="718">  2. push</tspan>
+      <tspan x="72" y="742">  3. append</tspan>
+      <tspan x="72" y="766">  4. insert_last</tspan>
+      <tspan x="72" y="790">정답: 3</tspan>
+      <tspan x="72" y="814">정답입니다!</tspan>
+      <tspan x="72" y="838">현재 점수: 2/2 | 진행: 2/6</tspan>
+      <tspan x="72" y="862"></tspan>
+      <tspan x="72" y="886">진행: 3/6</tspan>
+      <tspan x="72" y="910">문제: 조건문에 사용하는 키워드가 아닌 것은?</tspan>
+      <tspan x="72" y="934">  1. if</tspan>
+      <tspan x="72" y="958">  2. elif</tspan>
+      <tspan x="72" y="982">  3. else</tspan>
+      <tspan x="72" y="1006">  4. when</tspan>
+      <tspan x="72" y="1030">정답: 4</tspan>
+      <tspan x="72" y="1054">정답입니다!</tspan>
+      <tspan x="72" y="1078">현재 점수: 3/3 | 진행: 3/6</tspan>
+      <tspan x="72" y="1102"></tspan>
+      <tspan x="72" y="1126">진행: 4/6</tspan>
+      <tspan x="72" y="1150">문제: 키와 값의 쌍을 저장하는 자료형은?</tspan>
+      <tspan x="72" y="1174">  1. list</tspan>
+      <tspan x="72" y="1198">  2. tuple</tspan>
+      <tspan x="72" y="1222">  3. dict</tspan>
+      <tspan x="72" y="1246">  4. set</tspan>
+      <tspan x="72" y="1270">정답: 3</tspan>
+      <tspan x="72" y="1294">정답입니다!</tspan>
+      <tspan x="72" y="1318">현재 점수: 4/4 | 진행: 4/6</tspan>
+      <tspan x="72" y="1342"></tspan>
+      <tspan x="72" y="1366">진행: 5/6</tspan>
+      <tspan x="72" y="1390">문제: JSON 파일을 다룰 때 사용하는 표준 모듈은?</tspan>
+      <tspan x="72" y="1414">  1. json</tspan>
+      <tspan x="72" y="1438">  2. pickle</tspan>
+      <tspan x="72" y="1462">  3. csv</tspan>
+      <tspan x="72" y="1486">  4. pathlib</tspan>
+      <tspan x="72" y="1510">정답: 1</tspan>
+      <tspan x="72" y="1534">정답입니다!</tspan>
+      <tspan x="72" y="1558">현재 점수: 5/5 | 진행: 5/6</tspan>
+      <tspan x="72" y="1582"></tspan>
+      <tspan x="72" y="1606">진행: 6/6</tspan>
+      <tspan x="72" y="1630">문제: 증거용으로 추가한 문제는?</tspan>
+      <tspan x="72" y="1654">  1. 첫 번째 선택지</tspan>
+      <tspan x="72" y="1678">  2. 두 번째 선택지</tspan>
+      <tspan x="72" y="1702">  3. 세 번째 선택지</tspan>
+      <tspan x="72" y="1726">  4. 네 번째 선택지</tspan>
+      <tspan x="72" y="1750">정답: 1</tspan>
+      <tspan x="72" y="1774">정답입니다!</tspan>
+      <tspan x="72" y="1798">현재 점수: 6/6 | 진행: 6/6</tspan>
+      <tspan x="72" y="1822">결과: 6문제 중 6문제 정답 (100점)</tspan>
+      <tspan x="72" y="1846">새로운 최고 점수입니다!</tspan>
+  </text>
+  <text x="50" y="1908" fill="#94a3b8" font-family="Noto Sans CJK KR" font-size="13">실제 PTY 출력에서 생성 · 원본 해시는 svg-manifest.json에 기록</text>
+</svg>

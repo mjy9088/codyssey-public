@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="440" viewBox="0 0 1280 440">
+  <rect width="1280" height="440" fill="#0b1020"/>
+  <text x="50" y="62" fill="#f8fafc" font-family="Noto Sans CJK KR" font-size="30" font-weight="700">개발 환경</text>
+  <text x="50" y="98" fill="#93c5fd" font-family="Noto Sans CJK KR" font-size="16">Python, Git과 운영체제</text>
+  <rect x="50" y="126" width="1180" height="260" rx="12" fill="#020617" stroke="#334155"/>
+  <text fill="#d1fae5" font-family="Noto Sans CJK KR" font-size="16">
+      <tspan x="72" y="166">$ python --version</tspan>
+      <tspan x="72" y="190">Python 3.12.13</tspan>
+      <tspan x="72" y="214"></tspan>
+      <tspan x="72" y="238">$ git --version</tspan>
+      <tspan x="72" y="262">git version 2.54.0</tspan>
+      <tspan x="72" y="286"></tspan>
+      <tspan x="72" y="310">$ uname -a</tspan>
+      <tspan x="72" y="334">Darwin cx2r6s4.codyssey.kr 24.6.0 Darwin Kernel Version 24.6.0: Fri Feb 27 19:33:24 PST 2026; root:xnu</tspan>
+      <tspan x="72" y="358">-11417.140.69.709.8~1/RELEASE_X86_64 x86_64</tspan>
+  </text>
+  <text x="50" y="420" fill="#94a3b8" font-family="Noto Sans CJK KR" font-size="13">실제 PTY 출력에서 생성 · 원본 해시는 svg-manifest.json에 기록</text>
+</svg>

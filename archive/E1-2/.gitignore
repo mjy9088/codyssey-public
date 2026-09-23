@@ -1,0 +1,6 @@
+.local/
+__pycache__/
+.venv/
+state.json
+state.json.tmp
+state.json.broken*

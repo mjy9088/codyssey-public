@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1904" viewBox="0 0 1280 1904">
+  <rect width="1280" height="1904" fill="#0b1020"/>
+  <text x="50" y="62" fill="#f8fafc" font-family="Noto Sans CJK KR" font-size="30" font-weight="700">Git 브랜치와 병합 이력</text>
+  <text x="50" y="98" fill="#93c5fd" font-family="Noto Sans CJK KR" font-size="16">실제 git log 출력</text>
+  <rect x="50" y="126" width="1180" height="1724" rx="12" fill="#020617" stroke="#334155"/>
+  <text fill="#d1fae5" font-family="Noto Sans CJK KR" font-size="16">
+      <tspan x="72" y="166">$ git log --oneline --graph --decorate --all</tspan>
+      <tspan x="72" y="190">* 75e33c3 (HEAD -&gt; main, tag: submission-v1.0, origin/main, origin/HEAD) Docs: VS Code 개발 환경 캡처 </tspan>
+      <tspan x="72" y="214">추가</tspan>
+      <tspan x="72" y="238">* c60de77 Docs: 실제 GitHub clone pull 실습 증거 갱신</tspan>
+      <tspan x="72" y="262">* d74e380 Docs: 새 렌더링 파이프라인 증거 갱신</tspan>
+      <tspan x="72" y="286">* c812169 Refactor: 제출 캡처를 PTY SVG 파이프라인으로 전환</tspan>
+      <tspan x="72" y="310">* 5ff8663 Build: 멀티아키텍처 SVG rasterizer 고정</tspan>
+      <tspan x="72" y="334">* f910973 Feat: 터미널 증거를 재현 가능한 SVG로 생성</tspan>
+      <tspan x="72" y="358">* 9fc0eaf Feat: 터미널 증거를 시나리오별로 분리</tspan>
+      <tspan x="72" y="382">* 9d83ae5 Feat: 실제 터미널 입력 증거 보존</tspan>
+      <tspan x="72" y="406">*   b77b2bb Merge branch &#x27;feat/submission-automation&#x27;</tspan>
+      <tspan x="72" y="430">|\</tspan>
+      <tspan x="72" y="454">| * 3432a59 Docs: 재현 가능한 제출 스크린샷 추가</tspan>
+      <tspan x="72" y="478">| * b5d5ff6 Build: 태그 기준 제출 검증 절차 추가</tspan>
+      <tspan x="72" y="502">| * ff7b710 Refactor: clone pull 실습을 실제 GitHub 대상으로 전환</tspan>
+      <tspan x="72" y="526">|/</tspan>
+      <tspan x="72" y="550">*-.   abdf68d Merge diverged quiz play progress improvements</tspan>
+      <tspan x="72" y="574">|\ \</tspan>
+      <tspan x="72" y="598">| | * 46f9c32 Feat: 퀴즈 풀이 중 현재 점수 표시</tspan>
+      <tspan x="72" y="622">| |/</tspan>
+      <tspan x="72" y="646">|/|</tspan>
+      <tspan x="72" y="670">| * ddc4473 Feat: 퀴즈 문제별 진행률 표시</tspan>
+      <tspan x="72" y="694">|/</tspan>
+      <tspan x="72" y="718">*   531ab81 Merge branch &#x27;docs/explain-nonobvious-design&#x27;</tspan>
+      <tspan x="72" y="742">|\</tspan>
+      <tspan x="72" y="766">| * 084076e Fix: PTY 한글 출력을 증분 디코딩</tspan>
+      <tspan x="72" y="790">| * 62f1b46 Docs: 초보자를 위한 핵심 개념과 테스트 안내 추가</tspan>
+      <tspan x="72" y="814">| * a601864 Docs: 비직관적인 코드와 스크립트 의도 설명</tspan>
+      <tspan x="72" y="838">|/</tspan>
+      <tspan x="72" y="862">*   da766b2 Merge branch &#x27;refactor/remove-redundancy&#x27;</tspan>
+      <tspan x="72" y="886">|\</tspan>
+      <tspan x="72" y="910">| * a235a2a Refactor: Git 실습과 공개 접근 검증 의미 정리</tspan>
+      <tspan x="72" y="934">| * af54097 Refactor: 사용하지 않는 설정과 중복 코드 제거</tspan>
+      <tspan x="72" y="958">|/</tspan>
+      <tspan x="72" y="982">*   44b2546 Merge branch &#x27;refactor/package-layout-and-docs&#x27;</tspan>
+      <tspan x="72" y="1006">|\</tspan>
+      <tspan x="72" y="1030">| * 7e833b8 Docs: 컴포넌트별 안내와 설계 문서 구성</tspan>
+      <tspan x="72" y="1054">| * 7846937 Test: 퀴즈 게임 테스트를 책임별로 분리</tspan>
+      <tspan x="72" y="1078">| * 133b778 Refactor: 퀴즈 게임을 src 패키지로 구성</tspan>
+      <tspan x="72" y="1102">|/</tspan>
+      <tspan x="72" y="1126">*---.   2bc1554 Merge reproducible Git and submission evidence tooling</tspan>
+      <tspan x="72" y="1150">|\ \ \</tspan>
+      <tspan x="72" y="1174">| | | * aaf0102 Test: 비인증 origin 공개 접근 검증</tspan>
+      <tspan x="72" y="1198">| |_|/</tspan>
+      <tspan x="72" y="1222">|/| |</tspan>
+      <tspan x="72" y="1246">| | * 871e3ed Feat: 재현 가능한 TTY 제출 증거 생성</tspan>
+      <tspan x="72" y="1270">| |/</tspan>
+      <tspan x="72" y="1294">|/|</tspan>
+      <tspan x="72" y="1318">| * 3456acb Feat: Docker 기반 clone pull 실습 자동화</tspan>
+      <tspan x="72" y="1342">|/</tspan>
+      <tspan x="72" y="1366">*   fdd198b Merge branch &#x27;docs/complete-required-readme&#x27;</tspan>
+      <tspan x="72" y="1390">|\</tspan>
+      <tspan x="72" y="1414">| * 6098aae Docs: README 필수 항목과 상태 스키마 보완</tspan>
+      <tspan x="72" y="1438">|/</tspan>
+      <tspan x="72" y="1462">*   fde7e33 Merge branch &#x27;fix/retry-unsaved-state&#x27;</tspan>
+      <tspan x="72" y="1486">|\</tspan>
+      <tspan x="72" y="1510">| * 284c4a6 Fix: 종료 전 미저장 상태 재시도</tspan>
+      <tspan x="72" y="1534">|/</tspan>
+      <tspan x="72" y="1558">*   4a25abd Merge branch &#x27;refactor/simplify-persistence&#x27;</tspan>
+      <tspan x="72" y="1582">|\</tspan>
+      <tspan x="72" y="1606">| * 43ca249 Refactor: JSON 영속성 경계 단순화</tspan>
+      <tspan x="72" y="1630">|/</tspan>
+      <tspan x="72" y="1654">*   f781c20 Merge branch &#x27;refactor/separate-default-catalog&#x27;</tspan>
+      <tspan x="72" y="1678">|\</tspan>
+      <tspan x="72" y="1702">| * 4bbd4e2 Refactor: 기본 퀴즈와 사용자 상태 분리</tspan>
+      <tspan x="72" y="1726">|/</tspan>
+      <tspan x="72" y="1750">*   c1982be Merge branch &#x27;feat/define-score-policy&#x27;</tspan>
+      <tspan x="72" y="1774">|\</tspan>
+      <tspan x="72" y="1798">| * 5f62168 Feat: 최고 점수 비교 정책 명시</tspan>
+      <tspan x="72" y="1822">|/</tspan>
+  </text>
+  <text x="50" y="1884" fill="#94a3b8" font-family="Noto Sans CJK KR" font-size="13">실제 PTY 출력에서 생성 · 원본 해시는 svg-manifest.json에 기록</text>
+</svg>

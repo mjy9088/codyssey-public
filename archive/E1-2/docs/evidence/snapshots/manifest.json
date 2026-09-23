@@ -1,0 +1,34 @@
+{
+  "revision": "75e33c3074dda981e44ef75e5d8aafa014809003",
+  "revision_input": "submission-v1.0",
+  "generator": "scripts/capture_terminal_evidence.py",
+  "files": {
+    "docs/evidence/snapshots/environment.txt": {
+      "sha256": "50319495b36b997b5d96d7a8068e23e05ac6922afe551376651c1ca871a01292"
+    },
+    "docs/evidence/snapshots/git-graph.txt": {
+      "sha256": "1e34496ef7865e47d1c84bc7047d2f7ee380f85c857cec7b42276ec50a23337c"
+    },
+    "docs/evidence/snapshots/quiz-session.cast": {
+      "sha256": "692529e0b19142cda1b22ac1936dc00825859a6adea770c8206346b572c5ec15"
+    },
+    "docs/evidence/snapshots/quiz-session.txt": {
+      "sha256": "7ef9541b8a205653a8542066fc7194884cbec6957146cb94f2b91cc71dc3d8fa"
+    },
+    "docs/evidence/snapshots/quiz-add-quiz.txt": {
+      "sha256": "272a5826981c7327eb583bc92048c7827b9f430754ea5441f4282df7903ecda1"
+    },
+    "docs/evidence/snapshots/quiz-quiz-list.txt": {
+      "sha256": "de0015298f2a5dc302d29952d94c4cc5d69e09ff2b048480af4a22a828986069"
+    },
+    "docs/evidence/snapshots/quiz-play-quiz.txt": {
+      "sha256": "e1e8e7aefd47b4ffa3c2638ea9af8b00a3b3958680a0096437bade4989846018"
+    },
+    "docs/evidence/snapshots/quiz-best-score.txt": {
+      "sha256": "6b90efb5866c6a1980f11ebf402a738bb76dc00fb547802b50bb7758d4778824"
+    },
+    "docs/evidence/snapshots/quiz-exit.txt": {
+      "sha256": "b8674f8be67875e286fd6f724cc6e5edb7bdd95c88f9f31d7b524e922b10d5a1"
+    }
+  }
+}

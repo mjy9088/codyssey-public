@@ -1,0 +1,9 @@
+origin=https://github.com/mjy90884682/E1-2.git
+client_image=docker.gitea.com/gitea:1.24.7
+authentication=disabled (clean container, empty environment, no host mounts or prompts)
+tag=submission-v1.0
+75e33c3074dda981e44ef75e5d8aafa014809003	HEAD
+75e33c3074dda981e44ef75e5d8aafa014809003	refs/heads/main
+d4aa1b2339e30f502e6cd15d35c7e3566693768d	refs/tags/submission-v1.0
+75e33c3074dda981e44ef75e5d8aafa014809003	refs/tags/submission-v1.0^{}
+PASS: 인증 설정이 없는 컨테이너에서 origin의 공개 refs를 조회했습니다.

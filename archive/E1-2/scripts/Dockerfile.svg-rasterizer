@@ -1,0 +1,17 @@
+FROM rust:1.91.1-bookworm@sha256:c1e5f19e773b7878c3f7a805dd00a495e747acbdc76fb2337a4ebf0418896b33 AS build
+
+RUN cargo install \
+    --git https://github.com/linebender/resvg.git \
+    --rev 68b14c4c3bccdb60344c777406486b54c36ec1a4 \
+    --locked \
+    resvg
+
+FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-noto-cjk=1:20220127+repack1-1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /usr/local/cargo/bin/resvg /usr/local/bin/resvg
+
+ENTRYPOINT ["resvg"]

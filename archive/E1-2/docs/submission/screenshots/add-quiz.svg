@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="656" viewBox="0 0 1280 656">
+  <rect width="1280" height="656" fill="#0b1020"/>
+  <text x="50" y="62" fill="#f8fafc" font-family="Noto Sans CJK KR" font-size="30" font-weight="700">퀴즈 추가</text>
+  <text x="50" y="98" fill="#93c5fd" font-family="Noto Sans CJK KR" font-size="16">프롬프트와 실제 입력, 저장 결과</text>
+  <rect x="50" y="126" width="1180" height="476" rx="12" fill="#020617" stroke="#334155"/>
+  <text fill="#d1fae5" font-family="Noto Sans CJK KR" font-size="16">
+      <tspan x="72" y="166">$ python -m quiz_game</tspan>
+      <tspan x="72" y="190"></tspan>
+      <tspan x="72" y="214">=== Python 퀴즈 ===</tspan>
+      <tspan x="72" y="238">1. 퀴즈 풀기</tspan>
+      <tspan x="72" y="262">2. 퀴즈 추가</tspan>
+      <tspan x="72" y="286">3. 퀴즈 목록</tspan>
+      <tspan x="72" y="310">4. 최고 점수</tspan>
+      <tspan x="72" y="334">5. 종료</tspan>
+      <tspan x="72" y="358">선택: 2</tspan>
+      <tspan x="72" y="382"></tspan>
+      <tspan x="72" y="406">새 퀴즈를 추가합니다.</tspan>
+      <tspan x="72" y="430">문제: 증거용으로 추가한 문제는?</tspan>
+      <tspan x="72" y="454">선택지 1: 첫 번째 선택지</tspan>
+      <tspan x="72" y="478">선택지 2: 두 번째 선택지</tspan>
+      <tspan x="72" y="502">선택지 3: 세 번째 선택지</tspan>
+      <tspan x="72" y="526">선택지 4: 네 번째 선택지</tspan>
+      <tspan x="72" y="550">정답 번호: 1</tspan>
+      <tspan x="72" y="574">퀴즈가 저장되었습니다.</tspan>
+  </text>
+  <text x="50" y="636" fill="#94a3b8" font-family="Noto Sans CJK KR" font-size="13">실제 PTY 출력에서 생성 · 원본 해시는 svg-manifest.json에 기록</text>
+</svg>

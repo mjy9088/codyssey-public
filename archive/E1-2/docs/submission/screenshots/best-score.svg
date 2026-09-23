@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="464" viewBox="0 0 1280 464">
+  <rect width="1280" height="464" fill="#0b1020"/>
+  <text x="50" y="62" fill="#f8fafc" font-family="Noto Sans CJK KR" font-size="30" font-weight="700">최고 점수</text>
+  <text x="50" y="98" fill="#93c5fd" font-family="Noto Sans CJK KR" font-size="16">저장된 최고 점수 확인</text>
+  <rect x="50" y="126" width="1180" height="284" rx="12" fill="#020617" stroke="#334155"/>
+  <text fill="#d1fae5" font-family="Noto Sans CJK KR" font-size="16">
+      <tspan x="72" y="166">$ python -m quiz_game</tspan>
+      <tspan x="72" y="190"></tspan>
+      <tspan x="72" y="214">=== Python 퀴즈 ===</tspan>
+      <tspan x="72" y="238">1. 퀴즈 풀기</tspan>
+      <tspan x="72" y="262">2. 퀴즈 추가</tspan>
+      <tspan x="72" y="286">3. 퀴즈 목록</tspan>
+      <tspan x="72" y="310">4. 최고 점수</tspan>
+      <tspan x="72" y="334">5. 종료</tspan>
+      <tspan x="72" y="358">선택: 4</tspan>
+      <tspan x="72" y="382">최고 점수: 6/6 (100점)</tspan>
+  </text>
+  <text x="50" y="444" fill="#94a3b8" font-family="Noto Sans CJK KR" font-size="13">실제 PTY 출력에서 생성 · 원본 해시는 svg-manifest.json에 기록</text>
+</svg>
