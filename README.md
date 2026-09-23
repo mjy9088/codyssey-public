@@ -43,6 +43,9 @@ tree into this monorepo before the lineage is merged.
 - [`E1-2`](https://github.com/mjy90884682/E1-2)
 - [`E1-3`](https://github.com/mjy90884682/E1-3)
 
+Exact source and integration commits are recorded in
+[the import manifest](docs/IMPORTS.md).
+
 To inspect all imported lineages:
 
 ```bash
