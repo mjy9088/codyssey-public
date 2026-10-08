@@ -1,0 +1,50 @@
+#!/bin/busybox sh
+
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+fatal() {
+  echo "VM-BOOT-FATAL: $*" >&2
+  exec sh
+}
+
+echo "VM-BOOT: mounting virtual filesystems"
+mount -t proc proc /proc || fatal "cannot mount /proc"
+mount -t sysfs sysfs /sys || fatal "cannot mount /sys"
+mount -t devtmpfs devtmpfs /dev || fatal "cannot mount /dev"
+mkdir -p /dev/pts /run
+mount -t devpts devpts /dev/pts || fatal "cannot mount /dev/pts"
+
+test -s /www/index.html || fatal "website index is missing"
+test -d /lib/modules/"$(uname -r)" || fatal "kernel modules do not match $(uname -r)"
+
+echo "VM-BOOT: loading virtio network modules"
+modprobe virtio_pci || fatal "virtio_pci module failed"
+modprobe virtio_net || fatal "virtio_net module failed"
+
+interface=""
+for candidate in /sys/class/net/*; do
+  name="${candidate##*/}"
+  if [ "$name" != "lo" ]; then
+    interface="$name"
+    break
+  fi
+done
+test -n "$interface" || fatal "no network interface found"
+
+echo "VM-BOOT: configuring $interface as 10.0.2.15/24"
+ip link set lo up || fatal "cannot enable loopback"
+ip link set "$interface" up || fatal "cannot enable $interface"
+ip address add 10.0.2.15/24 dev "$interface" || fatal "cannot assign guest address"
+ip route add default via 10.0.2.2 dev "$interface" || fatal "cannot add default route"
+
+{
+  printf 'kernel='
+  uname -srvmo
+  printf 'machine='
+  cat /sys/class/dmi/id/product_name 2>/dev/null || printf 'QEMU-compatible virtual machine\n'
+  printf 'transport=qemu-user-net hostfwd=:8080 guest=10.0.2.15:8080\n'
+} > /www/__vm-proof.txt || fatal "cannot create proof endpoint"
+
+cat /www/__vm-proof.txt
+echo "VM-BOOT-READY: http://10.0.2.15:8080 (QEMU host forward :8080)"
+exec /bin/busybox-extras httpd -f -p 8080 -h /www

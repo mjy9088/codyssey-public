@@ -1,0 +1,45 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    networks: [lab]
+
+  verify:
+    profiles: [verify]
+    build:
+      context: .
+      dockerfile: verify/Dockerfile
+    init: true
+    shm_size: 1gb
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      BASE_URL: http://web:8080
+      VERIFY_MODE: docker
+    networks: [lab]
+
+  vm:
+    profiles: [vm]
+    build:
+      context: .
+      dockerfile: verify/vm/Dockerfile
+    user: "1000:1000"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [lab]
+
+networks:
+  lab:
+    internal: true
