@@ -38,6 +38,11 @@
 .portrait { margin: 0; }
 .portrait img { border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-paper); transform: rotate(1.5deg); transition: filter var(--motion-base); }
 [data-theme="dark"] .portrait img { filter: invert(1) hue-rotate(180deg); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .portrait img { filter: invert(1) hue-rotate(180deg); }
+  :root:not([data-theme]) .theme-icon-moon { display: none; }
+  :root:not([data-theme]) .theme-icon-sun { display: block; }
+}
 .portrait figcaption { display: flex; gap: var(--space-4); margin-top: var(--space-4); color: var(--ink-soft); font-size: var(--type-small); }
 .portrait figcaption span { color: var(--accent); font-family: var(--font-mono); }
 .about-profile { margin: 0; }

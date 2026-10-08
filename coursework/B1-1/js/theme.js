@@ -22,7 +22,7 @@ const preferredTheme = () => readStoredTheme() ?? (matchMedia("(prefers-color-sc
 
 export const initTheme = () => {
   const toggle = document.querySelector("#theme-toggle");
-  const themeColor = document.querySelector('meta[name="theme-color"]');
+  const themeColors = document.querySelectorAll('meta[name="theme-color"]');
   if (!(toggle instanceof HTMLButtonElement)) return;
 
   const applyTheme = (theme) => {
@@ -30,7 +30,7 @@ export const initTheme = () => {
     document.documentElement.dataset.theme = theme;
     toggle.setAttribute("aria-pressed", String(dark));
     toggle.setAttribute("aria-label", `Switch to ${dark ? LIGHT : DARK} theme`);
-    themeColor?.setAttribute("content", dark ? "#151816" : "#f4f1e8");
+    themeColors.forEach((meta) => meta.setAttribute("content", dark ? "#151816" : "#f4f1e8"));
   };
 
   applyTheme(preferredTheme());

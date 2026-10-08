@@ -52,6 +52,12 @@ test("system palette is correct before deferred JavaScript finishes loading", as
     await page.locator("body").waitFor({ state: "attached" });
     const color = info.project.name === "dark" ? "rgb(21, 24, 22)" : "rgb(244, 241, 232)";
     await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(color);
+    const dark = info.project.name === "dark";
+    await expect(page.locator(".portrait img")).toHaveCSS("filter", dark ? "invert(1) hue-rotate(180deg)" : "none");
+    await expect(page.locator(dark ? ".theme-icon-sun" : ".theme-icon-moon")).toBeVisible();
+    await expect(page.locator(dark ? ".theme-icon-moon" : ".theme-icon-sun")).toBeHidden();
+    await expect(page.locator(`#theme-toggle`)).toHaveAttribute("aria-label", "Toggle color theme");
+    await expect(page.locator(`meta[name="theme-color"][media="(prefers-color-scheme: ${dark ? "dark" : "light"})"]`)).toHaveAttribute("content", dark ? "#151816" : "#f4f1e8");
   } finally {
     release();
   }
