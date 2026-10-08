@@ -7,8 +7,10 @@ test("loading transitions to projects and language filtering", async ({ page }) 
   await page.goto("/");
   await expect(page.locator("#projects-status")).toContainText("Loading");
   await expect(page.locator("#project-list")).toHaveAttribute("aria-busy", "true");
+  await expect(page.locator(".project-skeleton")).toHaveCount(3);
   release();
   await expect(page.locator(".project-card")).toHaveCount(3);
+  await expect(page.locator(".project-skeleton")).toHaveCount(0);
   await page.locator("#project-filter").selectOption("JavaScript");
   await expect(page.locator(".project-card")).toHaveCount(1);
   await expect(page.locator(".project-name")).toHaveText("field-notes");

@@ -77,6 +77,8 @@ test("navigation is keyboard operable and closes on Escape and selection", async
     await toggle.focus();
     await page.keyboard.press("Enter");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(toggle.locator(".menu-icon-close")).toBeVisible();
+    await expect(toggle.locator(".menu-icon-open")).not.toBeVisible();
     await expect(page.locator("#primary-nav")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -109,6 +111,7 @@ test("scroll controls and reduced motion reflect viewport state", async ({ page 
 test("form rejects missing, blank and malformed values without sending data", async ({ page }) => {
   await page.goto("/");
   await page.locator('#contact-form button[type="submit"]').click();
+  await expect(page.locator("#form-status")).toHaveAttribute("data-state", "error");
   for (const name of ["name", "email", "message"]) {
     await expect(page.locator(`#field-${name}`)).toHaveAttribute("aria-invalid", "true");
     await expect(page.locator(`#error-${name}`)).not.toBeEmpty();
@@ -125,6 +128,7 @@ test("form rejects missing, blank and malformed values without sending data", as
   page.on("request", (request) => requests.push(request.url()));
   await page.locator('#contact-form button[type="submit"]').click();
   await expect(page.locator("#form-status")).toContainText("nothing was submitted");
+  await expect(page.locator("#form-status")).toHaveAttribute("data-state", "success");
   expect(requests).toEqual([]);
   expect(page.url()).not.toContain("reviewer");
 });
@@ -136,4 +140,25 @@ test("automated accessibility checks pass for populated and invalid form states"
   expect((await scan()).violations).toEqual([]);
   await page.locator('#contact-form button[type="submit"]').click();
   expect((await scan()).violations).toEqual([]);
+});
+
+test("input and select boundaries have at least three-to-one contrast", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".project-card")).toHaveCount(3);
+  const pairs = await page.evaluate(() => ["#field-name", "#field-email", "#field-message", "#project-filter"].flatMap((selector) => {
+    const style = getComputedStyle(document.querySelector(selector));
+    const surrounding = getComputedStyle(document.querySelector(selector === "#project-filter" ? "body" : "#contact"));
+    return [[style.borderTopColor, style.backgroundColor], [style.borderTopColor, surrounding.backgroundColor]];
+  }));
+  const luminance = (color) => {
+    const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map((value) => {
+      const normalized = value / 255;
+      return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+    });
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  };
+  for (const [border, background] of pairs) {
+    const [a, b] = [luminance(border), luminance(background)].sort((left, right) => right - left);
+    expect((a + 0.05) / (b + 0.05)).toBeGreaterThanOrEqual(3);
+  }
 });

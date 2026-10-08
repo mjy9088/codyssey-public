@@ -33,6 +33,7 @@ export const initContactForm = () => {
     entry.input.addEventListener("input", () => {
       if (entry.input.getAttribute("aria-invalid") === "true") validate(name, entry);
       status.textContent = "";
+      delete status.dataset.state;
     });
     entry.input.addEventListener("blur", () => validate(name, entry));
   });
@@ -41,9 +42,11 @@ export const initContactForm = () => {
     event.preventDefault();
     const results = Object.entries(entries).map(([name, entry]) => entry ? validate(name, entry) : false);
     if (results.every(Boolean)) {
+      status.dataset.state = "success";
       status.textContent = "Your note is complete. This portfolio does not send messages, so nothing was submitted.";
       return;
     }
+    status.dataset.state = "error";
     status.textContent = "Please correct the marked fields.";
     const firstInvalid = form.querySelector('[aria-invalid="true"]');
     if (firstInvalid instanceof HTMLElement) firstInvalid.focus();

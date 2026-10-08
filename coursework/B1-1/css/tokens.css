@@ -7,6 +7,7 @@
   --ink-soft: light-dark(#626861, #b7bcb4);
   --line: light-dark(#d8d3c6, #3b423c);
   --line-strong: light-dark(#aba797, #697168);
+  --control-border: light-dark(#737b70, #899582);
   --accent: light-dark(#126c61, #79cbbb);
   --accent-strong: light-dark(#0a5048, #a1dfd2);
   --accent-soft: light-dark(#dcece6, #203f38);
@@ -67,6 +68,7 @@
   --ink-soft: #b7bcb4;
   --line: #3b423c;
   --line-strong: #697168;
+  --control-border: #899582;
   --accent: #79cbbb;
   --accent-strong: #a1dfd2;
   --accent-soft: #203f38;

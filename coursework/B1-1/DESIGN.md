@@ -31,6 +31,7 @@ Content jobs follow the visitor path: hero hooks, About explains, Skills orients
 | `--ink-soft` | `#626861` | `#b7bcb4` | Secondary text |
 | `--line` | `#d8d3c6` | `#3b423c` | Whisper dividers |
 | `--line-strong` | `#aba797` | `#697168` | Hover borders |
+| `--control-border` | `#737b70` | `#899582` | Accessible input/select boundaries |
 | `--accent` | `#126c61` | `#79cbbb` | Links and actions |
 | `--accent-strong` | `#0a5048` | `#a1dfd2` | Hover/active |
 | `--accent-soft` | `#dcece6` | `#203f38` | Tags and selected state |
@@ -91,6 +92,7 @@ Local/system stacks only:
 ### Field
 - Structure: label, input/textarea, reserved error line.
 - States: default, focus, invalid, valid, disabled.
+- Validated fields use the success border, invalid fields use the danger border, and form summaries carry an explicit error/success state. Decorative dividers never substitute for control boundaries.
 - Accessibility: native required/type semantics plus `aria-invalid`, `aria-describedby`, and live form status.
 
 ### Section heading
