@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 760" role="img" aria-labelledby="title desc">
+  <title id="title">Abstract portrait drawn on a developer notebook page</title>
+  <desc id="desc">A calm line portrait surrounded by code marks, arrows, and ruled paper annotations.</desc>
+  <style>
+    .paper{fill:#fffdf7}.ink{fill:none;stroke:#202522}.soft{fill:none;stroke:#aba797}.note{fill:#126c61}.rule{stroke:#d8d3c6}
+  </style>
+  <rect class="paper" x="20" y="20" width="600" height="720" rx="24"/>
+  <g class="rule" stroke-width="1">
+    <path d="M60 130h520M60 190h520M60 250h520M60 310h520M60 370h520M60 430h520M60 490h520M60 550h520M60 610h520M60 670h520"/>
+    <path d="M110 58v644" stroke-width="2"/>
+  </g>
+  <g class="ink" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M230 422c-11-82 4-181 87-211 77-28 159 25 169 111 6 52-11 105-46 143-34 36-92 51-139 29-38-18-64-38-71-72Z" stroke-width="8"/>
+    <path d="M260 311c11-69 95-100 159-58 23 15 43 42 47 74-37-5-69-29-88-60-22 31-64 51-118 44Z" stroke-width="10"/>
+    <path d="M286 355c12-8 27-8 39 0M392 355c12-8 27-8 39 0" stroke-width="7"/>
+    <path d="M319 420c29 22 67 20 92-5" stroke-width="7"/>
+    <path d="M350 367c-5 15-6 30-1 43l18 2" stroke-width="5"/>
+    <path d="M214 616c18-70 72-110 143-110 75 0 134 39 154 110" stroke-width="10"/>
+    <path d="M270 520c9 52 151 54 171-1" stroke-width="6"/>
+    <path d="M175 582l-37 29 37 26M538 574l34 31-34 31" stroke-width="6"/>
+  </g>
+  <g class="soft" stroke-linecap="round" stroke-width="4">
+    <path d="M146 104h145M146 84h88M442 100h70"/>
+    <path d="M145 150h72M492 150h52M145 682h110M455 682h92"/>
+    <circle cx="90" cy="130" r="8"/>
+    <circle cx="90" cy="310" r="8"/>
+    <circle cx="90" cy="490" r="8"/>
+  </g>
+  <g class="note">
+    <circle cx="513" cy="98" r="9"/>
+    <path d="M148 224h58v8h-58zM481 474h62v8h-62z"/>
+    <path d="M518 196l8 17 19 3-14 13 3 19-16-9-17 9 4-19-14-13 19-3Z"/>
+  </g>
+</svg>

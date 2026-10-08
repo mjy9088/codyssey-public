@@ -1,0 +1,75 @@
+:root {
+  color-scheme: light;
+  --paper: #f4f1e8;
+  --sheet: #fffdf7;
+  --sheet-strong: #ffffff;
+  --ink: #202522;
+  --ink-soft: #626861;
+  --line: #d8d3c6;
+  --line-strong: #aba797;
+  --accent: #126c61;
+  --accent-strong: #0a5048;
+  --accent-soft: #dcece6;
+  --danger: #a43b36;
+  --success: #27633d;
+  --focus: #176fbd;
+
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-body: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --type-display: clamp(3rem, 10vw, 7.5rem);
+  --type-h1: clamp(2.5rem, 6vw, 4.75rem);
+  --type-h2: clamp(1.65rem, 3vw, 2.35rem);
+  --type-h3: 1.125rem;
+  --type-lead: clamp(1.125rem, 2vw, 1.35rem);
+  --type-body: 1rem;
+  --type-small: .875rem;
+  --type-label: .75rem;
+
+  --space-1: .25rem;
+  --space-2: .5rem;
+  --space-3: .75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+  --space-32: 8rem;
+  --page-gutter: clamp(1rem, 4vw, 3rem);
+  --content-max: 75rem;
+  --readable: 68ch;
+  --control-size: 2.75rem;
+  --header-size: 4.5rem;
+
+  --radius-sm: .25rem;
+  --radius-md: .75rem;
+  --radius-lg: 1.5rem;
+  --radius-round: 999rem;
+  --shadow-paper: 0 .25rem 1.125rem rgb(32 37 34 / .04), 0 .125rem .5rem rgb(32 37 34 / .03);
+  --motion-fast: 120ms;
+  --motion-base: 240ms;
+  --motion-reveal: 560ms;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #151816;
+  --sheet: #1d211e;
+  --sheet-strong: #252a26;
+  --ink: #f2eee2;
+  --ink-soft: #b7bcb4;
+  --line: #3b423c;
+  --line-strong: #697168;
+  --accent: #79cbbb;
+  --accent-strong: #a1dfd2;
+  --accent-soft: #203f38;
+  --danger: #ff9b92;
+  --success: #86cf9c;
+  --focus: #78bfff;
+  --shadow-paper: 0 .25rem 1.125rem rgb(0 0 0 / .18), 0 .125rem .5rem rgb(0 0 0 / .12);
+}
