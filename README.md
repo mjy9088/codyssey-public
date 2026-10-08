@@ -10,6 +10,7 @@ intended for public submission.
 | Path | Purpose |
 | --- | --- |
 | `environment/codyssey-init/` | Classroom and local development-environment bootstrap |
+| `coursework/B1-1/` | Self-contained vanilla portfolio with Docker and QEMU verification |
 | `archive/E1-1/` | Imported E1-1 work, with its original Git history |
 | `archive/E1-2/` | Imported E1-2 work, with its original Git history |
 | `archive/E1-3/` | Imported E1-3 work, with its original Git history |

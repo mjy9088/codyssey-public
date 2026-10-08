@@ -20,6 +20,16 @@ Treat the repository as permanently public, including its full Git history.
   messages, screenshots, logs, or generated files.
 - Store source, tests, public documentation, reproducible tooling, and sanitized
   evidence here.
+- Keep provided analysis archives and task data in the private repository. Public
+  tests must use publishable synthetic fixtures rather than restricted inputs.
+- Do not track execution logs, run reports, progress journals, traces, or generated
+  test results. Prefer rerunnable verification scripts and ignored/CI artifacts.
+  Only track an output explicitly required for submission; explain the exception
+  and why committing run artifacts is normally poor practice (staleness, repository
+  growth, and disclosure risks). Do not retroactively rewrite imported history.
+- Git tracks repository-owned inputs and outputs. Do not duplicate that with
+  source/output checksum manifests. Dependency locks and external download integrity
+  checks remain appropriate.
 - Use `codyssey-submit` only as a temporary submission projection. Do not make it
   the source of truth and do not develop independently in it.
 - Stop and flag the file instead of committing it when publication safety is
@@ -49,8 +59,8 @@ consistency. Explain any necessary cross-project change in the commit message.
 5. Do not commit dependency caches, virtual environments, editor state, secrets,
    or generated evidence unless the project explicitly treats that evidence as
    a deliverable.
-6. Use English for repository-wide documentation. Imported historical content
-   may remain in its original language.
+6. Use English for all authored documentation. Preserve original assignment wording,
+   canonical names, and imported historical content when their original form matters.
 
 ## Git and submission safety
 
