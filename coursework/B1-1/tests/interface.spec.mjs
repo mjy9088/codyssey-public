@@ -43,6 +43,21 @@ test("theme responds to preference and persists an explicit choice", async ({ pa
   await expect(page.locator("#theme-toggle")).toHaveAttribute("aria-pressed", String(next === "dark"));
 });
 
+test("system palette is correct before deferred JavaScript finishes loading", async ({ page }, info) => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  await page.route("**/js/app.js", async (route) => { await gate; await route.continue(); });
+  try {
+    await page.goto("/", { waitUntil: "commit" });
+    await page.locator("body").waitFor({ state: "attached" });
+    const color = info.project.name === "dark" ? "rgb(21, 24, 22)" : "rgb(244, 241, 232)";
+    await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(color);
+  } finally {
+    release();
+  }
+  await expect(page.locator("html")).toHaveAttribute("data-theme", info.project.name === "dark" ? "dark" : "light");
+});
+
 test("denied storage does not break theme or application startup", async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, "localStorage", { get: () => { throw new DOMException("Blocked", "SecurityError"); } });

@@ -1,4 +1,5 @@
 .icon-button {
+  appearance: none;
   display: inline-grid;
   width: var(--control-size);
   min-height: var(--control-size);

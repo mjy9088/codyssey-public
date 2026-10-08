@@ -1,18 +1,18 @@
 :root {
-  color-scheme: light;
-  --paper: #f4f1e8;
-  --sheet: #fffdf7;
-  --sheet-strong: #ffffff;
-  --ink: #202522;
-  --ink-soft: #626861;
-  --line: #d8d3c6;
-  --line-strong: #aba797;
-  --accent: #126c61;
-  --accent-strong: #0a5048;
-  --accent-soft: #dcece6;
-  --danger: #a43b36;
-  --success: #27633d;
-  --focus: #176fbd;
+  color-scheme: light dark;
+  --paper: light-dark(#f4f1e8, #151816);
+  --sheet: light-dark(#fffdf7, #1d211e);
+  --sheet-strong: light-dark(#ffffff, #252a26);
+  --ink: light-dark(#202522, #f2eee2);
+  --ink-soft: light-dark(#626861, #b7bcb4);
+  --line: light-dark(#d8d3c6, #3b423c);
+  --line-strong: light-dark(#aba797, #697168);
+  --accent: light-dark(#126c61, #79cbbb);
+  --accent-strong: light-dark(#0a5048, #a1dfd2);
+  --accent-soft: light-dark(#dcece6, #203f38);
+  --danger: light-dark(#a43b36, #ff9b92);
+  --success: light-dark(#27633d, #86cf9c);
+  --focus: light-dark(#176fbd, #78bfff);
 
   --font-display: Georgia, "Times New Roman", serif;
   --font-body: "Avenir Next", Avenir, "Segoe UI", sans-serif;
@@ -55,6 +55,8 @@
   --motion-reveal: 560ms;
   --ease-out: cubic-bezier(.16, 1, .3, 1);
 }
+
+[data-theme="light"] { color-scheme: light; }
 
 [data-theme="dark"] {
   color-scheme: dark;

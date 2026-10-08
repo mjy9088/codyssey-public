@@ -39,6 +39,7 @@ Content jobs follow the visitor path: hero hooks, About explains, Skills orients
 | `--focus` | `#176fbd` | `#78bfff` | Keyboard focus |
 
 Rules: color is semantic; no undeclared literals in CSS. Accent is reserved for interaction and annotations. Dark mode is selected by `[data-theme="dark"]`.
+Before deferred JavaScript runs, `light-dark()` and the system color scheme already select the correct initial palette. An explicit saved theme overrides that default through `data-theme`.
 
 ## 3. Typography
 
@@ -98,6 +99,7 @@ Local/system stacks only:
 
 ### Icon control
 - Structure: 44px minimum button with inline SVG and accessible name.
+- Custom icon controls use `appearance: none` so theme changes do not switch native control paint paths.
 - States: default, hover, focus, active; icon swap for theme and menu state.
 
 ## 6. Motion & Interaction
