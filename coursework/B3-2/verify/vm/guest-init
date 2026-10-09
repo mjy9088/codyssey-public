@@ -1,0 +1,17 @@
+#!/bin/sh
+export PATH=/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+export PYTHONPATH=/app/src
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts
+ip link set lo up
+echo "VM-TEST-BEGIN: $(uname -srvmo)"
+if python /app/tests/run.py; then
+  echo "VM-TEST-SUCCESS"
+else
+  status=$?
+  echo "VM-TEST-FAILURE: exit=$status"
+fi
+poweroff -f
