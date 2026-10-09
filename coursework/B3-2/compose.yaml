@@ -1,0 +1,31 @@
+services:
+  reviewer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  test:
+    profiles: [verify]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    working_dir: /app
+    entrypoint: [python, tests/run.py]
+
+  vm:
+    profiles: [vm]
+    build:
+      context: .
+      dockerfile: verify/vm/Dockerfile
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
