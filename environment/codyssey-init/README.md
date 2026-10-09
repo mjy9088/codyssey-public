@@ -1,104 +1,245 @@
-# 코디세이 Tailscale 원격 환경 설정
+# Codyssey macOS tailnet bootstrap
 
-이 저장소는 [코디세이](https://codyssey.kr/) 교육장에서 사용하는 macOS 장비에 Tailscale 기반 원격 접속 환경을 빠르게 다시 구성하기 위한 초기화 도구와 절차를 담고 있습니다.
+This directory prepares a repeatable Tailscale and GOST environment for a macOS workstation that
+already has a working Docker Engine and Compose v2. It builds a pinned Tailscale image with Bash and
+other terminal tools, starts the tailnet and local GOST management services, and optionally applies a
+small set of macOS preferences.
 
-교육장에서는 자리를 옮겨 다른 장비를 사용하거나, 주 2회 진행되는 장비 초기화 이후 개발 환경을 다시 설정해야 합니다. 이 저장소를 복제하고 준비된 스크립트를 실행하면 매번 동일한 원격 환경을 간단히 재구성할 수 있습니다.
+The bootstrap does not install Docker, authenticate to Tailscale by itself, or prove that a remote
+tailnet is reachable. Those remain explicit user and environment boundaries. It can install a pinned,
+checksum-verified `mise` binary when `mise` is missing.
 
-교육장 macOS에서는 `sudo`를 사용할 수 없으므로, 미리 설치된 OrbStack의 Docker 실행 환경에서 Tailscale과 GOST를 구동합니다. Tailscale로 원격 장비가 속한 tailnet에 연결하고, GOST를 통해 SSH 등의 서비스를 로컬 포트로 전달합니다. 아래 절차는 OrbStack이 이미 설치되어 있다는 전제입니다.
+## Availability and trusted source
 
-## 1. OrbStack 최초 실행
-
-Spotlight(`Command` + `Space`)에서 **OrbStack**을 검색해 직접 실행합니다.
-
-![Spotlight에서 OrbStack 실행](docs/images/orbstack-01-launch.png)
-
-처음 실행하면 업데이트 안내 창과 시작 안내 창이 함께 나타날 수 있습니다.
-
-1. 업데이트 안내 창에서 **Skip This Version**을 클릭합니다.
-2. 시작 안내 창에서 **Next**를 클릭합니다.
-
-![OrbStack 업데이트 건너뛰기](docs/images/orbstack-02-skip-update.png)
-
-![OrbStack 시작 안내](docs/images/orbstack-03-welcome.png)
-
-아래와 같은 기능 선택 화면이 나타나면 OrbStack 초기 구동이 완료된 것입니다. 이 창은 닫아도 됩니다. 이후에는 OrbStack 앱 창이 열려 있을 필요가 없습니다. 다만 메뉴 막대에서 OrbStack을 종료하지 말고, Docker 엔진은 백그라운드에서 계속 실행되도록 둡니다.
-
-![OrbStack 기능 선택 화면](docs/images/orbstack-04-ready.png)
-
-## 2. 저장소 복제
-
-터미널에서 다음 명령을 실행합니다.
+Use a reviewed local checkout today:
 
 ```sh
-git clone https://github.com/mjy90884682/init.git
-cd init
+cd environment/codyssey-init
+bash init.sh
 ```
 
-## 3. 환경 변수 설정
-
-예제 파일을 복사해 `.env` 파일을 만들고, `TS_AUTHKEY` 값을 발급받은 Tailscale 인증 키로 변경합니다.
+Do not use a mutable `main`/`master` raw URL. This work is not assumed to be present on GitHub's
+current `main` branch. Remote installation is available only after the exact reviewed commit has been
+published to an approved source. It requires both a base URL and a full 40-character commit. Download
+the initial script completely before executing it; streaming `curl | bash` can execute a partial file:
 
 ```sh
-cp .env.example .env
+export CODYSSEY_INIT_BASE_URL=https://raw.githubusercontent.com/OWNER/REPOSITORY
+export CODYSSEY_INIT_REF=0123456789abcdef0123456789abcdef01234567
+(
+  installer=$(mktemp) || exit 1
+  trap 'rm -f "$installer"' EXIT
+  curl --fail --location --silent --show-error \
+    "$CODYSSEY_INIT_BASE_URL/$CODYSSEY_INIT_REF/environment/codyssey-init/init.sh" \
+    -o "$installer" && bash "$installer"
+)
 ```
 
-```dotenv
-TS_AUTHKEY=tskey-auth-...-...
-```
+Remote mode stages the complete reusable runtime, including `init.sh`, `verify-macos-setup.py`, and
+runtime libraries, before copying anything into
+`${CODYSSEY_INIT_DIR:-$HOME/.local/share/codyssey-init}`. It refuses to overwrite a different
+installer file during a full preflight. Failed downloads leave the target untouched and remove their
+staging directory. Existing `.env` and `gost/gost.yaml` files are preserved. A local checkout runs in
+place and rejects a different `CODYSSEY_INIT_DIR`, avoiding a partial or ambiguous copy.
 
-인증 키는 [Tailscale 관리 콘솔](https://console.tailscale.com/admin/machines/new-linux)에서 발급할 수 있습니다. `.env`에는 비밀 정보가 포함되므로 Git에 커밋하지 마세요.
+## Prerequisites
 
-## 4. 서비스 실행 및 관리 화면 접속
+- macOS with OrbStack or another Docker Engine exposing Compose v2
+- `zsh`, `curl`, and ordinary terminal access
+- access to `/dev/net/tun` and permission for Docker to grant `NET_ADMIN` and `NET_RAW`
+- optionally, a Tailscale auth key or permission to complete browser login
 
-OrbStack의 Docker 엔진이 백그라운드에서 실행 중인지 확인한 뒤 다음 명령을 실행합니다. OrbStack 앱 창은 닫혀 있어도 됩니다.
+The script reuses `mise` from the current path or `$HOME/.local/bin`. When it is missing, macOS arm64
+and x86_64 use the official `mise` v2026.10.5 release binary with a repository-pinned SHA-256 value.
+No mutable shell installer is executed. Automatic installation requires `curl`, `shasum`, `cut`,
+`install`, and `mktemp`; unsupported systems and architectures fail clearly. The repository-owned
+`mise.toml` pins `just` to `1.43.0`. `next-script.zsh` runs under real zsh, trusts the local config,
+explicitly installs `just@1.43.0`, and refreshes the shell environment with `mise env -s zsh` before
+Compose starts.
+
+`init.sh` checks that Docker is running, adds the user-local `mise` path and zsh activation block once,
+and launches `next-script.zsh` as an interactive zsh script with standard input attached to
+`/dev/null`. Secret input is read directly and silently from `/dev/tty`.
+
+## Authentication and startup
+
+An exported `TS_AUTHKEY`, including an intentionally empty value, takes precedence and is passed to
+Compose without creating or changing `.env`. An existing `.env` is also preserved. Otherwise, when a
+terminal is available, the bootstrap asks for either:
+
+- a Tailscale auth key;
+- a pasted Tailscale install/up command containing an auth key; or
+- a blank line to use the browser-login path.
+
+Pasted text is never executed. A complete `tskey-auth-` token using the documented alphanumeric,
+underscore, and hyphen alphabet is extracted; a malformed token is rejected rather than partially
+matched. Terminal echo is restored from the exact saved `stty -g` state on success, failure, and
+signals. If no controlling terminal exists, the script safely creates an empty mode-`0600` `.env` and
+continues to the browser-login path without attempting to read or truncate `/dev/tty`.
+
+Compose is started with a build:
 
 ```sh
-sh init.sh
+docker compose up -d --build
 ```
 
-`init.sh`는 아래 Docker Compose 서비스를 백그라운드에서 시작하고, GOST UI가 준비되면 Chrome으로 관리 화면을 엽니다. API 주소가 URL 파라미터로 전달되므로 별도의 로그인 입력 없이 관리 화면에 자동으로 연결됩니다.
-
-- Tailscale
-- GOST
-- GOST UI
-
-자동으로 열리지 않으면 Chrome에서 [자동 연결 URL](http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080)을 직접 엽니다.
-
-GOST UI와 API는 모두 이 Mac의 로컬 인터페이스에서만 접근할 수 있으며, API 인증은 별도로 사용하지 않습니다.
-
-## 5. SSH 터널 추가
-
-GOST UI의 **Services**에서 서비스를 추가하면 Tailscale에 연결된 원격 장비의 SSH 포트를 이 Mac의 로컬 포트로 전달할 수 있습니다. 예를 들어 원격 장비의 Tailscale IP가 `100.64.0.10`이고 로컬 포트 `2222`를 사용하려면 다음과 같이 설정합니다.
-
-| 항목 | 값 | 설명 |
-| --- | --- | --- |
-| Name | `SSH - server-name` | 장비를 구분할 이름 |
-| Addr | `127.0.0.1:2222` | 이 Mac에서 접속할 로컬 주소와 포트 |
-| Handler Type | `tcp` | SSH 트래픽을 TCP로 전달 |
-| Handler Chain | `tailnet` | Tailscale SOCKS5 경로 사용 |
-| Listener Type | `tcp` | 로컬 TCP 포트 수신 |
-| Forwarder Node Name | `server-name` | 대상 장비를 구분할 이름 |
-| Forwarder Node Addr | `100.64.0.10:22` | 대상 장비의 Tailscale IP와 SSH 포트 |
-
-서비스를 추가하면 설정이 즉시 적용됩니다. 터미널에서 다음과 같이 접속해 확인합니다.
+The bootstrap waits for all three containers and a Tailscale `Running` or `NeedsLogin` state. A
+`NeedsLogin` state is not reported as a connected tailnet: the script extracts and prints the actual
+`https://login.tailscale.com/...` authentication URL from Tailscale's output, or fails with a command
+to inspect the logs if no URL is available:
 
 ```sh
-ssh -p 2222 <원격-사용자명>@localhost
+docker compose logs tailscale
 ```
 
-로컬 포트는 SSH 터널마다 겹치지 않게 지정합니다(예: `2222`, `2223`, `2224`). `Addr`를 `127.0.0.1`로 제한하면 같은 Mac에서만 터널에 접속할 수 있습니다.
+It then waits for the local GOST UI and opens Chrome when available, falling back to the default
+macOS browser. The URL is:
 
-UI에서 변경한 서비스는 현재 실행 중인 GOST에 즉시 반영되지만, 컨테이너를 다시 만들거나 재시작한 뒤에도 유지하려면 UI의 **Save Config** 기능으로 현재 설정을 `gost.yaml`에 저장해야 합니다. 저장 후 [gost/gost.yaml](gost/gost.yaml)에 변경 내용이 반영되었는지 확인하세요.
+<http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080>
 
-## 상태 확인 및 종료
+## Container privilege and mount boundary
+
+The Tailscale service intentionally uses kernel networking (`TS_USERSPACE=false`), host networking,
+`/dev/net/tun`, and the `NET_ADMIN` and `NET_RAW` capabilities. It also mounts `${HOME}` read/write at
+`/host` so the explicitly requested environment shell can work with the macOS user's files. This is
+a broad trust boundary: anyone with a shell in that container can modify the mounted home directory.
+Run only the reviewed image and scripts, and do not enable this Compose project where those privileges
+or that mount are unacceptable.
+
+On OrbStack, host networking refers to its Linux VM, not the macOS host network. The SOCKS5 listener
+at `127.0.0.1:1055` and the GOST chain remain available alongside kernel networking; containerboot
+passes that listener flag independently of the TUN mode. See the
+[Tailscale Docker parameters](https://tailscale.com/docs/features/containers/docker/docker-params).
+
+Tailscale state persists in the `tailscale-state` named volume. The GOST API listens only on
+`127.0.0.1:18080`, and the UI is published only on `127.0.0.1:18081`. No forwarding service is enabled
+by default. Add services with loopback listener addresses unless deliberate external exposure is
+required.
+
+## Tailnet shell and `just`
+
+Open Bash in the Tailscale container with either command:
 
 ```sh
-# 실행 상태 확인
+bash tailnet.sh
+just
+just bash
+```
+
+With arguments, `tailnet.sh` executes those exact arguments instead of prepending Bash:
+
+```sh
+bash tailnet.sh ssh user@100.64.0.10
+bash tailnet.sh bash -lc 'command-one | command-two'
+```
+
+Arguments, spaces, and the command exit status are preserved. Interactive terminals retain a TTY;
+redirected calls use Compose's non-TTY mode. Bash is probed through `sh -c 'command -v bash'`, and an
+old image is rebuilt only when Bash is the requested command (implicitly through no arguments or
+explicitly as the first argument). Arbitrary commands are never probed, prefixed, or rebuilt. The
+named state volume is not removed.
+
+## Optional macOS preferences
+
+Preferences are opt-in and nonfatal to the bootstrap:
+
+```sh
+CODYSSEY_MACOS_SETUP=1 bash init.sh
+```
+
+`macos-setup.sh` refuses non-Darwin systems and never uses `sudo`. Before each independent preference
+group, it creates a private per-run backup under
+`~/Library/Application Support/codyssey-init/macos-backups/`. It then:
+
+- disables macOS text automation;
+- only when both Terminal and Google Chrome exist, replaces Dock app pins with those two apps,
+  hides recent items, and removes folder stacks; otherwise the entire Dock group is left unchanged;
+- preserves existing input sources while adding Korean 2-Set once;
+- merges typed symbolic-hotkey entries 60 and 61 for Control-Space and Control-Shift-Space while
+  preserving unrelated shortcuts; and
+- restarts only the current user's Dock process.
+
+It does not call private `activateSettings` APIs.
+
+Every successful domain export is retained as `text.plist`, `dock.plist`,
+`input-sources.plist`, or `hotkeys.plist` in the backup directory printed by the script. To restore a
+particular run manually, set `backup` to that printed directory and import the snapshots that exist:
+
+```sh
+backup="$HOME/Library/Application Support/codyssey-init/macos-backups/run.REPLACE_ME"
+defaults import NSGlobalDomain "$backup/text.plist"
+defaults import com.apple.dock "$backup/dock.plist"
+defaults import com.apple.HIToolbox "$backup/input-sources.plist"
+defaults import com.apple.symbolichotkeys "$backup/hotkeys.plist"
+killall -u "$USER" Dock
+```
+
+If a group has a `.missing` marker instead of a plist, that domain was confirmed absent before the
+write. Restore that state with `defaults delete DOMAIN` rather than importing a file. Run only the
+commands corresponding to files or markers in that backup directory. `NSGlobalDomain` is never
+classified as absent.
+Restoring a whole domain also reverts later changes in that domain. Restart affected applications;
+input-source and shortcut changes may require logging out and back in.
+
+### Destructive live preference verifier
+
+`verify-macos-setup.py` is a deliberately destructive live test requiring Python 3.10 or newer. It
+privately snapshots every preference domain before any write, requires an existing Latin keyboard
+layout, removes only the exact Korean input mode and symbolic-hotkey entries 60/61 from its
+baseline-derived fixture, clears Dock pins, and enables all nine text-automation settings. It never
+inserts a synthetic input source. It then applies the setup twice and verifies parsed plist values,
+including exact Dock entries, typed hotkey parameters, and preservation of unrelated input sources
+and shortcuts. It will not run without both Darwin and this exact opt-in:
+
+```sh
+CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 verify-macos-setup.py
+```
+
+On success, the requested setup remains applied and the temporary verifier snapshot is removed. On
+any failure or interruption, restoration is attempted for every captured domain before the original
+error is rethrown. If any domain cannot be restored, the private snapshot is retained and its path is
+printed for manual recovery. Do not run the verifier on a workstation whose live preferences may not
+be temporarily changed. This behavior has not been verified on a real macOS host; no real preference
+restoration or tailnet login is claimed.
+
+## Safe verification
+
+The isolated check uses a digest-pinned Python 3.13.7 Alpine container, real Bash and zsh interpreters,
+temporary synthetic homes, and fake Docker, `mise`, download, browser, Darwin, and macOS preference
+commands. Its runtime has no network, writable source tree, host-home mount, capabilities, or service
+exposure:
+
+```sh
+sh scripts/check.sh
+```
+
+The bounded test build context excludes private `.env`, user-edited GOST runtime configuration,
+caches, and unrelated artifacts; it injects a synthetic GOST fixture instead. Bootstrap tests cover
+successful, failed, repeated, and conflicting immutable remote installs; preflight atomicity and
+staging cleanup; verified missing-`mise` installation; exported-key and existing-`.env` precedence;
+real-zsh execution; exact terminal-state restoration; browser-login URL handling; argument and exit
+status preservation; and Bash-only rebuild scope. The same command also runs stateful macOS tests for
+all preference groups, idempotence, private backups, confirmed absence versus export failure,
+group-level rollback, interruption recovery, failed-rollback snapshot retention, app guards, and
+current-user Dock restart behavior.
+Compose configuration and the Tailscale image build can also be checked without starting the
+privileged service:
+
+```sh
+HOME=/tmp/codyssey-home TS_AUTHKEY= docker compose config
+docker compose build tailscale
+```
+
+These checks are local simulation and build/configuration evidence only. They do not activate TUN,
+change host networking, authenticate Tailscale, or alter real macOS preferences.
+
+## Service management
+
+```sh
 docker compose ps
-
-# 로그 확인
 docker compose logs -f
-
-# 서비스 종료
 docker compose down
 ```
+
+`docker compose down` preserves the named Tailscale state volume unless `--volumes` is explicitly
+added.
