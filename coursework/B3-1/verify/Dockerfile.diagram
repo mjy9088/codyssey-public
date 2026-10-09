@@ -1,0 +1,6 @@
+FROM mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+COPY docs/architecture.svg /diagram/architecture.svg
+RUN mkdir /output \
+    && /ms-playwright/chromium-*/chrome-linux*/chrome --headless --no-sandbox --disable-gpu \
+       --hide-scrollbars --window-size=1200,707 --screenshot=/output/architecture.png file:///diagram/architecture.svg
+CMD ["true"]
