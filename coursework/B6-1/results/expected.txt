@@ -1,0 +1,139 @@
+result_set
+Q01 newest well-stocked books
+title|published_year|copy_count
+Reliable Systems|2025|7
+Useful Interfaces|2024|4
+Winter Lanterns|2023|6
+Patient Strategy|2022|5
+Practical Algorithms|2022|4
+result_set
+Q02 recent members
+full_name|joined_on|membership_status
+Eun Han|2025-01-12|active
+Finn Seo|2025-02-18|active
+Gina Lim|2025-04-05|active
+Hugo Yoon|2025-07-19|active
+Iris Jung|2025-10-23|suspended
+Joon Moon|2026-01-02|active
+result_set
+Q03 active members
+member_id|full_name|email
+1|Ada Park|ada@example.test
+2|Ben Choi|ben@example.test
+3|Cora Kim|cora@example.test
+5|Eun Han|eun@example.test
+6|Finn Seo|finn@example.test
+7|Gina Lim|gina@example.test
+result_set
+Q04 open loans
+rental_id|member_id|book_id|due_on|status
+10|6|10|2026-01-15|overdue
+2|1|2|2026-01-19|overdue
+5|3|3|2026-02-03|overdue
+14|8|12|2026-02-11|borrowed
+4|2|8|2026-02-15|borrowed
+8|5|9|2026-02-17|borrowed
+12|7|1|2026-02-19|borrowed
+result_set
+Q05 open-loan details
+rental_id|full_name|title|due_on|status
+10|Finn Seo|Walking the Coast|2026-01-15|overdue
+2|Ada Park|Database Foundations|2026-01-19|overdue
+5|Cora Kim|Everyday Astronomy|2026-02-03|overdue
+14|Hugo Yoon|Reliable Systems|2026-02-11|borrowed
+4|Ben Choi|Useful Interfaces|2026-02-15|borrowed
+8|Eun Han|Patient Strategy|2026-02-17|borrowed
+12|Gina Lim|Practical Algorithms|2026-02-19|borrowed
+result_set
+Q06 book categories
+title|category|shelf_code
+The Quiet Pioneer|Biography|B-02
+Patient Strategy|Business|D-02
+Database Foundations|Computing|A-01
+Practical Algorithms|Computing|A-01
+Reliable Systems|Computing|A-01
+Useful Interfaces|Design|D-01
+Winter Lanterns|Fiction|C-01
+Cities Through Time|History|B-01
+Questions of Choice|Philosophy|E-02
+Small Weather|Poetry|C-02
+Everyday Astronomy|Science|A-02
+Walking the Coast|Travel|E-01
+result_set
+Q07 rental count per member
+full_name|rental_count
+Ada Park|2
+Ben Choi|2
+Cora Kim|2
+Eun Han|2
+Finn Seo|2
+Hugo Yoon|2
+Dae Lee|1
+Gina Lim|1
+Iris Jung|1
+Joon Moon|0
+result_set
+Q08 overdue contacts
+full_name|email|title|due_on
+Finn Seo|finn@example.test|Walking the Coast|2026-01-15
+Ada Park|ada@example.test|Database Foundations|2026-01-19
+Cora Kim|cora@example.test|Everyday Astronomy|2026-02-03
+result_set
+Q09 category rental volume
+name|rental_count
+Computing|5
+Fiction|2
+Biography|1
+Business|1
+Design|1
+History|1
+Philosophy|1
+Poetry|1
+Science|1
+Travel|1
+result_set
+Q10 category inventory
+name|total_copies
+Computing|16
+Fiction|6
+Business|5
+Design|4
+Philosophy|3
+Poetry|3
+Science|3
+Biography|2
+History|2
+Travel|2
+result_set
+Q11 average completed duration
+average_days
+12.75
+result_set
+Q12 above-average inventory
+title|copy_count
+Reliable Systems|7
+Winter Lanterns|6
+Database Foundations|5
+Patient Strategy|5
+Practical Algorithms|4
+Useful Interfaces|4
+result_set
+Q13 members without rentals
+member_id|full_name
+10|Joon Moon
+result_set
+Q14 update overdue loan
+rental_id|returned_on|status
+5|2026-02-12|returned
+result_set
+Q15 delete historical rental
+remaining_rentals
+14
+result_set
+Q16 insert new rental
+rental_id|member_id|book_id|status
+16|10|2|borrowed
+result_set
+Q17 member lookup index
+name|sql
+idx_rentals_member_id|CREATE INDEX idx_rentals_member_id ON rentals(member_id)

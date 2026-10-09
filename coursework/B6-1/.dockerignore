@@ -1,0 +1,10 @@
+**
+!Dockerfile
+!sql/
+!sql/**
+!results/
+!results/**
+!scripts/
+!scripts/**
+!verify/
+!verify/**
