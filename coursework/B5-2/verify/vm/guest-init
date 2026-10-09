@@ -1,0 +1,23 @@
+#!/bin/busybox sh
+
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin
+export PYTHONPATH=/app
+
+fatal() {
+  echo "VM-CHECK-FAIL: $*" >&2
+  poweroff -f
+}
+
+mount -t proc proc /proc || fatal "cannot mount /proc"
+mount -t sysfs sysfs /sys || fatal "cannot mount /sys"
+mount -t devtmpfs devtmpfs /dev || fatal "cannot mount /dev"
+mkdir -p /dev/pts /run /tmp
+mount -t devpts devpts /dev/pts || fatal "cannot mount /dev/pts"
+mount -t tmpfs tmpfs /tmp || fatal "cannot mount /tmp"
+exec </dev/console >/dev/console 2>&1
+
+echo "VM-BOOT: $(uname -srvmo)"
+cd /app || fatal "application directory is missing"
+/app/.venv/bin/python /app/verify/guest_check.py || fatal "application checks failed"
+sync
+poweroff -f
