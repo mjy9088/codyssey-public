@@ -1,0 +1,57 @@
+services:
+  firebase:
+    build:
+      context: .
+      dockerfile: verify/firebase/Dockerfile
+    init: true
+    read_only: true
+    tmpfs: [/tmp, "/home/node/.config:uid=1000,gid=1000,mode=0700"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, node, -e, "require('net').connect(8080,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 40
+    networks: [lab]
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on: { firebase: { condition: service_healthy } }
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    networks: [lab]
+  verify:
+    profiles: [verify]
+    build:
+      context: .
+      dockerfile: verify/Dockerfile
+    init: true
+    shm_size: 1gb
+    depends_on: { web: { condition: service_healthy } }
+    environment: { BASE_URL: "http://web:8080" }
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [lab]
+  vm:
+    profiles: [vm]
+    build:
+      context: .
+      dockerfile: verify/vm/Dockerfile
+    user: "1000:1000"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [lab]
+networks:
+  lab:
+    internal: true
