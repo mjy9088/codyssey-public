@@ -1,0 +1,15 @@
+#!/bin/busybox sh
+export PATH=/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mount -t tmpfs tmpfs /tmp
+exec </dev/console >/dev/console 2>&1
+printf 'VM kernel: '; uname -srvmo
+if /bin/bash /app/verify/check.sh; then
+  echo VM-CHECK-PASS
+else
+  echo VM-CHECK-FAIL
+fi
+sync
+poweroff -f
