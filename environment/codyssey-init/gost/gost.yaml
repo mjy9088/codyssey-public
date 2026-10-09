@@ -1,15 +1,4 @@
-services:
-  - name: Screen Sharing (Sample)
-    addr: :4901
-    handler:
-      type: tcp
-      chain: tailnet
-    listener:
-      type: tcp
-    forwarder:
-      nodes:
-        - name: 100.66.142.251
-          addr: 100.66.142.251:5900
+services: []
 chains:
   - name: tailnet
     hops:

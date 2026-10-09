@@ -2,17 +2,20 @@ name: tailnet-forward
 
 services:
   tailscale:
-    image: tailscale/tailscale:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: codyssey-tailscale:1.88.3
     container_name: tailnet-forward-tailscale
     hostname: mac-orbstack-tailnet
     network_mode: host
 
     environment:
-      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
       TS_AUTH_ONCE: "true"
 
       TS_STATE_DIR: /var/lib/tailscale
-      TS_USERSPACE: "true"
+      TS_USERSPACE: "false"
 
       TS_SOCKS5_SERVER: "127.0.0.1:1055"
 
@@ -23,11 +26,19 @@ services:
 
     volumes:
       - tailscale-state:/var/lib/tailscale
+      - ${HOME}:/host:rw
+
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
 
     restart: unless-stopped
 
   gost:
-    image: gogost/gost:3.2.6
+    image: gogost/gost:3.2.6@sha256:1ae76fcd556aec335ff602a1828c1140c27d6243c7f02a89f41e177baa265faf
     container_name: tailnet-forward-gost
     network_mode: host
 
@@ -45,7 +56,7 @@ services:
     restart: unless-stopped
 
   gost-ui:
-    image: gogost/gost-ui:b956f5ee
+    image: gogost/gost-ui:b956f5ee@sha256:40f7467199e9f83d12ca8e790850207934f5456603358f2fed09688e17227b22
     container_name: tailnet-forward-ui
 
     ports:
