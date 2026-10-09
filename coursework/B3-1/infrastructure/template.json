@@ -1,0 +1,24 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "An intentionally small isolated public web service. Deploy only after reviewing cost and access.",
+  "Parameters": {
+    "ImageId": {"Type": "AWS::EC2::Image::Id", "Description": "Explicit Ubuntu 22.04 amd64 AMI in ap-northeast-2; no moving AMI alias"},
+    "KeyName": {"Type": "AWS::EC2::KeyPair::KeyName"},
+    "SshSource": {"Type": "String", "AllowedPattern": "([0-9]{1,3}\\.){3}[0-9]{1,3}/32", "Description": "Your single trusted IPv4 address, not a public wildcard"}
+  },
+  "Resources": {
+    "Vpc": {"Type": "AWS::EC2::VPC", "Properties": {"CidrBlock": "10.42.0.0/16", "EnableDnsSupport": true, "EnableDnsHostnames": true, "Tags": [{"Key": "Project", "Value": "network-candidate"}]}},
+    "Subnet": {"Type": "AWS::EC2::Subnet", "Properties": {"VpcId": {"Ref": "Vpc"}, "CidrBlock": "10.42.1.0/24", "MapPublicIpOnLaunch": true, "Tags": [{"Key": "Project", "Value": "network-candidate"}]}},
+    "Gateway": {"Type": "AWS::EC2::InternetGateway", "Properties": {"Tags": [{"Key": "Project", "Value": "network-candidate"}]}},
+    "GatewayAttachment": {"Type": "AWS::EC2::VPCGatewayAttachment", "Properties": {"VpcId": {"Ref": "Vpc"}, "InternetGatewayId": {"Ref": "Gateway"}}},
+    "RouteTable": {"Type": "AWS::EC2::RouteTable", "Properties": {"VpcId": {"Ref": "Vpc"}, "Tags": [{"Key": "Project", "Value": "network-candidate"}]}},
+    "DefaultRoute": {"Type": "AWS::EC2::Route", "DependsOn": "GatewayAttachment", "Properties": {"RouteTableId": {"Ref": "RouteTable"}, "DestinationCidrBlock": "0.0.0.0/0", "GatewayId": {"Ref": "Gateway"}}},
+    "SubnetRoute": {"Type": "AWS::EC2::SubnetRouteTableAssociation", "Properties": {"SubnetId": {"Ref": "Subnet"}, "RouteTableId": {"Ref": "RouteTable"}}},
+    "WebSecurityGroup": {"Type": "AWS::EC2::SecurityGroup", "Properties": {"GroupDescription": "HTTP public, SSH from one approved address", "VpcId": {"Ref": "Vpc"}, "Tags": [{"Key": "Project", "Value": "network-candidate"}], "SecurityGroupIngress": [{"IpProtocol": "tcp", "FromPort": 80, "ToPort": 80, "CidrIp": "0.0.0.0/0"}, {"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "CidrIp": {"Ref": "SshSource"}}]}},
+    "WebInstance": {"Type": "AWS::EC2::Instance", "DependsOn": ["DefaultRoute", "SubnetRoute"], "Properties": {"ImageId": {"Ref": "ImageId"}, "InstanceType": "t3.micro", "KeyName": {"Ref": "KeyName"}, "SubnetId": {"Ref": "Subnet"}, "SecurityGroupIds": [{"Ref": "WebSecurityGroup"}], "MetadataOptions": {"HttpTokens": "required"}, "BlockDeviceMappings": [{"DeviceName": "/dev/sda1", "Ebs": {"VolumeSize": 8, "VolumeType": "gp3", "Encrypted": true, "DeleteOnTermination": true}}], "Tags": [{"Key": "Project", "Value": "network-candidate"}], "UserData": {"Fn::Base64": {"Fn::Join": ["\n", ["#!/bin/bash", "set -euxo pipefail", "apt-get update", "DEBIAN_FRONTEND=noninteractive apt-get install -y nginx", "printf 'OK\\n' > /var/www/html/health", "systemctl enable --now nginx"]]}}}}
+  },
+  "Outputs": {
+    "HealthUrl": {"Value": {"Fn::Sub": "http://${WebInstance.PublicIp}/health"}},
+    "InstanceId": {"Value": {"Ref": "WebInstance"}}
+  }
+}

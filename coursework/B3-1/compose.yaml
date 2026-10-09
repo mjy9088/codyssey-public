@@ -1,0 +1,54 @@
+services:
+  cloud:
+    image: localstack/localstack:4.11.1@sha256:3071c9c72a1e9dbc23ad33540617ad7825ffeba80a8f421eff798b97850f9de5
+    environment:
+      SERVICES: cloudformation,ec2
+      AWS_DEFAULT_REGION: ap-northeast-2
+      EAGER_SERVICE_LOADING: "1"
+      DISABLE_EVENTS: "1"
+    healthcheck:
+      test: [CMD, awslocal, cloudformation, list-stacks]
+      interval: 2s
+      timeout: 10s
+      retries: 30
+    networks: [lab]
+  web:
+    build: .
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/health]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    networks: [lab]
+  vm:
+    profiles: [vm]
+    build:
+      context: .
+      dockerfile: verify/vm/Dockerfile
+    user: "1000:1000"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [lab]
+  verify:
+    profiles: [verify]
+    build:
+      context: .
+      dockerfile: verify/Dockerfile
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: ap-northeast-2
+      AWS_EC2_METADATA_DISABLED: "true"
+      AWS_MAX_ATTEMPTS: "1"
+      AWS_PAGER: ""
+      WEB_URL: http://web:8080
+    networks: [lab]
+networks:
+  lab:
+    internal: true

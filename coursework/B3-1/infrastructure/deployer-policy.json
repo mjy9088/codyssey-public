@@ -1,0 +1,39 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InspectNetworkLabResources",
+      "Effect": "Allow",
+      "Action": ["ec2:DescribeVpcs", "ec2:DescribeSubnets", "ec2:DescribeRouteTables", "ec2:DescribeInternetGateways", "ec2:DescribeSecurityGroups", "ec2:DescribeInstances", "ec2:DescribeInstanceStatus", "ec2:DescribeImages", "ec2:DescribeKeyPairs", "ec2:DescribeVolumes", "ec2:DescribeAddresses", "ec2:DescribeAvailabilityZones"],
+      "Resource": "*",
+      "Condition": {"StringEquals": {"aws:RequestedRegion": "ap-northeast-2"}}
+    },
+    {
+      "Sid": "ManageOwnedNetworkResources",
+      "Effect": "Allow",
+      "Action": ["ec2:DeleteVpc", "ec2:ModifyVpcAttribute", "ec2:DeleteSubnet", "ec2:ModifySubnetAttribute", "ec2:AttachInternetGateway", "ec2:DetachInternetGateway", "ec2:DeleteInternetGateway", "ec2:AssociateRouteTable", "ec2:DisassociateRouteTable", "ec2:CreateRoute", "ec2:DeleteRoute", "ec2:DeleteRouteTable", "ec2:DeleteSecurityGroup", "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress", "ec2:TerminateInstances"],
+      "Resource": "*",
+      "Condition": {"StringEquals": {"aws:RequestedRegion": "ap-northeast-2", "ec2:ResourceTag/Project": "network-candidate"}}
+    },
+    {
+      "Sid": "CreateTaggedNetworkResources",
+      "Effect": "Allow",
+      "Action": ["ec2:CreateVpc", "ec2:CreateSubnet", "ec2:CreateInternetGateway", "ec2:CreateRouteTable", "ec2:CreateSecurityGroup", "ec2:RunInstances"],
+      "Resource": "*",
+      "Condition": {"StringEquals": {"aws:RequestedRegion": "ap-northeast-2", "aws:RequestTag/Project": "network-candidate"}}
+    },
+    {
+      "Sid": "TagOnlyDuringOwnedCreation",
+      "Effect": "Allow",
+      "Action": ["ec2:CreateTags"],
+      "Resource": "*",
+      "Condition": {"StringEquals": {"aws:RequestedRegion": "ap-northeast-2", "aws:RequestTag/Project": "network-candidate", "ec2:CreateAction": ["CreateVpc", "CreateSubnet", "CreateInternetGateway", "CreateRouteTable", "CreateSecurityGroup", "RunInstances"]}}
+    },
+    {
+      "Sid": "ManageNamedLabStacks",
+      "Effect": "Allow",
+      "Action": ["cloudformation:CreateStack", "cloudformation:DeleteStack", "cloudformation:DescribeStacks", "cloudformation:DescribeStackEvents", "cloudformation:DescribeStackResources", "cloudformation:ListStackResources", "cloudformation:GetTemplate", "cloudformation:CreateChangeSet", "cloudformation:DescribeChangeSet", "cloudformation:ExecuteChangeSet", "cloudformation:DeleteChangeSet"],
+      "Resource": "arn:aws:cloudformation:ap-northeast-2:*:stack/network-candidate-*/*"
+    }
+  ]
+}

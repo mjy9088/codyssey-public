@@ -1,0 +1,9 @@
+**
+!web/
+!web/**
+!verify/
+!verify/**
+!infrastructure/
+!infrastructure/**
+!docs/
+!docs/architecture.svg
