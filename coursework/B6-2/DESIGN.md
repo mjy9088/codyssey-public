@@ -1,15 +1,10 @@
 # Folio Book Catalog Design System
 
-## 0. Research Log
-
-- Embedded references: shortlisted Notion, Wired, and Claude; selected Minimalist UI + Notion because a private catalog benefits from warm paper surfaces, strong reading hierarchy, and quiet controls.
-- Lazyweb: one desktop catalog query, one returned bookshelf screen viewed; retained its title-first grid, filters directly below the page title, and detail/action grouping without copying assets or branded content.
-- Imagen drafts: skipped because no image-generation tool is available in this environment; the UI uses no external imagery.
-- Direction: an orderly reading desk rather than an admin dashboard. Warm paper, ink-blue actions, fine rules, and staggered book-spine accents make the catalog recognizable without decorative clutter.
-
 ## 1. Atmosphere & Identity
 
 Folio feels like a carefully indexed personal library: calm, tactile, and exact. Its signature is the “shelf rule,” a narrow colored edge paired with editorial typography so every record reads like a catalog card rather than a generic SaaS tile.
+
+The direction is an orderly reading desk rather than an admin dashboard. Warm paper, ink-blue actions, fine rules, and staggered book-spine accents make the catalog recognizable without decorative clutter.
 
 Primary personas are a keyboard-first reader maintaining a small collection and a low-vision reader who needs strong contrast, clear focus, plain validation, and stable page structure.
 
