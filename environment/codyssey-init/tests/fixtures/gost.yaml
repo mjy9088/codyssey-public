@@ -1,0 +1,14 @@
+services: []
+chains:
+  - name: tailnet
+    hops:
+      - name: synthetic
+        nodes:
+          - name: socks
+            addr: 127.0.0.1:1055
+            connector:
+              type: socks5
+            dialer:
+              type: tcp
+api:
+  addr: 127.0.0.1:18080
