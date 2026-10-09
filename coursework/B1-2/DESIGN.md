@@ -1,17 +1,5 @@
 # Benchbook Design System
 
-## 0. Research Log
-
-- Embedded refs: shortlisted Notion, Linear, and Airtable; picked the operational taste rules plus
-  Notion because a workshop planner benefits from warm document surfaces, whisper borders, and dense
-  but calm controls.
-- Existing-project lane: reviewed B1-1's design contract and nine UI/behavior files; retained its
-  semantic-token discipline, 4px spacing base, state components, focus treatment, and intrinsic grids.
-- Lazyweb: skipped because external design research was unnecessary for this private-coursework task;
-  no restricted material was sent outside the workspace.
-- Imagen drafts: skipped because no image-generation tool is available and this is an application
-  shell whose real product UI is the focal artifact.
-
 ## 1. Atmosphere & Identity
 
 A working studio ledger: warm paper, graphite type, cobalt registration marks, and terse operational
