@@ -1,0 +1,116 @@
+#!/bin/bash
+set -euo pipefail
+export PATH=/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+fatal() { echo "VM-LAB-FAILURE: $*"; poweroff -f; }
+trap 'fatal "line=$LINENO exit=$?"' ERR
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /run/sshd /run/dbus
+mount -t devpts devpts /dev/pts
+mount -t tmpfs tmpfs /tmp
+chmod 1777 /tmp
+echo "VM-LAB-BEGIN: $(uname -srvmo)"
+
+modprobe virtio_pci
+modprobe virtio_net
+interface=
+for candidate in /sys/class/net/*; do
+  name=${candidate##*/}
+  if [[ "$name" != lo ]]; then interface=$name; break; fi
+done
+[[ -n "$interface" ]]
+ip link set lo up
+ip link set "$interface" up
+ip address add 10.0.2.15/24 dev "$interface"
+ip route add default via 10.0.2.2 dev "$interface"
+
+mkdir -p /home
+addgroup -S agent-common
+addgroup -S agent-core
+for account in agent-admin agent-dev agent-test; do adduser -D -s /bin/sh -G agent-common "$account"; done
+addgroup agent-admin agent-core
+addgroup agent-dev agent-core
+agent_home=/home/agent-admin/agent-app
+mkdir -p "$agent_home"/{upload_files,api_keys,bin} /var/log/agent-app
+chown agent-admin:agent-common "$agent_home/upload_files"
+chmod 2770 "$agent_home/upload_files"
+setfacl -m g:agent-common:rwx,d:g:agent-common:rwx "$agent_home/upload_files"
+chown agent-admin:agent-core "$agent_home/api_keys" /var/log/agent-app
+chmod 2770 "$agent_home/api_keys" /var/log/agent-app
+setfacl -m g:agent-core:rwx,d:g:agent-core:rwx "$agent_home/api_keys" /var/log/agent-app
+printf 'agent_api_key_test\n' > "$agent_home/api_keys/t_secret.key"
+chown agent-admin:agent-core "$agent_home/api_keys/t_secret.key"
+chmod 0640 "$agent_home/api_keys/t_secret.key"
+cp /lab/bin/monitor.sh /lab/bin/report.sh "$agent_home/bin/"
+cp /lab/synthetic-app.sh "$agent_home/bin/agent-app-synthetic"
+chown agent-dev:agent-core "$agent_home/bin/monitor.sh" "$agent_home/bin/report.sh"
+chown agent-admin:agent-core "$agent_home/bin/agent-app-synthetic"
+chmod 0750 "$agent_home/bin/"*
+touch /var/log/agent-app/monitor.log
+chown agent-admin:agent-core /var/log/agent-app/monitor.log
+chmod 0660 /var/log/agent-app/monitor.log
+
+cat >>/etc/ssh/sshd_config <<'EOF'
+Port 20022
+PermitRootLogin no
+PasswordAuthentication no
+EOF
+ssh-keygen -A >/dev/null
+/usr/sbin/sshd
+
+dbus-uuidgen --ensure
+dbus-daemon --system --fork
+firewalld --nofork --nopid >/tmp/firewalld.log 2>&1 &
+firewalld_pid=$!
+for _ in $(seq 1 30); do firewall-cmd --state >/dev/null 2>&1 && break; sleep 1; done
+firewall-cmd --state | grep -qx running
+firewall-cmd --permanent --zone=public --set-target=DROP >/dev/null
+for service in ssh dhcpv6-client; do firewall-cmd --permanent --zone=public --remove-service="$service" >/dev/null 2>&1 || true; done
+firewall-cmd --permanent --zone=public --add-port=20022/tcp >/dev/null
+firewall-cmd --permanent --zone=public --add-port=15034/tcp >/dev/null
+firewall-cmd --permanent --zone=public --add-interface="$interface" >/dev/null
+firewall-cmd --reload >/dev/null
+
+su agent-admin -s /bin/sh -c "AGENT_PORT=15034 $agent_home/bin/agent-app-synthetic" >/tmp/synthetic-app.log 2>&1 &
+app_pid=$!
+for _ in $(seq 1 30); do ss -ltnH 'sport = :15034' | grep -q . && break; sleep 1; done
+
+id agent-admin | grep -q agent-core
+id agent-dev | grep -q agent-core
+id agent-test | grep -q agent-common
+if id agent-test | grep -q agent-core; then fatal 'agent-test unexpectedly belongs to agent-core'; fi
+su agent-test -s /bin/sh -c "touch $agent_home/upload_files/test-write && rm $agent_home/upload_files/test-write"
+if su agent-test -s /bin/sh -c "cat $agent_home/api_keys/t_secret.key" >/dev/null 2>&1; then fatal 'agent-test read protected key'; fi
+sshd_effective=$(sshd -T)
+grep -qx 'port 20022' <<<"$sshd_effective"
+grep -qx 'permitrootlogin no' <<<"$sshd_effective"
+sockets=$(ss -ltnH)
+grep -q ':20022 ' <<<"$sockets"
+grep -q ':15034 ' <<<"$sockets"
+[[ $(firewall-cmd --zone=public --list-ports) == *20022/tcp* ]]
+[[ $(firewall-cmd --zone=public --list-ports) == *15034/tcp* ]]
+[[ -z $(firewall-cmd --zone=public --list-services) ]]
+[[ $(stat -c '%U:%G %a' "$agent_home/bin/monitor.sh") == 'agent-dev:agent-core 750' ]]
+echo 'VM-CHECK: ssh=20022 root-login=denied firewall=running ports=20022,15034'
+echo 'VM-CHECK: accounts=admin,dev,test groups=common,core ACL=verified'
+
+su agent-admin -s /bin/sh -c "AGENT_PROCESS_PATTERN=agent-app-synthetic AGENT_PORT=15034 MONITOR_DISK_PATH=/tmp $agent_home/bin/monitor.sh"
+before=$(wc -l < /var/log/agent-app/monitor.log)
+printf 'PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin\n* * * * * AGENT_PROCESS_PATTERN=agent-app-synthetic AGENT_PORT=15034 MONITOR_DISK_PATH=/tmp %s/bin/monitor.sh >/dev/null 2>&1\n' "$agent_home" > /tmp/agent-admin.cron
+crontab -u agent-admin /tmp/agent-admin.cron
+crond -f -l 8 >/tmp/crond.log 2>&1 &
+cron_pid=$!
+after=$before
+for _ in $(seq 1 38); do
+  sleep 2
+  after=$(wc -l < /var/log/agent-app/monitor.log)
+  (( after > before )) && break
+done
+if (( after <= before )); then cat /tmp/crond.log; fatal 'cron did not append monitor log'; fi
+su agent-admin -s /bin/sh -c "$agent_home/bin/report.sh /var/log/agent-app/monitor.log"
+echo "VM-CHECK: monitor-lines-before=$before after=$after cron=automatic rotation=10MiB/10"
+echo 'VM-LAB-SUCCESS'
+kill "$cron_pid" "$app_pid" "$firewalld_pid" 2>/dev/null || true
+poweroff -f

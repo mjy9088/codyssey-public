@@ -1,0 +1,62 @@
+#!/bin/bash
+set -euo pipefail
+export PATH=/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+fatal() { echo "PRIVATE-VM-FAILURE: $*"; /bin/busybox poweroff -f; }
+trap 'fatal "line=$LINENO exit=$?"' ERR
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /run/private /home
+mount -t devpts devpts /dev/pts
+mount -t tmpfs tmpfs /run
+mkdir -p /run/private
+test -s /private/input.zip
+echo "PRIVATE-VM-BEGIN: $(uname -srvmo)"
+
+unzip -qq -j /private/input.zip '*x86*' -d /run/private
+set -- /run/private/*
+[[ $# -eq 1 && -f $1 ]]
+(( $(stat -c %s "$1") <= 20971520 ))
+mv -- "$1" /run/private/supplied-app
+chmod 0750 /run/private/supplied-app
+
+groupadd agent-common
+groupadd agent-core
+useradd -m -s /bin/sh -g agent-common -G agent-core agent-admin
+agent_home=/home/agent-admin/agent-app
+mkdir -p "$agent_home"/{upload_files,api_keys,bin} /var/log/agent-app
+chown -R agent-admin:agent-core "$agent_home" /var/log/agent-app /run/private
+chmod 2770 "$agent_home/api_keys" /var/log/agent-app
+printf 'agent_api_key_test\n' > "$agent_home/api_keys/t_secret.key"
+cp "$agent_home/api_keys/t_secret.key" "$agent_home/api_keys/secret.key"
+chown agent-admin:agent-core "$agent_home/api_keys/t_secret.key"
+chown agent-admin:agent-core "$agent_home/api_keys/secret.key"
+chmod 0640 "$agent_home/api_keys/"*.key
+cp /lab/bin/monitor.sh "$agent_home/bin/monitor.sh"
+chown agent-admin:agent-core "$agent_home/bin/monitor.sh"
+chmod 0750 "$agent_home/bin/monitor.sh"
+
+timeout 40 su agent-admin -s /bin/sh -c "exec env AGENT_HOME=$agent_home AGENT_PORT=15034 AGENT_UPLOAD_DIR=$agent_home/upload_files AGENT_KEY_PATH=$agent_home/api_keys AGENT_LOG_DIR=/var/log/agent-app /run/private/supplied-app" > /run/private/app.log 2>&1 &
+runner_pid=$!
+ready=0
+for _ in $(seq 1 40); do
+  if grep -q 'Agent READY' /run/private/app.log && ss -ltnH 'sport = :15034' | grep -q .; then ready=1; break; fi
+  kill -0 "$runner_pid" 2>/dev/null || break
+  sleep 1
+done
+cat /run/private/app.log
+[[ $ready -eq 1 ]]
+(( $(grep -c '\[OK\]' /run/private/app.log) >= 5 ))
+pgrep -f /run/private/supplied-app > /run/private/app.pids
+uid=
+while read -r app_pid; do
+  candidate_uid=$(awk '/^Uid:/ { print $2 }' "/proc/$app_pid/status")
+  if [[ "$candidate_uid" != 0 ]]; then uid=$candidate_uid; break; fi
+done < /run/private/app.pids
+[[ -n "$uid" ]]
+su agent-admin -s /bin/sh -c "AGENT_PROCESS_PATTERN=supplied-app AGENT_PORT=15034 MONITOR_DISK_PATH=/run $agent_home/bin/monitor.sh"
+echo "PRIVATE-VM-CHECK: supplied-app-ready=yes ok-steps>=5 listener=15034 uid=$uid input-source=ephemeral-initramfs"
+echo 'PRIVATE-VM-SUCCESS'
+kill "$runner_pid" 2>/dev/null || true
+/bin/busybox poweroff -f
