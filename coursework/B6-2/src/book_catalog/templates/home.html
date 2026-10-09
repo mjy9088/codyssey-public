@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">Your personal index</p>
+  <h1>Every good book<br>leaves a mark.</h1>
+  <p class="hero__copy">Keep a concise record of the titles, authors, and years that belong on your shelf.</p>
+  <div class="actions">
+    <a class="button button--primary" href="/books">Open the catalog</a>
+    <a class="button button--secondary" href="/books/new">Add your first book</a>
+  </div>
+</section>
+<section class="ledger" aria-labelledby="ledger-title">
+  <p class="eyebrow">The Folio method</p>
+  <h2 id="ledger-title">A library, reduced to what matters.</h2>
+  <div class="ledger__grid">
+    <p><strong>01</strong><span>Record the essential details.</span></p>
+    <p><strong>02</strong><span>Find any title in an instant.</span></p>
+    <p><strong>03</strong><span>Keep your collection current.</span></p>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-heading"><p class="eyebrow">Design reference</p><h1>Interface showcase</h1><p>Synthetic examples for reviewing the Folio visual language.</p></header>
+<section class="showcase-section"><h2>Actions</h2><div class="actions"><button class="button button--primary">Primary action</button><button class="button button--secondary">Secondary action</button><button class="button button--danger-solid">Destructive action</button><button class="button button--secondary" disabled>Unavailable action</button><a class="button button--quiet" href="#fields">Quiet link</a></div></section>
+<section id="fields" class="showcase-section reading-width"><h2>Fields and notices</h2><div class="field"><label for="sample">Title</label><input id="sample" value="The Glass Orchard"><p class="field__hint">A helpful field hint.</p></div><p class="notice notice--success" role="status">The record was saved.</p><p class="notice notice--error" role="alert">Please check the highlighted fields.</p></section>
+<section class="showcase-section"><h2>Catalog card</h2><article class="book-card showcase-card"><p class="book-card__number">No. 042</p><h3><a href="#">The Glass Orchard</a></h3><p class="book-card__author">Mara Bell</p><div class="book-card__foot"><span>1998</span><a href="#">View record →</a></div></article></section>
+<section class="showcase-section"><h2>Empty state</h2><div class="empty-state"><p class="eyebrow">Nothing on this shelf</p><h3>Your catalog is ready for its first book.</h3><p>Add a title to begin building your personal index.</p><a class="button button--secondary" href="/books/new">Add a book</a></div></section>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+{% if notice %}<p class="notice notice--success" role="status">{% if notice == 'created' %}Book added to the catalog.{% else %}Changes saved.{% endif %}</p>{% endif %}
+<article class="record reading-width">
+  <p class="eyebrow">Catalog record · No. {{ "%03d"|format(book.id) }}</p>
+  <h1>{{ book.title }}</h1>
+  <dl><div><dt>Author</dt><dd>{{ book.author }}</dd></div><div><dt>Publication year</dt><dd>{{ book.year }}</dd></div></dl>
+  <div class="actions"><a class="button button--primary" href="/books/{{ book.id }}/edit">Edit record</a><a class="button button--danger" href="/books/{{ book.id }}/delete">Remove</a><a class="button button--quiet" href="/books">Back to catalog</a></div>
+</article>
+{% endblock %}

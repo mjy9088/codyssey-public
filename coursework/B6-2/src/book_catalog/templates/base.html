@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A quiet, server-rendered personal book catalog.">
+    <title>{{ page_title }} · Folio</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <header class="masthead">
+      <div class="shell masthead__inner">
+        <a class="brand" href="/" aria-label="Folio home">Folio<span>.</span></a>
+        <nav aria-label="Primary navigation">
+          <a href="/books" {% if request.url.path.startswith('/books') and request.url.path != '/books/new' %}aria-current="page"{% endif %}>Catalog</a>
+          <a href="/books/new" {% if request.url.path == '/books/new' %}aria-current="page"{% endif %}>Add a book</a>
+        </nav>
+      </div>
+    </header>
+    <main id="content" class="shell page">
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="footer shell">
+      <span>Folio</span>
+      <p>A small index for books worth returning to.</p>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="reading-width danger-panel">
+  <p class="eyebrow">Confirm removal</p><h1>Remove this book?</h1>
+  <p><strong>{{ book.title }}</strong> by {{ book.author }} will be permanently removed from your catalog.</p>
+  <form action="/books/{{ book.id }}/delete" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><div class="actions"><button class="button button--danger-solid" type="submit">Remove book</button><a class="button button--secondary" href="/books/{{ book.id }}">Keep book</a></div></form>
+</section>
+{% endblock %}

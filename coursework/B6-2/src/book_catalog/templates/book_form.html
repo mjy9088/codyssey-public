@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="reading-width">
+  <header class="page-heading"><p class="eyebrow">Catalog record</p><h1>{{ heading }}</h1><p>Use the published title, author name, and original publication year.</p></header>
+  {% if values and values.fields is defined %}<div class="notice notice--error" role="alert"><strong>Check the highlighted fields.</strong><p>Each record needs a valid title, author, and year.</p></div>{% endif %}
+  <form class="book-form" action="{{ action }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field {% if values and values.fields is defined and 'title' in values.fields %}field--invalid{% endif %}">
+      <label for="title">Title</label><input id="title" name="title" value="{{ values.title if values else '' }}" maxlength="160" required {% if values and values.fields is defined and 'title' in values.fields %}aria-invalid="true" aria-describedby="title-error"{% endif %}>
+      {% if values and values.fields is defined and 'title' in values.fields %}<p id="title-error" class="field__error">Enter a title of 160 characters or fewer.</p>{% else %}<p class="field__hint">The title as it appears on the cover.</p>{% endif %}
+    </div>
+    <div class="field {% if values and values.fields is defined and 'author' in values.fields %}field--invalid{% endif %}">
+      <label for="author">Author</label><input id="author" name="author" value="{{ values.author if values else '' }}" maxlength="120" required {% if values and values.fields is defined and 'author' in values.fields %}aria-invalid="true" aria-describedby="author-error"{% endif %}>
+      {% if values and values.fields is defined and 'author' in values.fields %}<p id="author-error" class="field__error">Enter an author name of 120 characters or fewer.</p>{% else %}<p class="field__hint">Use the primary credited author.</p>{% endif %}
+    </div>
+    <div class="field {% if values and values.fields is defined and 'year' in values.fields %}field--invalid{% endif %}">
+      <label for="year">Publication year</label><input id="year" name="year" type="number" value="{{ values.year if values else '' }}" min="1450" max="2100" required {% if values and values.fields is defined and 'year' in values.fields %}aria-invalid="true" aria-describedby="year-error"{% endif %}>
+      {% if values and values.fields is defined and 'year' in values.fields %}<p id="year-error" class="field__error">Enter a year from 1450 through 2100.</p>{% else %}<p class="field__hint">A four-digit year from 1450 through 2100.</p>{% endif %}
+    </div>
+    <div class="actions"><button class="button button--primary" type="submit">{{ submit_label }}</button><a class="button button--quiet" href="/books">Cancel</a></div>
+  </form>
+</div>
+{% endblock %}

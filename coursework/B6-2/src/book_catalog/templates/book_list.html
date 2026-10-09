@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-heading page-heading--split">
+  <div><p class="eyebrow">Personal library</p><h1>Catalog</h1></div>
+  <a class="button button--primary" href="/books/new">Add a book</a>
+</header>
+{% if notice %}<p class="notice notice--success" role="status">{% if notice == 'deleted' %}Book removed from the catalog.{% else %}Catalog updated successfully.{% endif %}</p>{% endif %}
+<form class="search" action="/books" method="get" role="search">
+  <label for="q">Search the catalog</label>
+  <div class="search__row"><input id="q" name="q" type="search" value="{{ query }}" placeholder="Title or author"><button class="button button--secondary" type="submit">Search</button></div>
+</form>
+{% if books %}
+<div class="catalog" aria-label="Books">
+  {% for book in books %}
+  <article class="book-card">
+    <p class="book-card__number">No. {{ "%03d"|format(book.id) }}</p>
+    <h2><a href="/books/{{ book.id }}">{{ book.title }}</a></h2>
+    <p class="book-card__author">{{ book.author }}</p>
+    <div class="book-card__foot"><span>{{ book.year }}</span><a href="/books/{{ book.id }}">View record <span aria-hidden="true">→</span></a></div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<section class="empty-state">
+  <p class="eyebrow">Nothing on this shelf</p>
+  <h2>{% if query %}No books match your search.{% else %}Your catalog is ready for its first book.{% endif %}</h2>
+  <p>{% if query %}Try another title or author, or clear the search.{% else %}Add a title to begin building your personal index.{% endif %}</p>
+  <a class="button button--secondary" href="{% if query %}/books{% else %}/books/new{% endif %}">{% if query %}Clear search{% else %}Add a book{% endif %}</a>
+</section>
+{% endif %}
+{% endblock %}
