@@ -1,12 +1,5 @@
 # Folio Design System
 
-## 0. Research Log
-
-- Embedded refs: shortlisted Notion, Linear, and Mintlify; selected operational `taste-skill`
-  with Notion because a lending catalog benefits from warm, readable, content-first structure.
-- Lazyweb: skipped because this scoped backend handoff has no approved external product research.
-- Imagen drafts: skipped because no image-generation tool is available and this is an application UI.
-
 ## 1. Atmosphere & Identity
 
 Folio feels like a quiet reading room: warm paper surfaces, crisp typographic hierarchy, and blue
