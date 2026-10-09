@@ -1,0 +1,56 @@
+[project]
+name = "mini-git-coursework"
+version = "0.1.0"
+description = "An in-memory educational commit graph CLI"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["typing-extensions==4.15.0"]
+
+[dependency-groups]
+dev = [
+    "basedpyright==1.31.4",
+    "nodejs-wheel-binaries==24.11.1",
+    "pytest==8.4.2",
+    "ruff==0.13.3",
+]
+
+[tool.basedpyright]
+typeCheckingMode = "all"
+pythonVersion = "3.11"
+pythonPlatform = "All"
+include = ["mini_git", "tests", "verify/guest_check.py", "main.py"]
+exclude = ["**/__pycache__", "**/.venv"]
+reportUnusedCallResult = "warning"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportUnusedVariable = "error"
+reportMissingParameterType = "error"
+reportPrivateUsage = "error"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["mini_git", "tests"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["COM812", "ISC001", "D203", "D213", "CPY001", "FBT001", "FBT002", "TD002", "TD003", "FIX002"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S603", "ARG", "PLR2004", "SLF001", "FLY002", "D"]
+"verify/**/*.py" = ["S101", "S603", "T201", "INP001"]
+"main.py" = ["T201"]
+"mini_git/errors.py" = ["D101", "D105"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
+filterwarnings = ["error"]
