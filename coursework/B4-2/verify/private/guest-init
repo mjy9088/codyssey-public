@@ -1,0 +1,159 @@
+#!/bin/bash
+set -u
+umask 077
+export PATH=/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+observation_result=failure
+finish() {
+  status=$?
+  trap - EXIT
+  if [[ $status -eq 0 && $observation_result == success ]]; then
+    echo 'PRIVATE-OBSERVATION-COMPLETE'
+  else
+    echo "PRIVATE-OBSERVATION-FAILURE: guest_status=$status"
+  fi
+  /bin/busybox poweroff -f
+}
+trap finish EXIT
+mount -t proc proc /proc || exit 1
+mount -t sysfs sysfs /sys || exit 1
+mount -t devtmpfs devtmpfs /dev || exit 1
+mkdir -p /dev/pts /home
+mount -t devpts devpts /dev/pts || exit 1
+mount -t tmpfs -o size=320m,nosuid,nodev tmpfs /run || exit 1
+mkdir -p /run/control /run/extract /run/target /run/cases || exit 1
+chmod 0700 /run/control /run/extract || exit 1
+chmod 0711 /run/cases || exit 1
+chmod 0755 /run/target || exit 1
+echo "PRIVATE-VM-BEGIN: $(uname -srvmo)"
+test -s /private/input.zip || { echo 'PRIVATE-OBSERVATION-BLOCKED: archive absent in guest'; exit 20; }
+ulimit -f 65536
+if ! timeout 20 unzip -qq -j /private/input.zip '*x86*' -d /run/extract; then
+  echo 'PRIVATE-OBSERVATION-BLOCKED: bounded x86 member extraction failed'
+  exit 20
+fi
+shopt -s nullglob
+members=(/run/extract/*)
+if (( ${#members[@]} != 1 )) || [[ ! -f ${members[0]} ]]; then
+  echo 'PRIVATE-OBSERVATION-BLOCKED: expected exactly one matching x86 member'
+  exit 20
+fi
+member=${members[0]}
+if (( $(stat -c %s "$member") > 33554432 )); then
+  echo 'PRIVATE-OBSERVATION-BLOCKED: extracted member exceeds 32 MiB bound'
+  exit 20
+fi
+mv -- "$member" /run/target/supplied-app || exit 1
+chown root:root /run/target /run/target/supplied-app || exit 1
+chmod 0555 /run/target /run/target/supplied-app || exit 1
+
+groupadd --system agent-core || exit 1
+useradd --system --create-home --shell /bin/sh --gid agent-core agent-observer || exit 1
+observe_case() {
+  name=$1 memory=$2 cpu=$3 threads=$4 duration=$5
+  case_root=/run/cases/$name
+  agent_home=$case_root/home
+  app_logs=$case_root/app-logs
+  app_tmp=$case_root/tmp
+  log=/run/control/$name.app.log
+  metrics=/run/control/$name.metrics.log
+  monitor=/run/control/$name.monitor.log
+  deadline_marker=/run/control/$name.deadline
+  test ! -e "$case_root" || { echo "PRIVATE-CASE-FAILURE: duplicate case state name=$name"; return 1; }
+  mkdir -p "$agent_home"/{upload_files,api_keys} "$app_logs" "$app_tmp" || {
+    echo "PRIVATE-CASE-FAILURE: case state setup failed name=$name"
+    return 1
+  }
+  printf 'agent_api_key_test\n' >"$agent_home/api_keys/secret.key"
+  chown -R agent-observer:agent-core "$case_root"
+  chmod 0700 "$agent_home/api_keys" "$app_logs"
+  echo "PRIVATE-CASE-BEGIN name=$name memory_limit=$memory cpu_max=$cpu multi_thread=$threads"
+  before_oom=$(dmesg | grep -Eic 'out of memory|killed process' || true)
+  /lab/bin/supervise.sh "$deadline_marker" "$duration" 5 -- runuser -u agent-observer -- env \
+    HOME="$agent_home" TMPDIR="$app_tmp" AGENT_HOME="$agent_home" AGENT_PORT=15034 \
+    AGENT_UPLOAD_DIR="$agent_home/upload_files" AGENT_KEY_PATH="$agent_home/api_keys" \
+    AGENT_LOG_DIR="$app_logs" MEMORY_LIMIT="$memory" CPU_MAX_OCCUPY="$cpu" \
+    MULTI_THREAD_ENABLE="$threads" /run/target/supplied-app >"$log" 2>&1 &
+  runner=$!
+  samples=0
+  max_samples=$((duration / 2 + 2))
+  while kill -0 "$runner" 2>/dev/null && (( samples < max_samples )); do
+    timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+    account_pids=()
+    while read -r pid; do
+      [[ -n $pid ]] && account_pids+=("$pid")
+    done <<<"$(pgrep -u agent-observer | sort -n || true)"
+    echo "PRIVATE-SAMPLE case=$name timestamp=$timestamp sample=$samples account_processes=${#account_pids[@]}" >>"$metrics"
+    if (( ${#account_pids[@]} == 0 )); then
+      echo "PRIVATE-PROCESS case=$name timestamp=$timestamp role=none" >>"$metrics"
+    fi
+    total_rss=0
+    total_cpu=0
+    total_threads=0
+    for pid in "${account_pids[@]}"; do
+      [[ -r /proc/$pid/status ]] || continue
+      details=$(ps -o ppid=,stat=,pcpu=,rss=,nlwp=,etime=,comm= -p "$pid") || continue
+      read -r ppid state pcpu rss nlwp etime comm <<<"$details"
+      role=launcher
+      for candidate in "${account_pids[@]}"; do
+        if [[ $ppid == "$candidate" ]]; then role=worker; break; fi
+      done
+      echo "PRIVATE-PROCESS case=$name timestamp=$timestamp role=$role pid=$pid ppid=$ppid state=$state cpu_pct=$pcpu rss_kb=$rss threads=$nlwp elapsed=$etime comm=$comm" >>"$metrics"
+      ps -L -o pid=,tid=,stat=,pcpu=,rss=,comm= -p "$pid" 2>/dev/null | while read -r thread_pid tid thread_state thread_cpu thread_rss thread_comm; do
+        [[ -n ${tid:-} ]] || continue
+        echo "PRIVATE-THREAD case=$name timestamp=$timestamp owner_pid=$thread_pid tid=$tid state=$thread_state cpu_pct=$thread_cpu rss_kb=$thread_rss comm=$thread_comm" >>"$metrics"
+      done
+      /lab/bin/monitor.sh "$pid" "$monitor" 1 0 >/dev/null 2>&1 || true
+      total_rss=$((total_rss + rss))
+      total_cpu=$(awk -v total="$total_cpu" -v value="$pcpu" 'BEGIN {printf "%.1f", total+value}')
+      total_threads=$((total_threads + nlwp))
+    done
+    echo "PRIVATE-AGGREGATE case=$name timestamp=$timestamp process_count=${#account_pids[@]} cpu_pct=$total_cpu rss_kb=$total_rss threads=$total_threads" >>"$metrics"
+    samples=$((samples + 1))
+    sleep 2
+  done
+  wait "$runner"
+  status=$?
+  after_oom=$(dmesg | grep -Eic 'out of memory|killed process' || true)
+  kernel_oom=no
+  (( after_oom > before_oom )) && kernel_oom=yes
+  origin=child-exit
+  termination=target-native-exit
+  if [[ -f $deadline_marker ]]; then
+    origin=supervisor-deadline
+    termination=external-timeout
+  elif grep -q 'MemoryGuard.*Memory limit exceeded\|MemoryGuard.*Self-terminating' "$log"; then
+    termination=application-memory-guard
+  elif grep -q 'CPU Threshold Violated\|WATCHDOG' "$log"; then
+    termination=application-cpu-guard
+  fi
+  pkill -TERM -u agent-observer 2>/dev/null || true
+  sleep 1
+  pkill -KILL -u agent-observer 2>/dev/null || true
+  for _ in $(seq 1 10); do
+    pgrep -u agent-observer >/dev/null 2>&1 || break
+    sleep 0.1
+  done
+  survivors=$(pgrep -u agent-observer | tr '\n' ',' 2>/dev/null || true)
+  if [[ -n $survivors ]]; then
+    echo "PRIVATE-CASE-FAILURE: surviving account processes name=$name pids=$survivors"
+    return 1
+  fi
+  echo "PRIVATE-CASE-END name=$name status=$status origin=$origin termination=$termination kernel_oom_evidence=$kernel_oom samples=$samples survivors=0"
+  echo "PRIVATE-APP-LOG-BEGIN name=$name"
+  sed "s/^/PRIVATE-APP case=$name | /" "$log"
+  echo "PRIVATE-APP-LOG-END name=$name"
+  echo "PRIVATE-METRICS-BEGIN name=$name"
+  cat "$metrics"
+  echo "PRIVATE-METRICS-END name=$name"
+  echo "PRIVATE-MONITOR-BEGIN name=$name"
+  cat "$monitor" 2>/dev/null || true
+  echo "PRIVATE-MONITOR-END name=$name"
+}
+
+observe_case memory-before 50 100 false 20 || exit 30
+observe_case memory-after 100 100 false 20 || exit 30
+observe_case cpu-before 512 10 false 45 || exit 30
+observe_case cpu-after 512 100 false 45 || exit 30
+observe_case thread-before 512 10 true 45 || exit 30
+observe_case thread-after 512 10 false 45 || exit 30
+observation_result=success
