@@ -1,0 +1,9 @@
+<article class="book-card">
+  <div class="inventory-rail" aria-hidden="true"></div>
+  <div class="book-card__body">
+    <div class="book-card__meta"><span>No. {{ "%03d"|format(book.id) }}</span><span>{{ book.year }}</span></div>
+    <h3><a href="/books/{{ book.id }}">{{ book.title }}</a></h3>
+    <p>{{ book.author }}</p>
+    <p class="availability-label {% if book.available_copies == 0 %}availability-label--unavailable{% endif %}"><span aria-hidden="true"></span>{{ book.available_copies }} of {{ book.total_copies }} available</p>
+  </div>
+</article>

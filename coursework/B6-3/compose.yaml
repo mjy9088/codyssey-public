@@ -1,0 +1,59 @@
+name: folio-lending
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      CATALOG_CSRF_SECRET: local-verification-secret-with-32-bytes
+      CATALOG_DATABASE_URL: sqlite+pysqlite:////app/data/catalog.db
+    init: true
+    networks: [catalog]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes:
+      - catalog-data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    pids_limit: 128
+
+  verify:
+    profiles: [verify]
+    build:
+      context: .
+      dockerfile: verify/Dockerfile
+    environment:
+      BASE_URL: http://app:8000
+    init: true
+    networks: [catalog]
+    read_only: true
+    shm_size: 1gb
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    pids_limit: 256
+
+  vm:
+    profiles: [vm]
+    build:
+      context: .
+      dockerfile: verify/vm/Dockerfile
+    init: true
+    networks: [catalog]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    pids_limit: 256
+
+networks:
+  catalog:
+
+volumes:
+  catalog-data:

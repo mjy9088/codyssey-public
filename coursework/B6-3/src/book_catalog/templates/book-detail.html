@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ book.title }} · Folio{% endblock %}
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb"><a href="/books">Catalog</a><span aria-hidden="true">/</span><span>Record {{ "%03d"|format(book.id) }}</span></nav>
+<article class="detail panel">
+  <p class="overline">Catalog record · {{ book.year }}</p>
+  <h1>{{ book.title }}</h1>
+  <p class="lead">{{ book.author }}</p>
+  {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+  <dl class="record-meta"><div><dt>Publication year</dt><dd>{{ book.year }}</dd></div><div><dt>Inventory</dt><dd><strong>{{ book.available_copies }}</strong> of {{ book.total_copies }} copies available</dd></div></dl>
+  <div class="cluster actions">
+    {% if book.available_copies > 0 %}
+    <form method="post" action="/books/{{ book.id }}/borrow">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="button primary" type="submit">Borrow this book</button>
+    </form>
+    {% else %}<span class="badge">Currently unavailable</span>{% endif %}
+    <a class="button secondary" href="/books/{{ book.id }}/edit">Edit record</a>
+  </div>
+  <details class="delete-disclosure"><summary>Remove this catalog record</summary><div class="delete-confirm"><p><strong>Delete {{ book.title }}?</strong> This cannot be undone. Records with lending history cannot be removed.</p><form method="post" action="/books/{{ book.id }}/delete"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button danger" type="submit">Delete permanently</button></form></div></details>
+</article>
+{% endblock %}

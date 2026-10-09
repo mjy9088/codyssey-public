@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% set editing = (book is defined and book) or book_id %}
+{% block title %}{{ "Edit" if editing else "Add" }} a book · Folio{% endblock %}
+{% block content %}
+<div class="narrow">
+  <p class="overline">Catalog record</p>
+  <h1>{{ "Edit book" if editing else "Add a book" }}</h1>
+  <p class="lead">Keep inventory details concise so every member can scan the shelf quickly.</p>
+  <form class="panel form-stack" method="post" action="{{ '/books/' ~ (book.id if book is defined and book else book_id) if editing else '/books' }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if error %}<p id="form-error" class="alert" role="alert">{{ error }}. Review each field and try again.</p>{% endif %}
+    <label for="title">Title</label>
+    <input id="title" name="title" value="{{ values.title if values is defined and values else (book.title if editing else '') }}" required maxlength="160" {% if error %}aria-invalid="true" aria-describedby="form-error title-hint"{% else %}aria-describedby="title-hint"{% endif %}><p id="title-hint" class="field-hint">Use the title as it appears on the cover.</p>
+    <label for="author">Author</label>
+    <input id="author" name="author" value="{{ values.author if values is defined and values else (book.author if editing else '') }}" required maxlength="120" {% if error %}aria-invalid="true" aria-describedby="form-error"{% endif %}>
+    <label for="year">Publication year</label>
+    <input id="year" name="year" type="number" min="1450" max="2100" value="{{ values.year if values is defined and values else (book.year if editing else '') }}" required {% if error %}aria-invalid="true" aria-describedby="form-error"{% endif %}>
+    <label for="total_copies">Total copies</label>
+    <input id="total_copies" name="total_copies" type="number" min="1" value="{{ values.total_copies if values is defined and values else (book.total_copies if editing else 1) }}" required {% if error %}aria-invalid="true" aria-describedby="form-error copies-hint"{% else %}aria-describedby="copies-hint"{% endif %}><p id="copies-hint" class="field-hint">Inventory cannot be lower than one copy.</p>
+    <div class="cluster actions">
+      <button class="button primary" type="submit">{{ "Save changes" if editing else "Add to catalog" }}</button>
+      <a class="button secondary" href="{{ '/books/' ~ (book.id if book is defined and book else book_id) if editing else '/books' }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}My loans · Folio{% endblock %}
+{% block content %}
+<header class="page-heading"><div><p class="overline">Your account</p><h1>My loans</h1><p class="lead">Track what is in your hands and what has returned to the shelf.</p></div></header>
+<nav class="filters" aria-label="Loan filters">
+  <a href="/loans?loan_status=all" {% if loan_status == 'all' %}aria-current="page"{% endif %}>All</a>
+  <a href="/loans?loan_status=borrowed" {% if loan_status == 'borrowed' %}aria-current="page"{% endif %}>Borrowed</a>
+  <a href="/loans?loan_status=returned" {% if loan_status == 'returned' %}aria-current="page"{% endif %}>Returned</a>
+</nav>
+<div class="loan-list">
+  {% for loan in loans %}
+  <article class="loan-row panel">
+    <div>
+      <span class="badge badge--{{ loan.status }}">{{ loan.status }}</span>
+      <h2><a href="/books/{{ loan.book.id }}">{{ loan.book.title }}</a></h2>
+      <p>{{ loan.book.author }} · Borrowed {{ loan.borrowed_at.strftime('%Y-%m-%d') }}</p>
+    </div>
+    {% if loan.status == 'borrowed' %}
+    <form method="post" action="/loans/{{ loan.id }}/return">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="button primary" type="submit">Return book</button>
+    </form>
+    {% else %}<p class="return-date">Returned <strong>{{ loan.returned_at.strftime('%Y-%m-%d') }}</strong></p>{% endif %}
+  </article>
+  {% else %}<section class="empty"><p class="overline">Nothing here yet</p><h2>No {{ loan_status if loan_status != 'all' else '' }} loans in this view.</h2><p>Borrow an available title or choose another filter.</p><a class="button secondary" href="/books">Browse catalog</a></section>{% endfor %}
+</div>
+{% endblock %}

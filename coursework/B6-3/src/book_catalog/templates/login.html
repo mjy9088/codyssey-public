@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Sign in · Folio{% endblock %}
+{% block content %}
+<section class="login-layout">
+  <div class="login-intro">
+    <p class="overline">Member access</p>
+    <h1>Return to your reading shelf.</h1>
+    <p class="lead">Sign in to borrow available titles and manage your active loans.</p>
+    <div class="login-mark" aria-hidden="true"><span>F</span><i></i></div>
+  </div>
+  <form class="panel form-stack auth-panel" method="post" action="/login">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next_path" value="{{ next_path }}">
+    <div><p class="overline">Welcome back</p><h2>Sign in to Folio</h2></div>
+    {% if error %}<p id="login-error" class="alert" role="alert">{{ error }}</p>{% endif %}
+    <label for="username">Username</label>
+    <input id="username" name="username" autocomplete="username" required {% if error %}aria-invalid="true" aria-describedby="login-error"{% endif %}>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required {% if error %}aria-invalid="true" aria-describedby="login-error"{% endif %}>
+    <button class="button primary" type="submit">Sign in</button>
+    <p class="demo-note"><strong>Local demo</strong><span>reader / correct-horse-battery-staple</span></p>
+  </form>
+</section>
+{% endblock %}

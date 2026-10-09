@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Loan unavailable · Folio{% endblock %}
+{% block content %}
+<section class="narrow panel error-panel">
+  <p class="overline">Unable to continue</p>
+  <h1>That lending action is not available.</h1>
+  <p class="alert" role="alert">{{ error }}</p>
+  <div class="cluster actions"><a class="button primary" href="/books">Return to catalog</a><a class="button secondary" href="/loans">Review my loans</a></div>
+</section>
+{% endblock %}

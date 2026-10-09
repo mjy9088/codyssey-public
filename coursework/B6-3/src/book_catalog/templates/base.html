@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Folio lending library catalog and member loans">
+  <title>{% block title %}Folio{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="site-header">
+    <nav class="nav shell" aria-label="Primary navigation">
+      <a class="brand" href="/" aria-label="Folio home">Folio<span>.</span></a>
+      {% if user %}
+      <div class="nav-links">
+        <a href="/books" {% if request.url.path.startswith('/books') %}aria-current="page"{% endif %}>Catalog</a>
+        <a href="/loans" {% if request.url.path == '/loans' %}aria-current="page"{% endif %}>My loans</a>
+      </div>
+      <div class="member">
+        <span class="member-name"><span class="member-dot" aria-hidden="true"></span>{{ user.full_name }}</span>
+        <form method="post" action="/logout">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="link-button" type="submit">Sign out</button>
+        </form>
+      </div>
+      {% endif %}
+    </nav>
+  </header>
+  <main id="content" class="shell page">{% block content %}{% endblock %}</main>
+  <footer class="site-footer shell"><strong>Folio.</strong><span>A shared shelf, thoughtfully kept.</span></footer>
+</body>
+</html>

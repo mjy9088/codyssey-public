@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Catalog · Folio{% endblock %}
+{% block content %}
+<header class="page-heading">
+  <div><p class="overline">Community catalog</p><h1>Books for every kind of reader.</h1><p class="lead">Search the shared shelf or add a record for the next reader.</p></div>
+  <a class="button secondary" href="/books/new">Add a book</a>
+</header>
+<form class="search" method="get" action="/books" role="search">
+  <label for="q">Search by title or author</label>
+  <div class="cluster">
+    <input id="q" name="q" type="search" value="{{ query }}" placeholder="Try a title or author">
+    <button class="button primary" type="submit">Search</button>
+  </div>
+</form>
+<div class="book-grid catalog">
+  {% for book in books %}
+    {% include "partials/book-card.html" %}
+  {% else %}
+    <section class="empty"><p class="overline">No matching titles</p><h2>Try another shelf.</h2><p>Search with a different title or author, or clear the current query.</p><a class="button secondary" href="/books">Clear search</a></section>
+  {% endfor %}
+</div>
+{% endblock %}

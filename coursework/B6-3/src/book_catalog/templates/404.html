@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Not found · Folio{% endblock %}
+{% block content %}
+<section class="narrow panel error-panel">
+  <p class="error-code">404</p>
+  <p class="overline">Missing record</p>
+  <h1>This book is not on the shelf.</h1>
+  <p>The record may have been removed or the address may be incorrect.</p>
+  <a class="button primary" href="/books">Browse the catalog</a>
+</section>
+{% endblock %}
