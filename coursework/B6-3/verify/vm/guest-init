@@ -1,0 +1,31 @@
+#!/bin/busybox sh
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin:/app/.venv/bin
+fatal() { echo "VM-BOOT-FATAL: $*" >&2; exec sh; }
+mount -t proc proc /proc || fatal "cannot mount /proc"
+mount -t sysfs sysfs /sys || fatal "cannot mount /sys"
+mount -t devtmpfs devtmpfs /dev || fatal "cannot mount /dev"
+mkdir -p /dev/pts /run /app/data
+mount -t devpts devpts /dev/pts || fatal "cannot mount /dev/pts"
+test -d /lib/modules/"$(uname -r)" || fatal "kernel modules do not match"
+modprobe virtio_pci || fatal "virtio_pci failed"
+modprobe virtio_net || fatal "virtio_net failed"
+interface=""
+for candidate in /sys/class/net/*; do
+  name="${candidate##*/}"
+  if [ "$name" != "lo" ]; then interface="$name"; break; fi
+done
+test -n "$interface" || fatal "no network interface"
+ip link set lo up || fatal "cannot enable loopback"
+ip link set "$interface" up || fatal "cannot enable network"
+ip address add 10.0.2.15/24 dev "$interface" || fatal "cannot assign guest address"
+ip route add default via 10.0.2.2 dev "$interface" || fatal "cannot add route"
+{
+  printf 'kernel='; uname -srvmo
+  printf 'machine='; cat /sys/class/dmi/id/product_name 2>/dev/null || printf 'QEMU virtual machine\n'
+  printf 'boundary=fastapi-sqlalchemy-sqlite-in-guest\n'
+} > /run/folio-vm-proof || fatal "cannot create proof"
+cat /run/folio-vm-proof
+export CATALOG_DATABASE_URL=sqlite+pysqlite:////app/data/catalog.db
+export CATALOG_CSRF_SECRET=qemu-verification-secret-with-32-bytes
+echo "VM-BOOT-READY: Folio at http://10.0.2.15:8000"
+exec /app/.venv/bin/uvicorn book_catalog.main:app --host 0.0.0.0 --port 8000 --no-access-log
