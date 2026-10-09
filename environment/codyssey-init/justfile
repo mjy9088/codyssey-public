@@ -1,0 +1,5 @@
+default:
+    bash ./tailnet.sh
+
+bash:
+    bash ./tailnet.sh
