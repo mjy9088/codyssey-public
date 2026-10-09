@@ -2,15 +2,15 @@
 
 This repository is the public working monorepo for the Codyssey AI All-in-One
 course. It contains material that is safe and useful to publish: source code,
-reproducible development environments, engineering notes, tests, and evidence
-intended for public submission.
+reproducible development environments, engineering notes, tests, and explicitly
+required sanitized deliverables.
 
 ## Repository map
 
 | Path | Purpose |
 | --- | --- |
 | `environment/codyssey-init/` | Classroom and local development-environment bootstrap |
-| `coursework/B1-1/` | Self-contained vanilla portfolio with Docker and QEMU verification |
+| `coursework/` | Current, self-contained coursework projects |
 | `archive/E1-1/` | Imported E1-1 work, with its original Git history |
 | `archive/E1-2/` | Imported E1-2 work, with its original Git history |
 | `archive/E1-3/` | Imported E1-3 work, with its original Git history |
@@ -19,35 +19,33 @@ intended for public submission.
 Additional course work should normally be added under a clearly named course or
 project directory rather than at the repository root.
 
+Current coursework:
+
+- [`B1-1`](coursework/B1-1/) and [`B1-2`](coursework/B1-2/)
+- [`B2-1`](coursework/B2-1/) and [`B2-2`](coursework/B2-2/)
+- [`B3-1`](coursework/B3-1/) and [`B3-2`](coursework/B3-2/)
+- [`B4-1`](coursework/B4-1/) and [`B4-2`](coursework/B4-2/)
+- [`B5-1`](coursework/B5-1/) and [`B5-2`](coursework/B5-2/)
+- [`B6-1`](coursework/B6-1/), [`B6-2`](coursework/B6-2/), and
+  [`B6-3`](coursework/B6-3/)
+
 ## Repository roles
 
 - **This repository (`codyssey-public`)** is the canonical public workspace and
   monorepo.
-- **`codyssey-private`** is the canonical home for assignment text, restricted
+- **The private workspace** is the canonical home for assignment text, restricted
   course material, credentials, personal data, and anything whose publication
   rights are unclear.
-- **[`codyssey-submit`](https://github.com/mjy9088/codyssey-submit)** is a
-  disposable, submission-only projection. It is not a development source of
-  truth.
 
 Read [the repository policy](docs/REPOSITORY_POLICY.md) before adding content.
-For an assessment hand-in, follow [the submission workflow](docs/SUBMISSION_WORKFLOW.md).
+When an assessment requires a different tree layout, use the optional
+[submission workflow](docs/SUBMISSION_WORKFLOW.md).
 
 ## Imported history
 
-The repositories below were imported as unrelated histories. Their existing
-commits remain reachable unchanged; a later commit on each lineage relocates its
-tree into this monorepo before the lineage is merged.
-
-- [`codyssey-init`](https://github.com/mjy9088/codyssey-init)
-- [`E1-1`](https://github.com/mjy90884682/E1-1)
-- [`E1-2`](https://github.com/mjy90884682/E1-2)
-- [`E1-3`](https://github.com/mjy90884682/E1-3)
-
-Exact source and integration commits are recorded in
-[the import manifest](docs/IMPORTS.md).
-
-To inspect all imported lineages:
+Projects under `archive/` retain imported histories joined into this repository.
+Git is the provenance record; inspect the reachable lineages directly instead of
+maintaining a duplicate commit inventory:
 
 ```bash
 git log --graph --oneline --decorate --all
