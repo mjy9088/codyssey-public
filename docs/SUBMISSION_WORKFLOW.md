@@ -2,48 +2,50 @@
 
 ## Principle
 
-Develop and review work in `codyssey-public`. Treat `codyssey-submit` as a
-reproducible transport repository containing only what a particular assessment
-requires. Submission-only deletion and renaming must not alter the canonical
-monorepo layout.
+Develop and review work in this monorepo. Submit the canonical coursework subtree
+unchanged when the approved destination accepts it. A standalone export is an
+optional transport artifact only when the required hand-in layout differs; it is
+not another development source of truth.
 
 ## Prepare a hand-in
 
-1. Confirm the source revision in `codyssey-public` is tested, pushed, and safe
-   to publish.
-2. Update a local clone of `codyssey-submit` and create a new temporary branch
-   named for the assessment and attempt, for example
-   `submit/e1-3-2026-09-23`.
-3. Copy or export the required public subtree from the exact source revision.
-   Record that source commit ID in the preparation commit message.
-4. Delete every file that the assessment does not require.
-5. Apply only the path or filename changes required by the submission format.
-6. Inspect the resulting tree, run its relevant checks, and scan it for secrets
-   and restricted content.
-7. Create exactly one submission-preparation commit containing the deletions and
-   renames. Do not add novel implementation work in this commit.
-8. Push the temporary branch and submit the required branch or URL.
-9. After the assessment lifecycle ends, delete the temporary branch if it is no
-   longer needed. The canonical work remains in `codyssey-public`.
+1. Read the selected project's README and applicable `AGENTS.md`.
+2. Verify the exact public revision with the project's documented checks.
+3. Inspect the selected subtree for secrets, restricted material, generated run
+   artifacts, and files outside the assessment scope.
+4. Submit that subtree directly if its layout is accepted.
+5. Only when a standalone root is required, export the subtree to a temporary
+   directory and apply the minimum required layout-only changes there.
+6. Re-run the relevant checks against the exported tree when its layout changed.
+7. Transfer the result only to the explicitly approved destination. A local
+   export does not demonstrate a push, publication, or deployment.
 
-## Preparation commit
+## Optional standalone export
 
-Use a message that makes the projection traceable, such as:
+Use Git to select an exact revision without copying unrelated monorepo paths:
 
-```text
-chore(submission): prepare E1-3 from codyssey-public@<commit>
+```sh
+revision=$(git rev-parse --verify HEAD)
+subtree=coursework/B1-1
+staging=$(mktemp -d)
+git archive "$revision" -- "$subtree" \
+  | tar -x -C "$staging" --strip-components=2
 ```
 
-The commit body should list the source subtree, any required rename, and why
-files were excluded. Do not include private assignment text in the message.
+Replace the example subtree with the project being submitted. Record the source
+revision outside the exported tree or in destination metadata if traceability is
+required; do not add a repository status or provenance inventory. The export has
+no Git history by default. If the destination requires history, use its approved
+procedure rather than inventing branch, commit-count, or retention rules.
 
 ## Guardrails
 
-- Never copy content from `codyssey-private` into a public submission unless it
-  has first been deliberately sanitized and made canonical in
-  `codyssey-public`.
-- Never commit credentials, even if the submission branch will be deleted.
-- Do not merge the preparation commit back into `codyssey-public`.
+- Never copy content from the private workspace into a public submission unless
+  it has first been deliberately sanitized and made canonical here.
+- Never include credentials, private URLs, restricted assignment text, supplied
+  data, or private evidence in an export.
+- Do not merge submission-only deletions or renames back into this monorepo.
 - If a fix is discovered during preparation, make and test it in
-  `codyssey-public`, then rebuild the submission projection.
-
+  this monorepo, then rebuild the export.
+- Keep build contexts within the exported subtree, retain dependency and image
+  pins, and do not replace deterministic fixtures with private or live inputs.

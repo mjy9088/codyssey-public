@@ -15,11 +15,11 @@ Treat the repository as permanently public, including its full Git history.
 
 - Keep original assignment statements, answer keys, restricted course assets,
   credentials, tokens, personal information, and material with uncertain
-  publication rights in `codyssey-private`.
+  publication rights in the private workspace.
 - Do not reproduce restricted prompts in comments, tests, fixtures, commit
   messages, screenshots, logs, or generated files.
-- Store source, tests, public documentation, reproducible tooling, and sanitized
-  evidence here.
+- Store source, tests, public documentation, reproducible tooling, and explicitly
+  required sanitized deliverables here.
 - Keep provided analysis archives and task data in the private repository. Public
   tests must use publishable synthetic fixtures rather than restricted inputs.
 - Do not track execution logs, run reports, progress journals, traces, or generated
@@ -30,14 +30,13 @@ Treat the repository as permanently public, including its full Git history.
 - Git tracks repository-owned inputs and outputs. Do not duplicate that with
   source/output checksum manifests. Dependency locks and external download integrity
   checks remain appropriate.
-- Use `codyssey-submit` only as a temporary submission projection. Do not make it
-  the source of truth and do not develop independently in it.
 - Stop and flag the file instead of committing it when publication safety is
   uncertain.
 
 ## Layout
 
 - `environment/`: development and classroom environment tooling.
+- `coursework/`: current work, one self-contained project per course identifier.
 - `archive/`: imported historical course repositories.
 - `docs/`: repository-wide policy and procedures.
 - New work: prefer a self-contained directory grouped by course stage or
@@ -70,6 +69,8 @@ consistency. Explain any necessary cross-project change in the commit message.
   committed to this repository.
 - Before publishing, inspect staged paths and diffs and run a secret scan when
   available.
-- Build a submission on a temporary branch in `codyssey-submit`, remove every
-  out-of-scope path there, and make exactly one preparation commit that contains
-  the required deletions and renames. Follow `docs/SUBMISSION_WORKFLOW.md`.
+- Keep each coursework subtree independently buildable and limit its build
+  contexts to that subtree.
+- Prefer submitting the canonical subtree unchanged. If a destination requires a
+  standalone root, use the temporary export described in
+  `docs/SUBMISSION_WORKFLOW.md`; do not merge export-only changes back.

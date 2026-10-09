@@ -4,14 +4,14 @@
 
 Confirm that the material is allowed to be public. If it includes assignment
 text, restricted assets, personal information, secrets, or content with unclear
-rights, keep it in `codyssey-private` instead.
+rights, keep it in the private workspace instead.
 
 Read the README and any `AGENTS.md` that applies to the target directory. Each
 imported project retains its own tools and verification commands.
 
 ## Change workflow
 
-1. Create a focused branch from `main`.
+1. Create a focused branch from the approved current base.
 2. Make the smallest coherent change in the relevant subtree.
 3. Run that project's documented tests, linters, or verification scripts.
 4. Review `git diff --cached` before committing, including generated files and
@@ -29,7 +29,7 @@ the entire monorepo.
 
 ## Submission
 
-Do not trim this repository for a submission and do not merge submission-only
-renames back into it. Produce the hand-in from the separate `codyssey-submit`
-repository by following `docs/SUBMISSION_WORKFLOW.md`.
-
+Submit the coursework subtree directly when the destination accepts the monorepo
+layout. If a destination requires a standalone root, create a temporary export by
+following `docs/SUBMISSION_WORKFLOW.md`. Do not apply submission-only deletion or
+renaming to this repository.
