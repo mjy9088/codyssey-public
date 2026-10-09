@@ -1,0 +1,39 @@
+#!/bin/busybox sh
+
+export PATH=/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+export PYTHONDONTWRITEBYTECODE=1
+
+fatal() {
+  printf 'VM-TEST-FAIL: %s\n' "$*" >&2
+  mkdir -p /www
+  printf '{"status":"fail","reason":"guest initialization"}\n' > /www/result.json
+  exec python -m http.server 8080 --directory /www
+}
+
+mount -t proc proc /proc || fatal "cannot mount proc"
+mount -t sysfs sysfs /sys || fatal "cannot mount sysfs"
+mount -t devtmpfs devtmpfs /dev || fatal "cannot mount devtmpfs"
+mkdir -p /dev/pts /run /tmp /www
+mount -t devpts devpts /dev/pts || fatal "cannot mount devpts"
+modprobe virtio_pci || fatal "virtio_pci module failed"
+modprobe virtio_net || fatal "virtio_net module failed"
+
+interface=""
+for candidate in /sys/class/net/*; do
+  name="${candidate##*/}"
+  if [ "$name" != lo ]; then interface="$name"; break; fi
+done
+test -n "$interface" || fatal "no network interface"
+ip link set lo up || fatal "cannot enable loopback"
+ip link set "$interface" up || fatal "cannot enable network"
+ip address add 10.0.2.15/24 dev "$interface" || fatal "cannot assign address"
+
+cd /app || fatal "application is missing"
+if python -m unittest discover -s tests -v; then
+  printf '{"status":"pass","runtime":"qemu-tcg","kernel":"%s"}\n' "$(uname -r)" > /www/result.json
+  echo "VM-TEST-PASS"
+else
+  printf '{"status":"fail","reason":"unittest"}\n' > /www/result.json
+  echo "VM-TEST-FAIL: unittest" >&2
+fi
+exec python -m http.server 8080 --directory /www

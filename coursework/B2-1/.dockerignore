@@ -1,0 +1,7 @@
+**
+!budget_app/
+!budget_app/**
+!tests/
+!tests/**
+!verify/
+!verify/**
