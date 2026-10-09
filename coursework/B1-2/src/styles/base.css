@@ -1,0 +1,124 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  color-scheme: light;
+}
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--type-body);
+  line-height: 1.6;
+  text-rendering: optimizeLegibility;
+}
+button,
+input,
+select,
+textarea {
+  color: inherit;
+  font: inherit;
+}
+button,
+select {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+a {
+  color: var(--accent);
+  text-underline-offset: 0.2em;
+}
+a:hover {
+  color: var(--accent-hover);
+}
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+h1 {
+  margin-bottom: var(--space-6);
+  font-family: var(--font-display);
+  font-size: var(--type-h1);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+h2 {
+  font-size: var(--type-h2);
+  line-height: 1.2;
+}
+h3 {
+  font-size: var(--type-h3);
+  line-height: 1.3;
+}
+:focus-visible {
+  outline: 0.15rem solid var(--focus);
+  outline-offset: 0.2rem;
+}
+::selection {
+  background: var(--accent-soft);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip-link {
+  position: fixed;
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-2);
+  z-index: 10;
+  padding: var(--space-2) var(--space-4);
+  background: var(--ink);
+  color: var(--surface);
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
+.page-shell,
+.site-header__inner,
+.footer-inner {
+  width: min(calc(100% - (var(--space-4) * 2)), var(--content-max));
+  margin-inline: auto;
+}
+.page-shell {
+  min-height: calc(100dvh - 9rem);
+  padding-block: var(--space-12) var(--space-20);
+  animation: route-in var(--motion-base) var(--ease-out);
+}
+.eyebrow {
+  margin-bottom: var(--space-3);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+@keyframes route-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-2));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0.01ms;
+    --motion-base: 0.01ms;
+  }
+}
