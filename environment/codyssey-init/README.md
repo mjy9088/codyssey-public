@@ -85,7 +85,8 @@ docker compose up -d --build
 
 The bootstrap waits for all three containers and a Tailscale `Running` or `NeedsLogin` state. A
 `NeedsLogin` state is not reported as a connected tailnet: the script extracts and prints the actual
-`https://login.tailscale.com/...` authentication URL from Tailscale's output, or fails with a command
+`https://login.tailscale.com/...` authentication URL from Tailscale's output. It waits up to 60 seconds
+for that URL because `NeedsLogin` can appear before the URL is logged, then fails with a command
 to inspect the logs if no URL is available:
 
 ```sh
@@ -96,6 +97,10 @@ It then waits for the local GOST UI and opens Chrome when available, falling bac
 macOS browser. The URL is:
 
 <http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080>
+
+Set `CODYSSEY_OPEN_BROWSER=0` for unattended or headless runs. Both URLs are still printed, but no
+browser is launched. VM verification uses this mode to avoid first-launch browser dialogs blocking
+the bootstrap.
 
 ## Container privilege and mount boundary
 
@@ -199,8 +204,8 @@ On success, the requested setup remains applied and the temporary verifier snaps
 any failure or interruption, restoration is attempted for every captured domain before the original
 error is rethrown. If any domain cannot be restored, the private snapshot is retained and its path is
 printed for manual recovery. Do not run the verifier on a workstation whose live preferences may not
-be temporarily changed. This behavior has not been verified on a real macOS host; no real preference
-restoration or tailnet login is claimed.
+be temporarily changed. The VM procedure below exercises real preference changes and idempotence.
+Failure restoration is covered by synthetic tests; authenticated tailnet login is outside its scope.
 
 ## Safe verification
 
@@ -243,3 +248,117 @@ docker compose down
 
 `docker compose down` preserves the named Tailscale state volume unless `--volumes` is explicitly
 added.
+
+## Verification in a macOS VM outside the classroom
+
+These scripts verify only this environment bootstrap. They use real Docker services and real macOS
+preferences without an auth key. Tailscale must remain in `NeedsLogin`; browser launching is disabled
+and authentication is never completed. No coursework, remote tailnet access, or authenticated forwarding is
+tested. The VM must be disposable: verification changes its user's `.zshrc`, Dock, keyboard settings,
+and text preferences. Successful preference verification leaves the requested settings applied.
+
+### An existing disposable VM
+
+With Docker already running, Python 3.10+, Chrome, a logged-in desktop user, and ordinary macOS
+preference domains present, run inside the guest:
+
+```sh
+cd environment/codyssey-init
+bash scripts/verify-macos-vm.sh --disposable
+```
+
+If the Apple Silicon guest lacks a Docker engine but already has Homebrew, prepare it first:
+
+```sh
+bash scripts/prepare-macos-vm.sh --disposable
+DOCKER_CONTEXT=colima-codyssey-verify bash scripts/verify-macos-vm.sh --disposable
+```
+
+Preparation installs Docker CLI, Compose, Buildx, Colima, QEMU, Python, and Chrome when absent. It starts a
+dedicated `codyssey-verify` Colima profile with x86_64 Linux emulated on arm64 using QEMU TCG. This
+avoids nested hardware virtualization, which [Tart does not support for macOS guests](https://tart.run/faq/).
+See [Colima's architecture and QEMU configuration](https://colima.run/docs/configuration/).
+Preparation includes Lima's additional guest agents, required for
+[cross-architecture port forwarding](https://lima-vm.io/docs/config/multi-arch/).
+The emulation is slow; reserve at least 8 GiB of guest memory and enough guest disk for a 30 GiB
+Linux disk and Docker images. Provisioning requires internet downloads and Homebrew's normal install
+permissions. It does not install Homebrew or OrbStack. Guest tool versions are resolved by Homebrew;
+the application image and bootstrap tool pins remain those in this repository.
+
+Verification first runs `scripts/check.sh --native-python`, then runs the actual `init.sh` twice.
+This mode runs both Python mock suites on the macOS guest with synthetic state and fake commands,
+and retains the pinned Docker container for the Bash/zsh bootstrap suites. No checks are omitted;
+using native guest Python avoids expensive process startup under x86 emulation. The default
+`scripts/check.sh` still runs all suites inside the isolated container.
+Verification checks the
+unauthenticated state, Bash/client tools, TUN device and home mount, GOST API and UI HTTP readiness,
+and the single shell activation block. It finally runs the live macOS preference verifier twice via
+its existing idempotence check. GOST API readiness also checks whether this Docker environment makes
+the Linux host's loopback listener accessible from the macOS guest; failure is a real incompatibility,
+not a simulated success. UI HTTP readiness does not prove browser rendering or API interaction.
+
+The verifier uses an allowlisted temporary copy under the guest home, a synthetic GOST configuration,
+an explicitly empty exported key, and its own Compose project. It refuses existing production
+container names or occupied management ports. It removes its own containers and state volume on exit;
+cleanup failure retains the private working directory and reports its location. Docker's built images
+and check image remain cached. Guest preferences and `.zshrc` remain modified. To stop or remove the
+prepared Docker VM afterward:
+
+```sh
+colima stop --profile codyssey-verify
+# Discard that profile's Linux disk and Docker cache when no longer needed:
+colima delete --profile codyssey-verify
+```
+
+### Create a new macOS VM and run everything
+
+On an Apple Silicon Mac running macOS 14 or newer, configure Tart through `mise`:
+
+```sh
+mise use tart@2.40.1
+mise exec -- tart --version
+```
+
+Choose a reviewed, stopped local Tart base VM with Homebrew, Tart Guest Agent, and a logged-in desktop
+user. A registry image can also be used, but must be pinned to its actual OCI digest; mutable registry
+tags are rejected. The guest macOS version must be compatible with the host. Non-vanilla Cirrus Labs
+images include Guest Agent; see [Tart's quick start](https://tart.run/quick-start/) and
+[Guest Agent documentation](https://tart.run/blog/2025/06/01/bridging-the-gaps-with-the-tart-guest-agent/).
+
+```sh
+cd environment/codyssey-init
+# Clone a reviewed local base into a new writable VM:
+bash scripts/create-macos-vm.sh --image reviewed-macos-base
+
+# Or use this pinned Cirrus Labs base (check host compatibility first):
+bash scripts/create-macos-vm.sh \
+  --image ghcr.io/cirruslabs/macos-tahoe-base@sha256:87f3aa5ce21b5c876268f233bdfecf38b4c2a8116fe9bbb718e714cbae187377 \
+  --name codyssey-environment-test
+```
+
+The host script clones a fresh VM, assigns four CPUs and 8 GiB memory, boots it headlessly, waits up
+to six minutes for Guest Agent, transfers the allowlisted environment files through `tart exec`,
+prepares guest Docker, and runs the same existing-VM verifier. It never shares the host home, sends
+`.env` or user-edited GOST configuration, passes a Tailscale key, or enables a nested hypervisor.
+Tart automatic cache pruning is disabled for this run, and an existing destination VM is never
+overwritten. Allow substantial download time and disk space for the macOS base and emulated Linux
+guest. The published quick-start image is approximately 25 GB before guest provisioning.
+
+All host Tart commands use `mise exec -- tart`; the host needs no Docker engine or Docker CLI.
+Docker is installed and used only inside the disposable macOS guest for the environment tests.
+
+After provisioning, cleanup shuts down Colima before stopping macOS so the nested Linux disk is
+flushed. On completion or failure the new VM is stopped and retained for inspection. Pass
+`--delete-on-success` to delete only this newly created VM after successful verification. Failed VMs
+are always retained; Tart's downloaded base cache is retained too. The script prints commands to open
+or delete its VM. Existing source VMs are never stopped or deleted.
+
+Host orchestration tests require only Python and fake commands; they do not create VMs:
+
+```sh
+python3 tests/vm-orchestration-test.py
+```
+
+These orchestration tests do not establish a successful real VM run. Real guest success is reported
+only when provisioning, Docker checks, both bootstrap passes, and live preference verification all
+finish successfully.

@@ -9,6 +9,7 @@ WORKDIR /work
 COPY Dockerfile docker-compose.yml init.sh next-script.zsh tailnet.sh justfile mise.toml README.md verify-macos-setup.py /src/
 COPY lib/ /src/lib/
 COPY tests/ /src/tests/
+COPY scripts/ /src/scripts/
 COPY macos-setup.sh /src/macos-setup.sh
 COPY .env.example /src/.env.example
 RUN mkdir -p /src/gost \

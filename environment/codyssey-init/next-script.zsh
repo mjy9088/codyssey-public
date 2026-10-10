@@ -75,14 +75,21 @@ if [[ -z $tailnet_state ]]; then
 fi
 
 if [[ $tailnet_state == needs-login ]]; then
-  login_output=$(docker compose logs --no-color tailscale 2>/dev/null || true)
-  auth_url=$(print -r -- "$login_output" | grep -Eo 'https://login\.tailscale\.com/[A-Za-z0-9_./?=&-]+' | head -n 1 || true)
+  auth_url=
+  # NeedsLogin can precede the control server's authentication URL, especially
+  # while a software-emulated VM is still starting its network services.
+  for _ in {1..60}; do
+    login_output=$(docker compose logs --no-color tailscale 2>/dev/null || true)
+    auth_url=$(print -r -- "$login_output" | grep -Eo 'https://login\.tailscale\.com/[A-Za-z0-9_./?=&-]+' | head -n 1 || true)
+    [[ -z $auth_url ]] || break
+    sleep 1
+  done
   if [[ -z $auth_url ]]; then
     printf 'Tailscale needs login, but no authentication URL is available yet. Run: docker compose logs tailscale\n' >&2
     exit 1
   fi
   printf 'Tailscale is not connected yet. Authenticate at: %s\n' "$auth_url"
-  if command -v open >/dev/null 2>&1; then
+  if [[ ${CODYSSEY_OPEN_BROWSER:-1} != 0 ]] && command -v open >/dev/null 2>&1; then
     open "$auth_url" 2>/dev/null || true
   fi
 fi
@@ -102,6 +109,6 @@ if (( ui_ready != 1 )); then
 fi
 
 printf 'GOST UI: %s\n' "$ui_url"
-if command -v open >/dev/null 2>&1; then
+if [[ ${CODYSSEY_OPEN_BROWSER:-1} != 0 ]] && command -v open >/dev/null 2>&1; then
   open -a 'Google Chrome' "$ui_url" 2>/dev/null || open "$ui_url" 2>/dev/null || true
 fi
