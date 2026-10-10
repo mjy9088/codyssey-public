@@ -227,6 +227,10 @@ status preservation; and Bash-only rebuild scope. The same command also runs sta
 all preference groups, idempotence, private backups, confirmed absence versus export failure,
 group-level rollback, interruption recovery, failed-rollback snapshot retention, app guards, and
 current-user Dock restart behavior.
+The isolated image also runs synthetic guest preparation and Docker-target boundary fixtures, plus
+Compose ownership and Tart lifecycle tests. Guest preparation fixtures always run in this Linux
+container and are skipped when invoked directly on Darwin. `--native-python` is macOS-only and prints
+an explicit rejection on Linux; Linux hosts should use the default container command above.
 Compose configuration and the Tailscale image build can also be checked without starting the
 privileged service:
 
@@ -283,13 +287,17 @@ Preparation includes Lima's additional guest agents, required for
 The emulation is slow; reserve at least 8 GiB of guest memory and enough guest disk for a 30 GiB
 Linux disk and Docker images. Provisioning requires internet downloads and Homebrew's normal install
 permissions. It does not install Homebrew or OrbStack. Guest tool versions are resolved by Homebrew;
-the application image and bootstrap tool pins remain those in this repository.
+the application image and bootstrap tool pins remain those in this repository. This provisioning
+step is intentionally mutable and is not a reproducible package snapshot: Homebrew may resolve newer
+formula or cask versions on a later run.
 
 Verification first runs `scripts/check.sh --native-python`, then runs the actual `init.sh` twice.
-This mode runs both Python mock suites on the macOS guest with synthetic state and fake commands,
-and retains the pinned Docker container for the Bash/zsh bootstrap suites. No checks are omitted;
-using native guest Python avoids expensive process startup under x86 emulation. The default
-`scripts/check.sh` still runs all suites inside the isolated container.
+This mode runs only `macos-setup-test.py` and `vm-orchestration-test.py` natively on the macOS guest
+with synthetic state and fake commands. The pinned Linux container runs the Bash/zsh bootstrap suites
+and always runs `vm-guest-test.py`, whose fake Homebrew, Colima, and Docker guest boundaries must never
+execute natively on macOS. No checks are omitted; native execution of the two safe Python suites avoids
+expensive process startup under x86 emulation. The default `scripts/check.sh` runs all suites inside
+the isolated container.
 Verification checks the
 unauthenticated state, Bash/client tools, TUN device and home mount, GOST API and UI HTTP readiness,
 and the single shell activation block. It finally runs the live macOS preference verifier twice via
@@ -298,11 +306,15 @@ the Linux host's loopback listener accessible from the macOS guest; failure is a
 not a simulated success. UI HTTP readiness does not prove browser rendering or API interaction.
 
 The verifier uses an allowlisted temporary copy under the guest home, a synthetic GOST configuration,
-an explicitly empty exported key, and its own Compose project. It refuses existing production
-container names or occupied management ports. It removes its own containers and state volume on exit;
-cleanup failure retains the private working directory and reports its location. Docker's built images
-and check image remain cached. Guest preferences and `.zshrc` remain modified. To stop or remove the
-prepared Docker VM afterward:
+an explicitly empty exported key, and a randomized Compose project. Before Docker workload use, it
+rejects `DOCKER_HOST`, resolves and freezes `DOCKER_CONTEXT`, and accepts only an absolute local
+Unix-socket endpoint. It clears caller Compose-file and environment-file overrides. It refuses
+existing production container names, occupied management ports, or a pre-existing state volume for
+its randomized project; rejected resources are not cleaned up because the verifier does not own them.
+It removes only its own containers and state volume on exit. Cleanup failure retains the private
+working directory, reports its location, returns nonzero, and suppresses terminal PASS. Docker's
+built images and check image remain cached. Guest preferences and `.zshrc` remain modified. To stop
+or remove the prepared Docker VM afterward:
 
 ```sh
 colima stop --profile codyssey-verify
@@ -312,11 +324,10 @@ colima delete --profile codyssey-verify
 
 ### Create a new macOS VM and run everything
 
-On an Apple Silicon Mac running macOS 14 or newer, configure Tart through `mise`:
+On an Apple Silicon Mac running macOS 14 or newer, make Tart available through `mise`:
 
 ```sh
-mise use tart@2.40.1
-mise exec -- tart --version
+mise exec tart@2.40.1 -- tart --version
 ```
 
 Choose a reviewed, stopped local Tart base VM with Homebrew, Tart Guest Agent, and a logged-in desktop
@@ -344,14 +355,20 @@ Tart automatic cache pruning is disabled for this run, and an existing destinati
 overwritten. Allow substantial download time and disk space for the macOS base and emulated Linux
 guest. The published quick-start image is approximately 25 GB before guest provisioning.
 
-All host Tart commands use `mise exec -- tart`; the host needs no Docker engine or Docker CLI.
-Docker is installed and used only inside the disposable macOS guest for the environment tests.
+Every host Tart invocation, including the long-running VM process, uses
+`mise exec tart@2.40.1 -- tart`; the repository-wide `mise.toml` is not changed to install Tart for
+ordinary bootstrap users. The host needs no Docker engine or Docker CLI. Docker is installed and used
+only inside the disposable macOS guest for the environment tests.
 
-After provisioning, cleanup shuts down Colima before stopping macOS so the nested Linux disk is
-flushed. On completion or failure the new VM is stopped and retained for inspection. Pass
+If guest preparation starts the dedicated Colima profile and a later readiness check fails, the guest
+preparer attempts to stop that owned profile while preserving the original failure status. After
+provisioning, host cleanup shuts down Colima before stopping macOS so the nested Linux disk is
+flushed. A Tart stop failure is reported, prevents deletion, and is never described as stopped. On
+completion or failure the new VM is retained for inspection. Pass
 `--delete-on-success` to delete only this newly created VM after successful verification. Failed VMs
 are always retained; Tart's downloaded base cache is retained too. The script prints commands to open
-or delete its VM. Existing source VMs are never stopped or deleted.
+or delete its VM after a confirmed stop. Terminal PASS is printed only after required cleanup has
+succeeded. Existing source VMs are never stopped or deleted.
 
 Host orchestration tests require only Python and fake commands; they do not create VMs:
 
@@ -359,6 +376,8 @@ Host orchestration tests require only Python and fake commands; they do not crea
 python3 tests/vm-orchestration-test.py
 ```
 
-These orchestration tests do not establish a successful real VM run. Real guest success is reported
-only when provisioning, Docker checks, both bootstrap passes, and live preference verification all
-finish successfully.
+These orchestration tests do not establish a successful real VM run. The Linux container cannot
+exercise Tart, Colima, Homebrew, macOS defaults, Chrome rendering, Guest Agent timing, or QEMU port
+forwarding on a real Mac. Real guest success is reported only when provisioning, Docker checks, both
+bootstrap passes, live preference verification, and cleanup all finish successfully on supported
+macOS hosts.
