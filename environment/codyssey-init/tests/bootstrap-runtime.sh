@@ -23,7 +23,14 @@ exit 0
 EOF
 cat >"$fakebin/open" <<'EOF'
 #!/bin/sh
+printf '<open>' >>"$TEST_LOG"
+for argument in "$@"; do printf '<%s>' "$argument" >>"$TEST_LOG"; done
+printf '\n' >>"$TEST_LOG"
 exit 0
+EOF
+cat >"$fakebin/sleep" <<'EOF'
+#!/bin/sh
+printf '<sleep><%s>\n' "$1" >>"$TEST_LOG"
 EOF
 chmod 0755 "$fakebin"/*
 
@@ -36,7 +43,16 @@ printf '<auth=%s><mise=%s>\n' "${TS_AUTHKEY:-}" "${MISE_ENV_APPLIED:-}" >>"$TEST
 case "$*" in
   'compose ps --status running --services') printf 'tailscale\ngost\ngost-ui\n' ;;
   'compose exec -T tailscale tailscale status --json') printf '{"BackendState":"%s"}\n' "${NEXT_STATE:-Running}" ;;
-  'compose logs --no-color tailscale') printf 'To authenticate, visit: https://login.tailscale.com/a/synthetic\n' ;;
+  'compose logs --no-color tailscale')
+    if [ -n "${LOGIN_READS_FILE:-}" ]; then
+      count=0
+      [ ! -f "$LOGIN_READS_FILE" ] || count=$(cat "$LOGIN_READS_FILE")
+      count=$((count + 1))
+      printf '%s\n' "$count" >"$LOGIN_READS_FILE"
+      [ "$count" -gt "${LOGIN_DELAY:-0}" ] || exit 0
+    fi
+    [ "${NO_LOGIN_URL:-0}" != 1 ] || exit 0
+    printf 'To authenticate, visit: https://login.tailscale.com/a/synthetic\n' ;;
 esac
 EOF
   chmod 0755 "$fakebin/docker"
@@ -59,6 +75,35 @@ NEXT_STATE=NeedsLogin zsh "$work/next-script.zsh" </dev/null >"$tmp/login.out"
 grep -q 'https://login.tailscale.com/a/synthetic' "$tmp/login.out"
 grep -qx 'TS_AUTHKEY=' "$work/.env"
 [[ $(stat -c '%a' "$work/.env") == 600 ]]
+
+# NeedsLogin is observable before the login URL is available on a real cold boot.
+: >"$log"
+TS_AUTHKEY='' NEXT_STATE=NeedsLogin LOGIN_DELAY=2 LOGIN_READS_FILE="$tmp/delayed-reads" \
+  zsh "$work/next-script.zsh" </dev/null >"$tmp/delayed.out"
+grep -q 'https://login.tailscale.com/a/synthetic' "$tmp/delayed.out"
+[[ $(cat "$tmp/delayed-reads") == 3 ]]
+[[ $(grep -c '<sleep><1>' "$log") == 2 ]]
+if TS_AUTHKEY='' NEXT_STATE=NeedsLogin NO_LOGIN_URL=1 LOGIN_READS_FILE="$tmp/missing-reads" \
+  zsh "$work/next-script.zsh" </dev/null >"$tmp/missing.out" 2>&1; then
+  printf 'missing login URL incorrectly succeeded\n' >&2
+  exit 1
+fi
+[[ $(cat "$tmp/missing-reads") == 60 ]]
+grep -q 'no authentication URL is available' "$tmp/missing.out"
+
+: >"$log"
+TS_AUTHKEY='' NEXT_STATE=NeedsLogin CODYSSEY_OPEN_BROWSER=0 \
+  zsh "$work/next-script.zsh" </dev/null >"$tmp/headless.out"
+grep -q 'GOST UI:' "$tmp/headless.out"
+if grep -q '<open>' "$log"; then
+  printf 'headless bootstrap launched a browser\n' >&2
+  exit 1
+fi
+: >"$log"
+TS_AUTHKEY='' NEXT_STATE=NeedsLogin CODYSSEY_OPEN_BROWSER=1 \
+  zsh "$work/next-script.zsh" </dev/null >"$tmp/browser.out"
+grep -q '<open><https://login.tailscale.com/a/synthetic>' "$log"
+grep -q '<open><-a><Google Chrome>' "$log"
 
 source "$work/lib/auth.sh"
 key=$(extract_tailscale_auth_key 'TS_AUTHKEY=tskey-auth-old_style_value-token_2 docker compose up')
