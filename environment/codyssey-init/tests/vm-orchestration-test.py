@@ -36,12 +36,24 @@ if args[0] == "exec":
             json.dump(names, stream)
     elif "-c" in args:
         print("/Users/synthetic/guest work")
-    elif any("prepare-macos-vm.sh" in item for item in args) and scenario == "prepare-failure":
-        sys.exit(17)
-    elif any("verify-macos-vm.sh" in item for item in args) and scenario == "verify-failure":
+    elif args[-1] == "/usr/bin/true" and scenario == "delayed-readiness":
+        marker = os.environ["VM_TEST_READY"]
+        count = int(open(marker).read()) + 1 if os.path.exists(marker) else 1
+        open(marker, "w").write(str(count))
+        if count < 3:
+            sys.exit(1)
+    elif any("prepare-macos-vm.sh" in item for item in args):
+        if scenario == "prepare-failure": sys.exit(17)
+        if scenario == "prepare-interrupt": sys.exit(130)
+        if scenario == "prepare-terminate": sys.exit(143)
+    elif any("verify-macos-vm.sh" in item for item in args) and scenario in ("verify-failure", "verify-shutdown-failure", "verify-stop-failure"):
         sys.exit(19)
-    elif "/opt/homebrew/bin/colima" in args and scenario == "shutdown-failure":
+    elif "/opt/homebrew/bin/colima" in args and scenario in ("shutdown-failure", "verify-shutdown-failure"):
         sys.exit(23)
+if args[0] == "stop" and scenario in ("stop-failure", "verify-stop-failure"):
+    sys.exit(29)
+if args[0] == "stop":
+    print("TART_STOP_COMPLETE")
 '''
 
 
@@ -54,7 +66,7 @@ class OrchestrationTests(unittest.TestCase):
             for name, script in {
                 "uname": '#!/bin/sh\ncase "$1" in -s) echo Darwin;; -m) echo arm64;; esac\n',
                 "sw_vers": "#!/bin/sh\necho 15.0\n",
-                "mise": '#!/bin/sh\n[ "$1" = exec ] && [ "$2" = -- ] || exit 1\nshift 2\nexec "$@"\n',
+                "mise": '#!/bin/sh\n[ "$1" = exec ] && [ "$2" = tart@2.40.1 ] && [ "$3" = -- ] && [ "$4" = tart ] || exit 97\nshift 4\nexec tart "$@"\n',
                 "tart": "#!" + sys.executable + "\n" + FAKE_TART,
             }.items():
                 target = fakebin / name
@@ -62,9 +74,11 @@ class OrchestrationTests(unittest.TestCase):
                 target.chmod(0o755)
             log = work / "commands.jsonl"
             payload = work / "payload.json"
+            ready = work / "ready-count"
             env = dict(os.environ, PATH=str(fakebin) + os.pathsep + os.environ["PATH"],
-                       VM_TEST_LOG=str(log), VM_TEST_PAYLOAD=str(payload),
-                       VM_TEST_SCENARIO=scenario, TS_AUTHKEY="synthetic-secret-must-not-transfer")
+                        VM_TEST_LOG=str(log), VM_TEST_PAYLOAD=str(payload),
+                        VM_TEST_READY=str(ready), VM_TEST_SCENARIO=scenario,
+                        TS_AUTHKEY="synthetic-secret-must-not-transfer")
             result = subprocess.run(
                 ["bash", str(ROOT / "scripts/create-macos-vm.sh"),
                  "--image", "reviewed-base", "--name", "synthetic-test", *extra],
@@ -89,6 +103,7 @@ class OrchestrationTests(unittest.TestCase):
         self.assertNotIn("synthetic-secret-must-not-transfer", json.dumps(commands))
         self.assertTrue(any("DOCKER_CONTEXT=colima-codyssey-verify" in cmd for cmd in commands))
         self.assertTrue(any("/Users/synthetic/guest work/scripts/verify-macos-vm.sh" in cmd for cmd in commands))
+        self.assertLess(result.stdout.index("TART_STOP_COMPLETE"), result.stdout.index("PASS:"))
 
     def test_success_can_delete_owned_vm(self):
         result, commands, _ = self.run_case(extra=("--delete-on-success",))
@@ -101,7 +116,7 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(commands, [["clone", "reviewed-base", "synthetic-test"]])
 
     def test_failures_are_propagated_and_retained(self):
-        for scenario, code in (("set-failure", 1), ("boot-failure", 1), ("prepare-failure", 17), ("verify-failure", 19), ("shutdown-failure", 1)):
+        for scenario, code in (("set-failure", 1), ("boot-failure", 1), ("prepare-failure", 17), ("prepare-interrupt", 130), ("prepare-terminate", 143), ("verify-failure", 19), ("shutdown-failure", 1)):
             with self.subTest(scenario=scenario):
                 result, commands, _ = self.run_case(scenario, ("--delete-on-success",))
                 self.assertEqual(result.returncode, code, result.stderr)
@@ -109,6 +124,25 @@ class OrchestrationTests(unittest.TestCase):
                 self.assertFalse(any(cmd[0] == "delete" for cmd in commands))
                 if scenario == "prepare-failure":
                     self.assertFalse(any(any("verify-macos-vm.sh" in arg for arg in cmd) for cmd in commands))
+
+    def test_cleanup_failure_preserves_original_status_and_suppresses_pass(self) -> None:
+        for scenario in ("verify-shutdown-failure", "verify-stop-failure"):
+            with self.subTest(scenario=scenario):
+                result, commands, _ = self.run_case(scenario, ("--delete-on-success",))
+                self.assertEqual(result.returncode, 19, result.stderr)
+                self.assertNotIn("PASS:", result.stdout)
+                self.assertFalse(any(cmd[0] == "delete" for cmd in commands))
+
+    def test_tart_stop_failure_never_claims_stopped_or_deletes(self) -> None:
+        result, commands, _ = self.run_case("stop-failure", ("--delete-on-success",))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("retained (stopped)", result.stdout.lower())
+        self.assertNotIn("PASS:", result.stdout)
+        self.assertFalse(any(cmd[0] == "delete" for cmd in commands))
+
+    def test_guest_agent_may_become_ready_after_initial_failures(self) -> None:
+        result, _, _ = self.run_case("delayed-readiness")
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_mutable_remote_image_is_rejected_before_creation(self):
         result, commands, _ = self.run_case(extra=("--image", "ghcr.io/example/macos:latest",))
