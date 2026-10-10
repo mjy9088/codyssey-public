@@ -7,7 +7,10 @@ case ${1:-} in
   '') [ "$#" -eq 0 ] ;;
   --native-python)
     [ "$#" -eq 1 ]
-    [ "$(uname -s)" = Darwin ]
+    if [ "$(uname -s)" != Darwin ]; then
+      printf '%s\n' '--native-python requires macOS; use the default container check on Linux.' >&2
+      exit 1
+    fi
     python3 -c 'import sys; assert sys.version_info >= (3, 10)'
     # Both suites use synthetic state and fake external commands only.
     python3 "$root/tests/macos-setup-test.py"
@@ -25,7 +28,7 @@ tar -C "$root" -cf - \
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh \
   tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/fixtures/dockerignore \
   tests/macos-fake-tools.py tests/macos-setup-test.py tests/fixtures/gost.yaml \
-  tests/vm-orchestration-test.py scripts/check.sh scripts/create-macos-vm.sh scripts/prepare-macos-vm.sh \
+  tests/vm-orchestration-test.py tests/vm-guest-test.py scripts/check.sh scripts/create-macos-vm.sh scripts/prepare-macos-vm.sh \
   scripts/verify-macos-vm.sh scripts/vm-files.sh | \
   docker build --file tests/check.Dockerfile --tag "$image" -
 docker run --rm --network none --read-only \
