@@ -1,0 +1,7 @@
+#cloud-config
+package_update: true
+runcmd:
+  - [sh, -c, "DEBIAN_FRONTEND=noninteractive apt-get install -y nginx"]
+  - [sh, -c, "printf 'OK\\n' > /var/www/html/health"]
+  - [sh, -c, "printf '%s\\n' '<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Network lab</title><body><h1>Network lab</h1><p>Azure bootstrap is healthy.</p><a href=\"health\">Health endpoint</a></body></html>' > /var/www/html/index.html"]
+  - [systemctl, enable, --now, nginx]

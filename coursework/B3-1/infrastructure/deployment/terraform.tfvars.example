@@ -1,0 +1,7 @@
+subscription_id      = "00000000-0000-0000-0000-000000000000"
+resource_group_name  = "network-candidate"
+location             = "koreacentral"
+vm_size              = "Standard_B1s"
+admin_cidr           = "192.0.2.44/32"
+admin_ssh_public_key = "ssh-ed25519 REPLACE_WITH_AN_APPROVED_PUBLIC_KEY"
+ubuntu_image_version = "22.04.202404290"
