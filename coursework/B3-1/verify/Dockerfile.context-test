@@ -1,0 +1,13 @@
+FROM alpine@sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412
+
+COPY . /context
+
+RUN test -f /context/infrastructure/deployment/main.tf \
+    && test -f /context/infrastructure/deployment/.terraform.lock.hcl \
+    && test -f /context/infrastructure/deployment/cloud-init.yaml \
+    && test -f /context/infrastructure/deployment/tests/deployment.tftest.hcl \
+    && test -f /context/infrastructure/deployment/terraform.tfvars.example \
+    && test -f /context/infrastructure/access-bootstrap/main.tf \
+    && test -f /context/infrastructure/access-bootstrap/.terraform.lock.hcl \
+    && test -f /context/infrastructure/access-bootstrap/tests/access-bootstrap.tftest.hcl \
+    && ! find /context/infrastructure -type f \( -name '*.tfvars' -o -name '*.tfvars.json' \) | grep -q .
