@@ -1,0 +1,4 @@
+subscription_id       = "00000000-0000-0000-0000-000000000000"
+location              = "koreacentral"
+resource_group_name   = "network-candidate"
+deployer_principal_id = "11111111-1111-1111-1111-111111111111"
