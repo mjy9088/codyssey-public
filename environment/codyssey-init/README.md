@@ -11,22 +11,51 @@ checksum-verified `mise` binary when `mise` is missing.
 
 ## Availability and trusted source
 
-Use a reviewed local checkout today:
+The repository-root entry point delegates to this existing Bash bootstrap from a
+reviewed local checkout (run from the repository root, not this environment directory):
 
 ```sh
-cd environment/codyssey-init
-bash init.sh
+sh init.sh
 ```
 
-After publishing these changes, the POSIX entry point supports:
+For the shortest remote command:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mjy9088/codyssey-public/main/init.sh | sh
+```
+
+The root entry point must be published to GitHub before that new URL is available.
+That command streams the root wrapper from mutable `main`, so use it only when that
+latest wrapper is trusted. By default, the wrapper downloads the Bash bootstrap from
+the reviewed commit `7a4feac9bbf6aa3c547141b0cfbbfb76bbb5168b` into a temporary file before
+executing it. `CODYSSEY_INIT_REF` may select another reviewed full 40-character
+lowercase commit, and `CODYSSEY_INIT_BASE_URL` may select another reviewed HTTPS raw
+source. Run `sh init.sh --help` or `sh init.sh --docs` without network access for
+usage and the documentation URL at the selected revision.
+
+To pin and buffer the root wrapper itself before execution, use:
+
+```sh
+(
+  ref=REPLACE_WITH_A_REVIEWED_COMMIT_CONTAINING_ROOT_INIT
+  installer=$(mktemp)
+  trap 'rm -f "$installer"' EXIT HUP INT TERM
+  curl -fsSL "https://raw.githubusercontent.com/mjy9088/codyssey-public/$ref/init.sh" -o "$installer" &&
+    sh "$installer"
+  status=$?
+  rm -f "$installer"
+  exit "$status"
+)
+```
+
+The nested POSIX entry point remains available for backward compatibility:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/mjy9088/codyssey-public/main/environment/codyssey-init/install.sh | sh
 ```
 
-It resolves `main` to a commit once and downloads the complete Bash installer before executing it.
-Set `CODYSSEY_INIT_REF` to a reviewed full commit to pin the installation, and optionally
-`CODYSSEY_INIT_BASE_URL` to use another source. The new entry point must be published before the URL works.
+It resolves `main` once when `CODYSSEY_INIT_REF` is absent. Prefer an explicit
+reviewed full commit when using that older entry point.
 
 Remote mode stages the complete reusable runtime, including `init.sh`, `verify-macos-setup.py`, and
 runtime libraries, before copying anything into
@@ -274,7 +303,14 @@ exposure:
 
 ```sh
 sh scripts/check.sh
+# From the repository root, check the short entry point separately:
+# sh scripts/check-init.sh
 ```
+
+The root check separately builds an explicit allowlist containing only the root
+entry point and its tests, then runs with no network, a read-only filesystem, a
+temporary home, no added capabilities, and all capabilities dropped. It uses fake
+download and Bash commands; it does not bootstrap the host.
 
 The bounded test build context excludes private `.env`, user-edited GOST runtime configuration,
 caches, and unrelated artifacts; it injects a synthetic GOST fixture instead. Bootstrap tests cover
