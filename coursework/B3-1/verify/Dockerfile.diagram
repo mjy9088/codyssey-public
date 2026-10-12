@@ -1,6 +1,7 @@
 FROM mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+RUN npm install --prefix /renderer --ignore-scripts --no-audit --no-fund playwright-core@1.58.2
 COPY docs/architecture.svg /diagram/architecture.svg
 RUN mkdir /output \
-    && /ms-playwright/chromium-*/chrome-linux*/chrome --headless --no-sandbox --disable-gpu \
-       --hide-scrollbars --window-size=1200,707 --screenshot=/output/architecture.png file:///diagram/architecture.svg
+    && CHROME="$(find /ms-playwright -type f -path '*/chrome-linux*/chrome' -print -quit)" \
+       node -e 'const { chromium } = require("/renderer/node_modules/playwright-core"); (async () => { const browser = await chromium.launch({ executablePath: process.env.CHROME, headless: true, args: ["--no-sandbox"] }); const page = await browser.newPage({ viewport: { width: 1200, height: 620 }, deviceScaleFactor: 1 }); await page.goto("file:///diagram/architecture.svg"); await page.screenshot({ path: "/output/architecture.png" }); await browser.close(); })().catch(error => { console.error(error); process.exit(1); });'
 CMD ["true"]
