@@ -22,6 +22,8 @@ venv/
 
 # JavaScript
 node_modules/
+.pnpm-store/
+*.tsbuildinfo
 
 # Build and coverage output
 build/
@@ -32,4 +34,5 @@ coverage/
 # Local scratch space
 .tmp/
 tmp/
-
+/core
+/core.[0-9]*
