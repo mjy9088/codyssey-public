@@ -5,10 +5,29 @@ course. It contains material that is safe and useful to publish: source code,
 reproducible development environments, engineering notes, tests, and explicitly
 required sanitized deliverables.
 
+## Environment bootstrap
+
+Review the [environment documentation](environment/codyssey-init/README.md), then
+start the bootstrap from a trusted network with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mjy9088/codyssey-public/main/init.sh | sh
+```
+
+The new short URL becomes available after the root entry point is published to
+GitHub. Before then, run `sh init.sh` from this local repository root.
+
+The short URL streams a mutable `main` wrapper and must therefore be trusted at
+execution time. The wrapper validates and buffers an exact revision of the Bash
+environment bootstrap before running it; its default payload is pinned. Use a
+reviewed local checkout or the revision-pinned buffered command in the environment
+documentation when the wrapper itself must also be immutable.
+
 ## Repository map
 
 | Path | Purpose |
 | --- | --- |
+| `init.sh` | Short POSIX entry point for the environment bootstrap |
 | `environment/codyssey-init/` | Classroom and local development-environment bootstrap |
 | `coursework/` | Current, self-contained coursework projects |
 | `archive/E1-1/` | Imported E1-1 work, with its original Git history |
