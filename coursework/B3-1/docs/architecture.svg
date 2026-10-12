@@ -1,25 +1,155 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620">
-  <title>Candidate AWS web-service topology</title>
-  <desc>An Internet client reaches an internet gateway, a public subnet route, a restricted security group and a web instance in a VPC. This is a design, not deployment evidence.</desc>
-  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0L8 3L0 6" fill="none" stroke="#24463c" stroke-width="1.5"/></marker></defs>
-  <rect width="1200" height="620" fill="#f8f7f2"/>
-  <g font-family="sans-serif" fill="#172720">
-    <text x="48" y="54" font-size="30" font-weight="bold">Small web-service topology</text>
-    <text x="48" y="88" font-size="17">Design reference only. No real cloud deployment is claimed.</text>
-    <rect x="40" y="220" width="165" height="110" rx="10" fill="#ffffff" stroke="#24463c" stroke-width="2"/>
-    <text x="70" y="268" font-size="22">Internet</text><text x="70" y="298" font-size="17">review client</text>
-    <rect x="430" y="125" width="720" height="420" rx="12" fill="#e7f1eb" stroke="#24463c" stroke-width="2"/>
-    <text x="455" y="166" font-size="23">VPC 10.42.0.0/16</text><text x="915" y="166" font-size="18">ap-northeast-2</text>
-    <rect x="275" y="225" width="190" height="100" rx="10" fill="#ffffff" stroke="#24463c" stroke-width="2"/>
-    <text x="297" y="267" font-size="21">Internet gateway</text><text x="300" y="298" font-size="16">attached to VPC</text>
-    <rect x="520" y="210" width="580" height="280" rx="10" fill="#ffffff" stroke="#60776b" stroke-width="2"/>
-    <text x="548" y="249" font-size="21">Public subnet 10.42.1.0/24</text>
-    <text x="548" y="284" font-size="17">Route: 0.0.0.0/0 → internet gateway</text>
-    <rect x="745" y="322" width="315" height="125" rx="8" fill="#d4e5dd" stroke="#24463c" stroke-width="2"/>
-    <text x="770" y="360" font-size="22">EC2 web instance</text>
-    <text x="770" y="393" font-size="17">Nginx · /health · IMDSv2</text><text x="770" y="424" font-size="17">Encrypted, disposable root disk</text>
-    <text x="545" y="342" font-size="18">Security group</text><text x="545" y="376" font-size="16">HTTP: 80 public</text><text x="545" y="407" font-size="16">SSH: trusted /32</text>
-    <path d="M205 275H270M465 275H510M694 378H738" fill="none" stroke="#24463c" stroke-width="2" marker-end="url(#arrow)"/>
-    <text x="48" y="585" font-size="18">Control plane: reviewed non-root IAM identity, scoped actions, region and ownership conditions.</text>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">Azure web service topology and validation boundaries</title>
+  <desc id="desc">A conceptual Azure resource group contains a virtual network, subnet, network interface, Linux virtual machine, managed OS disk, network security group, static public IPv4 address, and route table. Separate lanes distinguish Docker Nginx checks from QEMU Linux and BusyBox HTTP checks. This original diagram is not cloud deployment evidence.</desc>
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7fbff"/>
+      <stop offset="1" stop-color="#eef5f9"/>
+    </linearGradient>
+    <linearGradient id="azure-panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f2f8fd"/>
+      <stop offset="1" stop-color="#e3f1fb"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#17324d" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0L8 4L0 8Z" fill="#0067a9"/>
+    </marker>
+    <marker id="arrow-teal" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0L8 4L0 8Z" fill="#18766f"/>
+    </marker>
+    <style>
+      .title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #102a43; letter-spacing: -0.4px; }
+      .subtitle { font: 400 15px "Segoe UI", Arial, sans-serif; fill: #486581; }
+      .eyebrow { font: 700 12px "Segoe UI", Arial, sans-serif; letter-spacing: 1.1px; }
+      .section { font: 700 18px "Segoe UI", Arial, sans-serif; fill: #102a43; }
+      .label { font: 650 15px "Segoe UI", Arial, sans-serif; fill: #17324d; }
+      .body { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #40566b; }
+      .small { font: 400 12px "Segoe UI", Arial, sans-serif; fill: #526b80; }
+      .mono { font: 600 12px Consolas, "Liberation Mono", monospace; fill: #17324d; }
+      .cloud-card { fill: #ffffff; stroke: #80bde5; stroke-width: 1.5; }
+      .local-card { fill: #ffffff; stroke: #8bc9c3; stroke-width: 1.5; }
+      .azure-line { fill: none; stroke: #0067a9; stroke-width: 2; marker-end: url(#arrow-blue); }
+      .control-line { fill: none; stroke: #527b9b; stroke-width: 1.5; stroke-dasharray: 5 4; marker-end: url(#arrow-blue); }
+      .local-line { fill: none; stroke: #18766f; stroke-width: 2; marker-end: url(#arrow-teal); }
+    </style>
+  </defs>
+
+  <rect width="1200" height="620" fill="url(#page)"/>
+  <path d="M0 0H1200V78H0Z" fill="#ffffff"/>
+  <path d="M0 77H1200" stroke="#d8e5ef"/>
+  <text class="title" x="40" y="38">Azure web service — topology and proof boundaries</text>
+  <text class="subtitle" x="40" y="63">Original design artifact · target architecture at left · local checks at right · not a cloud console capture</text>
+
+  <!-- Target Azure architecture -->
+  <rect x="32" y="96" width="790" height="454" rx="14" fill="url(#azure-panel)" stroke="#62a9d8" stroke-width="2" filter="url(#shadow)"/>
+  <text class="eyebrow" x="56" y="124" fill="#0067a9">TARGET · AZURE ARCHITECTURE</text>
+  <text class="small" x="56" y="144">Conceptual until an authorized deployment is independently observed</text>
+
+  <!-- External actors and public path -->
+  <rect class="cloud-card" x="56" y="168" width="150" height="66" rx="8"/>
+  <circle cx="78" cy="190" r="8" fill="#0078d4"/>
+  <path d="M65 218c2-13 24-13 26 0" fill="none" stroke="#0078d4" stroke-width="3"/>
+  <text class="label" x="99" y="193">Internet client</text>
+  <text class="small" x="99" y="214">HTTP request</text>
+
+  <rect class="cloud-card" x="56" y="260" width="150" height="112" rx="8"/>
+  <text class="label" x="72" y="286">Deployment identity</text>
+  <text class="body" x="72" y="309">Scoped Azure RBAC</text>
+  <text class="body" x="72" y="329">Terraform operations</text>
+  <text class="small" x="72" y="352">No embedded credential</text>
+
+  <rect x="56" y="392" width="150" height="90" rx="8" fill="#edf3f7" stroke="#9cb2c3" stroke-width="1.5"/>
+  <text class="label" x="72" y="418">Bootstrap identity</text>
+  <text class="body" x="72" y="441">Creates role assignment</text>
+  <text class="small" x="72" y="462">Separate management step</text>
+
+  <!-- Azure resource group -->
+  <rect x="236" y="160" width="560" height="362" rx="12" fill="#ffffff" stroke="#0078d4" stroke-width="2"/>
+  <rect x="236" y="160" width="560" height="38" rx="12" fill="#0078d4"/>
+  <path d="M236 186V198H796V186" fill="#0078d4"/>
+  <text x="256" y="185" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700" fill="#ffffff">Azure resource group</text>
+  <text x="438" y="184" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#dff1ff">HTTP :80 → public IPv4</text>
+  <text x="646" y="184" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#dff1ff">deployment scope</text>
+
+  <rect x="258" y="216" width="260" height="282" rx="10" fill="#f5faff" stroke="#79b8df" stroke-width="1.5"/>
+  <text class="label" x="278" y="242">Virtual network</text>
+  <text class="mono" x="405" y="242">10.42.0.0/16</text>
+
+  <rect x="278" y="258" width="220" height="218" rx="9" fill="#eaf5fc" stroke="#9ac9e8" stroke-width="1.5"/>
+  <text class="label" x="298" y="284">Subnet</text>
+  <text class="mono" x="360" y="284">10.42.1.0/24</text>
+
+  <text class="small" x="298" y="320">Subnet association boundary</text>
+  <text class="body" x="298" y="350">NIC receives private IPv4</text>
+  <text class="body" x="298" y="373">Route table applies here</text>
+  <path d="M300 405H476" stroke="#9ac9e8" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text class="small" x="298" y="432">Workload traffic traverses</text>
+  <text class="small" x="298" y="452">the associated NIC and NSG.</text>
+
+  <rect class="cloud-card" x="548" y="216" width="226" height="62" rx="7"/>
+  <text class="label" x="564" y="240">Route table · subnet associated</text>
+  <text class="mono" x="564" y="260">0.0.0.0/0 → Internet</text>
+  <text class="small" x="564" y="274">Azure platform egress</text>
+
+  <rect class="cloud-card" x="548" y="294" width="226" height="54" rx="7"/>
+  <text class="label" x="564" y="317">Static public IPv4</text>
+  <text class="small" x="564" y="337">Associated through NIC IP config</text>
+
+  <rect class="cloud-card" x="548" y="364" width="226" height="58" rx="7"/>
+  <text class="label" x="564" y="387">NSG · attached to NIC</text>
+  <text class="small" x="564" y="407">HTTP 80 public · SSH 22 trusted /32</text>
+
+  <rect class="cloud-card" x="548" y="438" width="104" height="48" rx="7"/>
+  <text class="label" x="563" y="459">NIC</text>
+  <text class="small" x="563" y="477">IP configuration</text>
+
+  <rect x="670" y="430" width="104" height="64" rx="9" fill="#d9edfa" stroke="#0078d4" stroke-width="2" filter="url(#shadow)"/>
+  <text class="label" x="687" y="454">Linux VM</text>
+  <text class="body" x="687" y="474">Nginx</text>
+  <text class="mono" x="687" y="489">/health</text>
+
+  <rect x="548" y="498" width="226" height="20" rx="5" fill="#eef6fb" stroke="#80bde5" stroke-width="1.5"/>
+  <text class="small" x="562" y="513">Managed OS disk · 30 GiB requested</text>
+  <path d="M722 494V498" fill="none" stroke="#0067a9" stroke-width="1.5"/>
+
+  <!-- Azure relationships -->
+  <path class="azure-line" d="M206 207H530V321H541"/>
+  <path class="control-line" d="M548 246H526V300H498"/>
+  <path class="azure-line" d="M548 321H536V462H541"/>
+  <path class="azure-line" d="M652 462H663"/>
+  <path class="azure-line" d="M600 422V431"/>
+  <path class="control-line" d="M206 316H225V218H256"/>
+  <path class="control-line" d="M206 436H220V344H206"/>
+  <text class="small" x="212" y="330" transform="rotate(-90 212 330)">control plane</text>
+
+  <!-- Local validation boundary -->
+  <rect x="842" y="96" width="326" height="454" rx="14" fill="#edf8f6" stroke="#52a89f" stroke-width="2" filter="url(#shadow)"/>
+  <text class="eyebrow" x="866" y="124" fill="#18766f">LOCAL VALIDATION · NO CLOUD</text>
+  <text class="small" x="866" y="144">Deterministic checks with synthetic inputs</text>
+
+  <rect class="local-card" x="866" y="168" width="278" height="100" rx="8"/>
+  <text class="label" x="886" y="194">Terraform provider mock</text>
+  <text class="body" x="886" y="217">Schema and configuration contract tests</text>
+  <text class="body" x="886" y="239">without a live Azure control plane</text>
+  <rect x="886" y="247" width="159" height="5" rx="2.5" fill="#43a69d"/>
+
+  <path class="local-line" d="M1005 268V291"/>
+  <rect class="local-card" x="866" y="298" width="278" height="100" rx="8"/>
+  <text class="label" x="886" y="324">Docker + QEMU guest</text>
+  <text class="body" x="886" y="347">Docker: Nginx /health over HTTP</text>
+  <text class="body" x="886" y="369">QEMU: Linux + BusyBox HTTP</text>
+  <rect x="886" y="377" width="210" height="5" rx="2.5" fill="#43a69d"/>
+
+  <rect x="866" y="422" width="278" height="104" rx="8" fill="#fff8e8" stroke="#d9a441" stroke-width="1.5"/>
+  <text class="label" x="886" y="448">Proof boundary</text>
+  <text class="body" x="886" y="471">Mock contract test ≠ live Azure</text>
+  <text class="body" x="886" y="493">Local HTTP ≠ managed NSG/RBAC proof</text>
+  <text class="small" x="886" y="514">Cloud behavior needs an authorized run.</text>
+
+  <!-- Durable artifact footer -->
+  <rect x="32" y="568" width="1136" height="32" rx="7" fill="#17324d"/>
+  <text x="52" y="589" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#ffffff">DESIGN ARTIFACT</text>
+  <text x="190" y="589" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#d9e8f3">The PNG is rendered from this SVG; it is not a screenshot and does not claim deployment, authorization, or managed-service enforcement.</text>
 </svg>
