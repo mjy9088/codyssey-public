@@ -3,3 +3,9 @@ default:
 
 bash:
     bash ./tailnet.sh
+
+chrome-extension:
+    sh ./scripts/install-chrome-extension.sh
+
+browser:
+    bash ./scripts/tailnet-browser.sh

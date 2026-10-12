@@ -31,3 +31,8 @@ fi
 if grep -Eq '\{\{args\}\}' "$root/justfile"; then
   fail 'justfile interpolates arbitrary arguments into a shell recipe'
 fi
+
+bash -n "$root/tailscale-entrypoint.sh" "$root/init.sh"
+sh -n "$root/install.sh"
+grep -q -- '--state=mem:' "$root/tailscale-entrypoint.sh"
+grep -q 'codyssey-tailscale' "$root/Dockerfile"

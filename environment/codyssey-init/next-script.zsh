@@ -11,6 +11,17 @@ mise trust "$root/mise.toml"
 mise install just@1.43.0
 eval "$(mise env -s zsh)"
 
+open_browser() {
+  local url=$1
+  if [[ $(uname -s) == Darwin && ${CODYSSEY_BROWSER:-portable} != system ]]; then
+    bash "$root/scripts/tailnet-browser.sh" "$url"
+  elif [[ $url == https://login.tailscale.com/* ]]; then
+    open "$url"
+  else
+    open -a 'Google Chrome' "$url" 2>/dev/null || open "$url"
+  fi
+}
+
 restore_tty() {
   if [[ -n ${tty_state:-} ]]; then
     stty "$tty_state" <"$tty_path" 2>/dev/null || true
@@ -79,8 +90,11 @@ if [[ $tailnet_state == needs-login ]]; then
   # NeedsLogin can precede the control server's authentication URL, especially
   # while a software-emulated VM is still starting its network services.
   for _ in {1..60}; do
+    login_status=$(docker compose exec -T tailscale tailscale status --json 2>/dev/null || true)
+    auth_url=$(print -r -- "$login_status" | sed -n 's/.*"AuthURL"[[:space:]]*:[[:space:]]*"\(https:\/\/login\.tailscale\.com\/[^" ]*\)".*/\1/p')
+    [[ -z $auth_url ]] || break
     login_output=$(docker compose logs --no-color tailscale 2>/dev/null || true)
-    auth_url=$(print -r -- "$login_output" | grep -Eo 'https://login\.tailscale\.com/[A-Za-z0-9_./?=&-]+' | head -n 1 || true)
+    auth_url=$(print -r -- "$login_output" | grep -Eo 'https://login\.tailscale\.com/[A-Za-z0-9_./?=&-]+' | tail -n 1 || true)
     [[ -z $auth_url ]] || break
     sleep 1
   done
@@ -90,7 +104,7 @@ if [[ $tailnet_state == needs-login ]]; then
   fi
   printf 'Tailscale is not connected yet. Authenticate at: %s\n' "$auth_url"
   if [[ ${CODYSSEY_OPEN_BROWSER:-1} != 0 ]] && command -v open >/dev/null 2>&1; then
-    open "$auth_url" 2>/dev/null || true
+    open_browser "$auth_url" || printf 'Could not launch the browser; use the printed login URL.\n' >&2
   fi
 fi
 
@@ -109,6 +123,12 @@ if (( ui_ready != 1 )); then
 fi
 
 printf 'GOST UI: %s\n' "$ui_url"
+printf 'Chrome extension: %s/chrome-extension (Load unpacked at chrome://extensions).\n' "$root"
 if [[ ${CODYSSEY_OPEN_BROWSER:-1} != 0 ]] && command -v open >/dev/null 2>&1; then
-  open -a 'Google Chrome' "$ui_url" 2>/dev/null || open "$ui_url" 2>/dev/null || true
+  open_browser "$ui_url" || printf 'Could not launch the browser; use the printed GOST URL.\n' >&2
+fi
+
+if [[ -t 0 && -t 1 && ${CODYSSEY_INTERACTIVE_SHELL:-1} != 0 ]]; then
+  printf 'Environment ready. Use just to enter the Tailscale container.\n'
+  exec zsh -i
 fi

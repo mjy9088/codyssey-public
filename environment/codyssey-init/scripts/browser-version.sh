@@ -1,0 +1,4 @@
+# Official Chrome for Testing archives. These are external download integrity pins.
+BROWSER_VERSION=155.0.8059.39
+BROWSER_MAC_X64_SHA256=9e4da7961d4a426078f02e89ecfa569a7926ada2dc88aa53c0bd9ed0d46c3bb7
+BROWSER_MAC_ARM64_SHA256=529a71bd61aaa2ef266a4d4bd300ae9572ba6a3468a8d55c3023ffeffb5b6b4e

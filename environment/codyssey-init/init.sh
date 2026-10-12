@@ -11,9 +11,13 @@ die() {
 }
 
 remote_files=(
-  .dockerignore .env.example Dockerfile README.md docker-compose.yml init.sh justfile
+  .dockerignore .env.example Dockerfile README.md HANDOFF.md docker-compose.yml init.sh justfile
   macos-setup.sh mise.toml next-script.zsh tailnet.sh verify-macos-setup.py
-  lib/auth.sh gost/gost.yaml
+  lib/auth.sh gost/gost.yaml enable-korean.swift install.sh tailscale-entrypoint.sh
+  chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs
+  chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs
+  chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh
+  scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh
 )
 remote_staging=
 mise_download=
@@ -55,6 +59,7 @@ install_remote_files() {
     if [[ $file == gost/gost.yaml && -e $destination ]] || [[ -e $destination ]]; then
       continue
     fi
+    mkdir -p "$(dirname -- "$destination")"
     install -m 0644 "$staging/$file" "$destination"
   done
   chmod 0755 "$target/init.sh" "$target/next-script.zsh" "$target/tailnet.sh" \
@@ -136,6 +141,14 @@ fi
 
 if [[ ${CODYSSEY_MACOS_SETUP:-0} == 1 ]]; then
   bash "$init_dir/macos-setup.sh" || printf 'Optional macOS preferences failed; continuing.\n' >&2
+elif [[ $(uname -s) == Darwin ]]; then
+  bash "$init_dir/macos-setup.sh" --input-only
 fi
 
+if [[ -t 0 ]]; then
+  exec zsh -i "$init_dir/next-script.zsh"
+fi
+if { true </dev/tty; } 2>/dev/null; then
+  exec zsh -i "$init_dir/next-script.zsh" </dev/tty
+fi
 exec zsh -i "$init_dir/next-script.zsh" </dev/null

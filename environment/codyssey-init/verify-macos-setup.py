@@ -26,8 +26,8 @@ TEXT_KEYS: Final = (
 )
 KOREAN: Final[dict[str, PlistValue]] = {
     "InputSourceKind": "Input Mode",
-    "Bundle ID": "com.apple.inputmethod.Korean",
-    "Input Mode": "com.apple.inputmethod.Korean.2SetKorean",
+    "Bundle ID": "org.youknowone.inputmethod.Gureum",
+    "Input Mode": "org.youknowone.inputmethod.Gureum.han2",
 }
 
 
@@ -174,7 +174,7 @@ def verify_preferences(directory: Path, unrelated_sources: list[dict[str, PlistV
     if not isinstance(hotkeys, dict):
         raise VerificationError("AppleSymbolicHotKeys is not a dictionary")
     expected_60 = {"enabled": True, "value": {"type": "standard", "parameters": [32, 49, 262144]}}
-    expected_61 = {"enabled": True, "value": {"type": "standard", "parameters": [32, 49, 786432]}}
+    expected_61 = {"enabled": True, "value": {"type": "standard", "parameters": [32, 49, 393216]}}
     if {key: value for key, value in hotkeys.items() if key not in {"60", "61"}} != unrelated_hotkeys or hotkeys.get("60") != expected_60 or hotkeys.get("61") != expected_61:
         raise VerificationError("symbolic hotkeys do not preserve unrelated typed entries")
     return values

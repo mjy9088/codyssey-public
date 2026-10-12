@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+node --test /src/tests/chrome-extension-test.mjs
+python3 /src/tests/portable-browser-test.py
 
 for test_script in /src/tests/bootstrap-static.sh /src/tests/bootstrap-remote.sh /src/tests/bootstrap-runtime.sh; do
   bash "$test_script"

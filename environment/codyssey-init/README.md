@@ -18,22 +18,15 @@ cd environment/codyssey-init
 bash init.sh
 ```
 
-Do not use a mutable `main`/`master` raw URL. This work is not assumed to be present on GitHub's
-current `main` branch. Remote installation is available only after the exact reviewed commit has been
-published to an approved source. It requires both a base URL and a full 40-character commit. Download
-the initial script completely before executing it; streaming `curl | bash` can execute a partial file:
+After publishing these changes, the POSIX entry point supports:
 
 ```sh
-export CODYSSEY_INIT_BASE_URL=https://raw.githubusercontent.com/OWNER/REPOSITORY
-export CODYSSEY_INIT_REF=0123456789abcdef0123456789abcdef01234567
-(
-  installer=$(mktemp) || exit 1
-  trap 'rm -f "$installer"' EXIT
-  curl --fail --location --silent --show-error \
-    "$CODYSSEY_INIT_BASE_URL/$CODYSSEY_INIT_REF/environment/codyssey-init/init.sh" \
-    -o "$installer" && bash "$installer"
-)
+curl -fsSL https://raw.githubusercontent.com/mjy9088/codyssey-public/main/environment/codyssey-init/install.sh | sh
 ```
+
+It resolves `main` to a commit once and downloads the complete Bash installer before executing it.
+Set `CODYSSEY_INIT_REF` to a reviewed full commit to pin the installation, and optionally
+`CODYSSEY_INIT_BASE_URL` to use another source. The new entry point must be published before the URL works.
 
 Remote mode stages the complete reusable runtime, including `init.sh`, `verify-macos-setup.py`, and
 runtime libraries, before copying anything into
@@ -58,8 +51,7 @@ explicitly installs `just@1.43.0`, and refreshes the shell environment with `mis
 Compose starts.
 
 `init.sh` checks that Docker is running, adds the user-local `mise` path and zsh activation block once,
-and launches `next-script.zsh` as an interactive zsh script with standard input attached to
-`/dev/null`. Secret input is read directly and silently from `/dev/tty`.
+and launches `next-script.zsh` as an interactive zsh script with terminal input restored when a controlling terminal is available. Secret input is read directly and silently from `/dev/tty`.
 
 ## Authentication and startup
 
@@ -85,8 +77,9 @@ docker compose up -d --build
 
 The bootstrap waits for all three containers and a Tailscale `Running` or `NeedsLogin` state. A
 `NeedsLogin` state is not reported as a connected tailnet: the script extracts and prints the actual
-`https://login.tailscale.com/...` authentication URL from Tailscale's output. It waits up to 60 seconds
-for that URL because `NeedsLogin` can appear before the URL is logged, then fails with a command
+`https://login.tailscale.com/...` authentication URL from Tailscale's output. The entry point keeps the daemon alive throughout browser
+authentication, avoiding the upstream container wrapper's 60-second startup timeout. It reads the current URL from status, with the latest logged URL as a fallback, and waits up to 60 seconds
+for that URL because `NeedsLogin` can appear before the URL is available, then fails with a command
 to inspect the logs if no URL is available:
 
 ```sh
@@ -94,7 +87,7 @@ docker compose logs tailscale
 ```
 
 It then waits for the local GOST UI and opens Chrome when available, falling back to the default
-macOS browser. The URL is:
+portable Tailnet browser by default (or the installed browser with `CODYSSEY_BROWSER=system`). Interactive runs finish in zsh with `mise` and `just` available. The URL is:
 
 <http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080>
 
@@ -112,11 +105,11 @@ Run only the reviewed image and scripts, and do not enable this Compose project 
 or that mount are unacceptable.
 
 On OrbStack, host networking refers to its Linux VM, not the macOS host network. The SOCKS5 listener
-at `127.0.0.1:1055` and the GOST chain remain available alongside kernel networking; containerboot
-passes that listener flag independently of the TUN mode. See the
+at `127.0.0.1:1055` and the GOST chain remain available alongside kernel networking; The entry point configures that listener alongside the TUN device. See the
 [Tailscale Docker parameters](https://tailscale.com/docs/features/containers/docker/docker-params).
 
-Tailscale state persists in the `tailscale-state` named volume. The GOST API listens only on
+Tailscale uses `--state=mem:` and registers as an ephemeral node. Restarting it requires fresh
+authentication unless a reusable auth key is configured. Existing old state volumes are left untouched. The GOST API listens only on
 `127.0.0.1:18080`, and the UI is published only on `127.0.0.1:18081`. No forwarding service is enabled
 by default. Add services with loopback listener addresses unless deliberate external exposure is
 required.
@@ -141,12 +134,52 @@ bash tailnet.sh bash -lc 'command-one | command-two'
 Arguments, spaces, and the command exit status are preserved. Interactive terminals retain a TTY;
 redirected calls use Compose's non-TTY mode. Bash is probed through `sh -c 'command -v bash'`, and an
 old image is rebuilt only when Bash is the requested command (implicitly through no arguments or
-explicitly as the first argument). Arbitrary commands are never probed, prefixed, or rebuilt. The
-named state volume is not removed.
+explicitly as the first argument). Arbitrary commands are never probed, prefixed, or rebuilt. Existing old state volumes are not removed.
+
+## Portable Tailnet browser
+
+On macOS the bootstrap now opens a portable **Chrome for Testing 155.0.8059.39** with the Tailnet
+extension loaded automatically. No browser installation, Web Store visit, or Load unpacked step is
+needed. The launcher chooses `mac-x64` on x86_64 and `mac-arm64` on Apple Silicon, downloads from
+Google's versioned archive, verifies its pinned SHA-256, and extracts into
+`~/Library/Caches/codyssey-init/`. It reuses the browser on later runs. Failed downloads, checksums,
+or extraction leave no installed browser and remove staging files.
+
+```sh
+just browser
+# Or open a particular website:
+bash scripts/tailnet-browser.sh https://server.example.ts.net
+# Download and prepare without opening a window:
+bash scripts/tailnet-browser.sh --prepare
+```
+
+The browser uses its own profile and extension copy under
+`~/Library/Application Support/codyssey-init/`. Tailnet routing enables automatically on the first
+launch; later launches preserve the user's routing choice. The extension routes MagicDNS names,
+`.ts.net` names, Tailscale IPs, and private IPv4 destinations. Public websites stay direct. Its popup
+can switch to All websites or disable routing. It needs only the `proxy` permission, and does not
+authenticate Tailscale or provide a system-wide VPN. Keep the Tailscale container running and logged in.
+
+The version and archive integrity pins live in `scripts/browser-version.sh`. The browser does not
+auto-update; update those pins deliberately to adopt another release. Only x86_64 has been exercised
+with a real browser here; the arm64 archive was downloaded and its checksum recorded, and architecture
+selection is covered by synthetic tests. The launcher can override its private locations with
+`CODYSSEY_BROWSER_CACHE_DIR` and `CODYSSEY_BROWSER_SUPPORT_DIR`.
+
+Use `CODYSSEY_BROWSER=system` to keep the installed-browser behavior. `CODYSSEY_OPEN_BROWSER=0`
+skips browser downloads and launches during bootstrap. To install the extension into ordinary Chrome,
+run `just chrome-extension`, enable Developer mode, click Load unpacked, and select the printed
+`chrome-extension` directory. That ordinary installation starts with routing off.
+
+Chrome for Testing supports [automatic extension loading](https://groups.google.com/a/chromium.org/g/chromium-extensions/c/1-g8EFx2BBY/m/S0ET5wPjCAAJ).
+The browser archives come from [Google's Chrome for Testing project](https://github.com/GoogleChromeLabs/chrome-for-testing).
+See [the extension documentation](chrome-extension/README.md) for routing details and troubleshooting.
+The SOCKS proxy must be reachable from macOS at `127.0.0.1:1055`; this has been verified on the current
+OrbStack installation. Other Docker engines may need port forwarding from their Linux VM.
 
 ## Optional macOS preferences
 
-Preferences are opt-in and nonfatal to the bootstrap:
+This environment uses **Gureum 1.13.2 Hangul 2-set** by default. Other preferences are opt-in and nonfatal:
 
 ```sh
 CODYSSEY_MACOS_SETUP=1 bash init.sh
@@ -159,12 +192,37 @@ group, it creates a private per-run backup under
 - disables macOS text automation;
 - only when both Terminal and Google Chrome exist, replaces Dock app pins with those two apps,
   hides recent items, and removes folder stacks; otherwise the entire Dock group is left unchanged;
-- preserves existing input sources while adding Korean 2-Set once;
+- preserves unrelated input sources while adding Gureum Hangul 2-set once;
 - merges typed symbolic-hotkey entries 60 and 61 for Control-Space and Control-Shift-Space while
   preserving unrelated shortcuts; and
 - restarts only the current user's Dock process.
 
-It does not call private `activateSettings` APIs.
+The reference environment is macOS 15.7.5 on x86_64 with Gureum 1.13.2 installed at
+`/Library/Input Methods/Gureum.app`. This is an environment bootstrap, not a general-purpose macOS
+configuration tool. On a fresh machine, `scripts/install-gureum.sh` downloads the exact 1.13.2 package,
+verifies its pinned SHA-256, and extracts it into `~/Library/Input Methods/Gureum.app` without sudo.
+An existing matching installation is reused. Swift and the Xcode Command Line Tools are required for
+Carbon registration and selection; the script does not silently substitute Apple's input method.
+
+`enable-korean.swift` registers the installed app, enables its parent source
+`org.youknowone.inputmethod.Korean` and Hangul mode `org.youknowone.inputmethod.Gureum.han2`, and attempts
+to select Hangul. The legacy parent ID differs from the app's bundle ID,
+`org.youknowone.inputmethod.Gureum`. After successful Gureum selection, it disables the Apple Korean
+sources added by the earlier bootstrap. A freshly registered input method may require logout/relogin:
+selection error `-50` was observed on this machine. The bootstrap reports the pending session step
+rather than claiming the physical shortcut works. After logging back in, rerun:
+
+```sh
+bash macos-setup.sh --input-only
+```
+
+Control-Space uses symbolic hotkey 60 with parameters `[32, 49, 262144]`; Control-Shift-Space uses 61
+with `[32, 49, 393216]`. The old value `786432` was Control-Option-Space. After importing preferences,
+the setup reads them back to synchronize the preference cache, then calls this reference environment's
+Apple helper, `/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u`.
+This is an environment-specific private helper, and its availability is a prerequisite for live reload.
+Loaded shortcut registration does not prove physical key handling; test in a focused text field after
+logout/relogin. See [HANDOFF.md](HANDOFF.md) for installed input-source details and fresh-VM steps.
 
 Every successful domain export is retained as `text.plist`, `dock.plist`,
 `input-sources.plist`, or `hotkeys.plist` in the backup directory printed by the script. To restore a
@@ -250,8 +308,8 @@ docker compose logs -f
 docker compose down
 ```
 
-`docker compose down` preserves the named Tailscale state volume unless `--volumes` is explicitly
-added.
+`docker compose down` stops the ephemeral node. This project no longer creates a Tailscale state
+volume; any volume from an older installation remains untouched.
 
 ## Verification in a macOS VM outside the classroom
 

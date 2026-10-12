@@ -128,15 +128,15 @@ apply_input_sources() {
     kind=$($plistbuddy_bin -c "Print :AppleEnabledInputSources:$index:InputSourceKind" "$work" 2>/dev/null || true)
     bundle=$($plistbuddy_bin -c "Print :AppleEnabledInputSources:$index:'Bundle ID'" "$work" 2>/dev/null || true)
     mode=$($plistbuddy_bin -c "Print :AppleEnabledInputSources:$index:'Input Mode'" "$work" 2>/dev/null || true)
-    if [[ $kind == 'Input Mode' && $bundle == 'com.apple.inputmethod.Korean' && $mode == 'com.apple.inputmethod.Korean.2SetKorean' ]]; then
+    if [[ $kind == 'Input Mode' && $bundle == 'org.youknowone.inputmethod.Gureum' && $mode == 'org.youknowone.inputmethod.Gureum.han2' ]]; then
       return
     fi
     index=$((index + 1))
   done
   "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index dict" "$work" || failed=1
   "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index:InputSourceKind string 'Input Mode'" "$work" || failed=1
-  "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index:'Bundle ID' string 'com.apple.inputmethod.Korean'" "$work" || failed=1
-  "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index:'Input Mode' string 'com.apple.inputmethod.Korean.2SetKorean'" "$work" || failed=1
+  "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index:'Bundle ID' string 'org.youknowone.inputmethod.Gureum'" "$work" || failed=1
+  "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index:'Input Mode' string 'org.youknowone.inputmethod.Gureum.han2'" "$work" || failed=1
   [[ $failed -eq 0 ]] || { warn 'input source update could not be prepared'; return; }
   if ! "$defaults_bin" import com.apple.HIToolbox "$work" >/dev/null 2>&1; then
     restore_domain com.apple.HIToolbox || warn 'input source rollback failed; backup retained'
@@ -168,16 +168,57 @@ apply_hotkeys() {
   fi
   "$plistbuddy_bin" -c 'Print :AppleSymbolicHotKeys' "$work" >/dev/null 2>&1 ||
     "$plistbuddy_bin" -c 'Add :AppleSymbolicHotKeys dict' "$work" || { warn 'hotkey map is unreadable'; return; }
-  add_hotkey "$work" 60 262144 && add_hotkey "$work" 61 786432 || { warn 'hotkey update could not be prepared'; return; }
+  add_hotkey "$work" 60 262144 && add_hotkey "$work" 61 393216 || { warn 'hotkey update could not be prepared'; return; }
   if ! "$defaults_bin" import com.apple.symbolichotkeys "$work" >/dev/null 2>&1; then
     restore_domain com.apple.symbolichotkeys || warn 'hotkey rollback failed; backup retained'
     warn 'hotkey write failed'
   fi
 }
 
+enable_korean() {
+  local app
+  if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then
+    app=$(bash "$(dirname -- "$0")/scripts/install-gureum.sh") || return 1
+    /usr/bin/swift "$(dirname -- "$0")/enable-korean.swift" "$app" || return $?
+  fi
+}
+
+reload_hotkeys() {
+  # This bootstrap targets the reference macOS environment, where this Apple
+  # helper is present. Refresh its current user's live shortcuts after import.
+  if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then
+    # Synchronize the imported values before the helper reads its preference cache.
+    "$defaults_bin" read com.apple.symbolichotkeys AppleSymbolicHotKeys >/dev/null || return 1
+    /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u || {
+      warn 'live shortcut reload failed; log out and back in'
+      return 1
+    }
+  fi
+}
+
+if [[ ${1:-} == --input-only ]]; then
+  apply_input_sources
+  keyboard_status=0
+  enable_korean || keyboard_status=$?
+  [[ $keyboard_status == 0 || $keyboard_status == 2 ]] || exit "$keyboard_status"
+  apply_hotkeys
+  reload_hotkeys || exit 1
+  if [[ $keyboard_status == 2 ]]; then
+    printf 'Gureum installed and shortcuts configured; logout/relogin is required before keyboard testing. Backups: %s\n' "$backup_root"
+  else
+    printf 'Gureum and Control-Space configured. Physical keyboard testing is still required. Backups: %s\n' "$backup_root"
+  fi
+  exit 0
+fi
+
 apply_text
 apply_dock
 apply_input_sources
+keyboard_status=0
+enable_korean || keyboard_status=$?
+[[ $keyboard_status == 0 || $keyboard_status == 2 ]] || exit "$keyboard_status"
 apply_hotkeys
+reload_hotkeys || exit 1
+[[ $keyboard_status == 0 ]] || warn 'Gureum needs logout/relogin before keyboard testing'
 printf 'macOS preferences applied with group isolation. Backups: %s\n' "$backup_root"
 exit 0

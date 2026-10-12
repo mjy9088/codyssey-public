@@ -9,3 +9,5 @@ RUN apk add --no-cache \
   && mkdir -p /host
 
 WORKDIR /host
+COPY tailscale-entrypoint.sh /usr/local/bin/codyssey-tailscale
+ENTRYPOINT ["bash", "/usr/local/bin/codyssey-tailscale"]

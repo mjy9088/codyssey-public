@@ -116,11 +116,11 @@ def assert_success_contract(state: Path) -> None:
     sources = read_domain(state, "com.apple.HIToolbox")["AppleEnabledInputSources"]
     assert isinstance(sources, list) and isinstance(sources[0], dict)
     assert sources[0]["KeyboardLayout Name"] == "ABC"
-    assert sources.count({"InputSourceKind": "Input Mode", "Bundle ID": "com.apple.inputmethod.Korean", "Input Mode": "com.apple.inputmethod.Korean.2SetKorean"}) == 1
+    assert sources.count({"InputSourceKind": "Input Mode", "Bundle ID": "org.youknowone.inputmethod.Gureum", "Input Mode": "org.youknowone.inputmethod.Gureum.han2"}) == 1
     hotkeys = read_domain(state, "com.apple.symbolichotkeys")["AppleSymbolicHotKeys"]
     assert isinstance(hotkeys, dict) and hotkeys["99"] == {"enabled": True}
     assert hotkeys["60"] == {"enabled": True, "value": {"type": "standard", "parameters": [32, 49, 262144]}}
-    assert hotkeys["61"] == {"enabled": True, "value": {"type": "standard", "parameters": [32, 49, 786432]}}
+    assert hotkeys["61"] == {"enabled": True, "value": {"type": "standard", "parameters": [32, 49, 393216]}}
 
 
 def test_success_and_repeat() -> None:
