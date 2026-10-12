@@ -1,27 +1,30 @@
 # HTTP Routing Troubleshooting
 
-This candidate's reproducible local case distinguishes a missing HTTP resource from a networking
-failure. It is not an AWS incident report and does not claim a real public deployment.
+This reproducible local case distinguishes a missing HTTP resource from a networking failure. It is
+not an Azure incident report and does not claim a public deployment.
 
 ## Symptom and hypothesis
 
-A request to `/not-present` returns HTTP 404 while `/health` returns HTTP 200 with `OK`. Because the
-server returns an HTTP status, the request reached the HTTP service; changing a security group is
-not the appropriate first action for this case.
+A request to `/not-present` returns HTTP 404 while `/health` returns HTTP 200 with `OK`. An HTTP status
+means the request reached the service, so changing an NSG or route is not the appropriate first action
+for this case.
 
 ## Reproduction and correction
 
-`verify/check.sh` requests both paths against the selected Docker or QEMU server and checks the
-responses. Use the documented `/health` path. The same assertions run through both real service
-paths, rather than substituting a stored response or a static PASS record.
+`verify/check.sh` requests both paths against the selected Docker or QEMU server and checks the real
+responses. Use the documented `/health` path. Both service paths execute the assertions rather than
+substituting a stored response or static PASS record.
 
-## Prevention and cloud follow-up
+## Authorized Azure follow-up
 
-Keep a stable health route and verify status and body. During an authorized AWS deployment, separately
-check DNS/address selection, routing, security-group source restrictions, listening ports, bootstrap
-logs and application routing. Capture actual symptoms before changing settings. Do not copy this
-local case as proof of AWS networking behavior.
+For a real deployment, separate application routing from infrastructure reachability:
 
-A troubleshooting document is an explicit submission requirement. Normally execution narratives
-should remain in reviewed CI/ignored artifacts because they become stale and may reveal operational
-details; prefer the rerunnable check over committing raw logs.
+1. Confirm the Standard public IP is associated with the intended NIC and the VM is running.
+2. Inspect effective routes; Azure combines system routes with the configured user-defined route.
+3. Inspect effective NSG rules and verify TCP/80 is allowed while SSH is limited to the approved `/32`.
+4. Check cloud-init and Nginx status inside the VM before changing network controls.
+5. Request `/health` locally and externally, recording the actual status, body, and source client.
+
+The QEMU result is not proof of Azure routing, NSG behavior, Ubuntu bootstrap, or public reachability.
+A troubleshooting document is an explicit submission requirement; raw operational logs should normally
+remain in reviewed CI or ignored artifacts because they become stale and can disclose infrastructure.
