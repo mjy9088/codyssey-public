@@ -42,7 +42,7 @@ for argument in "$@"; do printf '<%s>' "$argument" >>"$TEST_LOG"; done
 printf '<auth=%s><mise=%s>\n' "${TS_AUTHKEY:-}" "${MISE_ENV_APPLIED:-}" >>"$TEST_LOG"
 case "$*" in
   'compose ps --status running --services') printf 'tailscale\ngost\ngost-ui\n' ;;
-  'compose exec -T tailscale tailscale status --json') printf '{"BackendState":"%s"}\n' "${NEXT_STATE:-Running}" ;;
+  'compose exec -T tailscale tailscale status --json') printf '{"BackendState":"%s","AuthURL":"%s"}\n' "${NEXT_STATE:-Running}" "${CURRENT_AUTH_URL:-}" ;;
   'compose logs --no-color tailscale')
     if [ -n "${LOGIN_READS_FILE:-}" ]; then
       count=0
@@ -75,6 +75,11 @@ NEXT_STATE=NeedsLogin zsh "$work/next-script.zsh" </dev/null >"$tmp/login.out"
 grep -q 'https://login.tailscale.com/a/synthetic' "$tmp/login.out"
 grep -qx 'TS_AUTHKEY=' "$work/.env"
 [[ $(stat -c '%a' "$work/.env") == 600 ]]
+
+# Current status wins over historical log URLs.
+TS_AUTHKEY='' NEXT_STATE=NeedsLogin CURRENT_AUTH_URL=https://login.tailscale.com/a/current \
+  zsh "$work/next-script.zsh" </dev/null >"$tmp/current.out"
+grep -q 'Authenticate at: https://login.tailscale.com/a/current' "$tmp/current.out"
 
 # NeedsLogin is observable before the login URL is available on a real cold boot.
 : >"$log"

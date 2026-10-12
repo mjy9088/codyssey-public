@@ -22,15 +22,22 @@ esac
 docker version >/dev/null
 grep -qx '\*' "$root/.dockerignore"
 grep -qx '!Dockerfile' "$root/.dockerignore"
+context=$(mktemp -d)
+trap 'rm -rf "$context"' EXIT HUP INT TERM
 tar -C "$root" -cf - \
   Dockerfile docker-compose.yml init.sh next-script.zsh tailnet.sh justfile mise.toml \
-  README.md verify-macos-setup.py macos-setup.sh .env.example lib/auth.sh \
+  README.md HANDOFF.md verify-macos-setup.py macos-setup.sh enable-korean.swift install.sh tailscale-entrypoint.sh .env.example lib/auth.sh \
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh \
   tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/fixtures/dockerignore \
   tests/macos-fake-tools.py tests/macos-setup-test.py tests/fixtures/gost.yaml \
   tests/vm-orchestration-test.py tests/vm-guest-test.py scripts/check.sh scripts/create-macos-vm.sh scripts/prepare-macos-vm.sh \
-  scripts/verify-macos-vm.sh scripts/vm-files.sh | \
-  docker build --file tests/check.Dockerfile --tag "$image" -
+  scripts/verify-macos-vm.sh scripts/vm-files.sh \
+  chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs \
+  chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs \
+  chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh tests/chrome-extension-test.mjs \
+  scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh tests/portable-browser-test.py | \
+  tar -C "$context" -xf -
+docker build --file "$context/tests/check.Dockerfile" --tag "$image" "$context"
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,exec,size=64m,mode=1777 \
   --env CODYSSEY_NATIVE_PYTHON_CHECKS="$native_python" \

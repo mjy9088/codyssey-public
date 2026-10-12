@@ -1,2 +1,3 @@
 *
 !Dockerfile
+!tailscale-entrypoint.sh

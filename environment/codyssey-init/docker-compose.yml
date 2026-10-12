@@ -12,9 +12,6 @@ services:
 
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:-}
-      TS_AUTH_ONCE: "true"
-
-      TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "false"
 
       TS_SOCKS5_SERVER: "127.0.0.1:1055"
@@ -25,7 +22,6 @@ services:
         --shields-up=true
 
     volumes:
-      - tailscale-state:/var/lib/tailscale
       - ${HOME}:/host:rw
 
     devices:
@@ -63,6 +59,3 @@ services:
       - "127.0.0.1:18081:80"
 
     restart: unless-stopped
-
-volumes:
-  tailscale-state:
