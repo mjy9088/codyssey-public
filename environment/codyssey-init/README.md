@@ -82,6 +82,13 @@ Compose starts.
 `init.sh` checks that Docker is running, adds the user-local `mise` path and zsh activation block once,
 and launches `next-script.zsh` as an interactive zsh script with terminal input restored when a controlling terminal is available. Secret input is read directly and silently from `/dev/tty`.
 
+When both standard input and output are terminals, `init.sh` also offers to install
+`~/.local/bin/j`. Answers `y`, `Y`, `yes`, and `YES` install a mode-`0700` managed wrapper that changes
+to the resolved `codyssey-init` directory and runs `just` with the original arguments and exit status.
+Later accepted runs update that target atomically. The bootstrap replaces only wrappers bearing its
+exact ownership marker; another existing `j` is preserved with a warning. Noninteractive and declined
+runs do not create or change the command.
+
 ## Authentication and startup
 
 An exported `TS_AUTHKEY`, including an intentionally empty value, takes precedence and is passed to
@@ -194,6 +201,14 @@ auto-update; update those pins deliberately to adopt another release. Only x86_6
 with a real browser here; the arm64 archive was downloaded and its checksum recorded, and architecture
 selection is covered by synthetic tests. The launcher can override its private locations with
 `CODYSSEY_BROWSER_CACHE_DIR` and `CODYSSEY_BROWSER_SUPPORT_DIR`.
+
+Additional local unpacked extensions can be registered in
+`~/Library/Application Support/codyssey-init/unpacked-extension-paths`, one canonical absolute
+directory per line. Each directory must contain a regular `manifest.json`. The launcher preserves
+registration order and loads each unique valid directory after the built-in Tailnet extension.
+Relative, stale, non-canonical, comma-containing, empty, unreadable, and duplicate entries are
+reported and ignored; they never prevent the built-in extension or browser from launching. Override
+the parent directory with `CODYSSEY_BROWSER_SUPPORT_DIR` when using a private test location.
 
 Use `CODYSSEY_BROWSER=system` to keep the installed-browser behavior. `CODYSSEY_OPEN_BROWSER=0`
 skips browser downloads and launches during bootstrap. To install the extension into ordinary Chrome,
