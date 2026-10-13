@@ -41,13 +41,18 @@ write_shell_quoted() {
 }
 
 install_managed_j() {
-  local target=$1 bin command_path first_line temporary
+  local target=$1 bin command_path first_line second_line temporary
   bin="$HOME/.local/bin"
   command_path="$bin/j"
   if [[ -e $command_path || -L $command_path ]]; then
     first_line=
-    IFS= read -r first_line <"$command_path" || true
-    if [[ $first_line != '# codyssey-init: managed-j-v1' ]]; then
+    second_line=
+    {
+      IFS= read -r first_line || true
+      IFS= read -r second_line || true
+    } <"$command_path" 2>/dev/null || true
+    if [[ $first_line != '# codyssey-init: managed-j-v1' ]] \
+      && [[ $first_line != '#!/bin/sh' || $second_line != '# codyssey-init: managed-j-v1' ]]; then
       printf 'codyssey-init: preserving existing unowned command at %s\n' "$command_path" >&2
       return 0
     fi
@@ -55,7 +60,7 @@ install_managed_j() {
   mkdir -p "$bin"
   temporary=$(mktemp "$bin/.j.XXXXXX") || die 'could not create a temporary j wrapper.'
   if ! {
-    printf '%s\n' '# codyssey-init: managed-j-v1' '#!/bin/sh' 'set -eu'
+    printf '%s\n' '#!/bin/sh' '# codyssey-init: managed-j-v1' 'set -eu'
     printf 'cd -- '
     write_shell_quoted "$target"
     printf '\nexec just "$@"\n'
@@ -166,9 +171,9 @@ command -v zsh >/dev/null 2>&1 || die 'zsh is required.'
 export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
 command -v mise >/dev/null 2>&1 || install_mise
 
-if [[ -t 0 && -t 1 ]]; then
-  printf 'Install the global j command in %s? [y/N] ' "$HOME/.local/bin"
-  IFS= read -r install_j_answer || install_j_answer=
+if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then
+  printf 'Install the global j command in %s? [y/N] ' "$HOME/.local/bin" >/dev/tty
+  IFS= read -r install_j_answer </dev/tty || install_j_answer=
   case $install_j_answer in
     y|Y|yes|YES) install_managed_j "$init_dir" ;;
     *) ;;
