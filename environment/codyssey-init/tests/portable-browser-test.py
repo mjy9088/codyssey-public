@@ -99,6 +99,45 @@ class PortableBrowserTests(unittest.TestCase):
         self.assertIn(f"--load-extension={self.support}/tailnet-chrome-extension", call)
         self.assertNotIn("/Applications", call[2])
 
+    def test_registered_extensions_are_validated_deduplicated_and_ordered(self):
+        first = self.base / "first extension"
+        second = self.base / "second-extension"
+        for path in [first, second]:
+            path.mkdir()
+            (path / "manifest.json").write_text("{}")
+        stale = self.base / "stale-extension"
+        missing_manifest = self.base / "missing-manifest"
+        missing_manifest.mkdir()
+        comma = self.base / "comma,extension"
+        comma.mkdir()
+        (comma / "manifest.json").write_text("{}")
+        alias = self.base / "extension-alias"
+        alias.symlink_to(first, target_is_directory=True)
+        registry = self.support / "unpacked-extension-paths"
+        registry.parent.mkdir(parents=True)
+        registry.write_text(
+            "\n".join([
+                str(first), str(self.support / "tailnet-chrome-extension"),
+                "relative-extension", str(stale), str(comma),
+                str(alias), str(missing_manifest), str(first), str(second), "",
+            ])
+        )
+
+        result = self.run_launcher("about:blank")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        extension_flag = next(argument for argument in self.calls("open")[0] if argument.startswith("--load-extension="))
+        built_in = self.support / "tailnet-chrome-extension"
+        self.assertEqual(extension_flag, f"--load-extension={built_in},{first},{second}")
+        for rejected in ["relative-extension", str(stale), str(comma), str(alias), str(missing_manifest),
+            str(self.support / "tailnet-chrome-extension"), str(first)]:
+            self.assertIn(rejected, result.stderr)
+
+    def test_launcher_exposes_the_extension_registry_contract_marker(self):
+        launcher = (self.root / "scripts/tailnet-browser.sh").read_text()
+
+        self.assertIn("# codyssey-init: unpacked-extension-registry-v1", launcher.splitlines())
+
     def test_failures_leave_no_installed_browser_or_staging(self):
         for failure in ["FAIL_DOWNLOAD", "BAD_CHECKSUM", "FAIL_EXTRACT"]:
             with self.subTest(failure=failure):
