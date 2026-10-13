@@ -12,7 +12,8 @@ case ${1:-} in
       exit 1
     fi
     python3 -c 'import sys; assert sys.version_info >= (3, 10)'
-    # Both suites use synthetic state and fake external commands only.
+    # These suites use synthetic state and fake external commands only.
+    python3 "$root/tests/portable-browser-test.py"
     python3 "$root/tests/macos-setup-test.py"
     python3 "$root/tests/vm-orchestration-test.py"
     native_python=1
@@ -24,7 +25,7 @@ grep -qx '\*' "$root/.dockerignore"
 grep -qx '!Dockerfile' "$root/.dockerignore"
 context=$(mktemp -d)
 trap 'rm -rf "$context"' EXIT HUP INT TERM
-tar -C "$root" -cf - \
+tar -C "$root" -cf "$context/payload.tar" \
   Dockerfile docker-compose.yml init.sh next-script.zsh tailnet.sh justfile mise.toml \
   README.md HANDOFF.md verify-macos-setup.py macos-setup.sh enable-korean.swift install.sh tailscale-entrypoint.sh .env.example lib/auth.sh \
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh \
@@ -35,8 +36,9 @@ tar -C "$root" -cf - \
   chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs \
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs \
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh tests/chrome-extension-test.mjs \
-  scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh tests/portable-browser-test.py | \
-  tar -C "$context" -xf -
+  scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh tests/portable-browser-test.py
+tar -C "$context" -xf "$context/payload.tar"
+rm "$context/payload.tar"
 docker build --file "$context/tests/check.Dockerfile" --tag "$image" "$context"
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,exec,size=64m,mode=1777 \

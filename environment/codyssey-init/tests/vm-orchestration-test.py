@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -97,6 +98,8 @@ class OrchestrationTests(unittest.TestCase):
         self.assertFalse(any(cmd[0] == "delete" for cmd in commands))
         self.assertIn("init.sh", names)
         self.assertIn("verify-macos-setup.py", names)
+        # The guest must have every input needed to build its isolated check image.
+        self.assertIn("tests/managed-j-runtime.sh", names)
         self.assertNotIn(".env", names)
         self.assertNotIn("gost/gost.yaml", names)
         self.assertTrue(all(not name.startswith(("coursework/", "archive/")) for name in names))
@@ -109,6 +112,27 @@ class OrchestrationTests(unittest.TestCase):
         result, commands, _ = self.run_case(extra=("--delete-on-success",))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(["delete", "synthetic-test"], commands)
+
+    def test_missing_check_input_stops_before_docker_build(self):
+        with tempfile.TemporaryDirectory(prefix="vm-check-context-") as directory:
+            work = Path(directory)
+            source = work / "source"
+            shutil.copytree(ROOT, source, ignore=shutil.ignore_patterns(".git", "artifacts", ".env", "gost"))
+            (source / "tests/managed-j-runtime.sh").unlink()
+            fakebin = work / "bin"
+            fakebin.mkdir()
+            log = work / "docker.log"
+            docker = fakebin / "docker"
+            docker.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$CHECK_DOCKER_LOG"\n')
+            docker.chmod(0o755)
+            result = subprocess.run(
+                ["sh", str(source / "scripts/check.sh")],
+                env=dict(os.environ, PATH=str(fakebin) + os.pathsep + os.environ["PATH"],
+                         CHECK_DOCKER_LOG=str(log)), text=True, capture_output=True, timeout=10,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("managed-j-runtime.sh", result.stderr)
+            self.assertEqual(log.read_text().splitlines(), ["version"])
 
     def test_collision_never_stops_or_deletes_existing_vm(self):
         result, commands, _ = self.run_case("collision", ("--delete-on-success",))

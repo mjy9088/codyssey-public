@@ -7,7 +7,7 @@ vm_files=(
   scripts/create-macos-vm.sh tests/vm-orchestration-test.py tests/vm-guest-test.py
   scripts/prepare-macos-vm.sh scripts/verify-macos-vm.sh
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh
-  tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/macos-fake-tools.py
+  tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/managed-j-runtime.sh tests/macos-fake-tools.py
   tests/macos-setup-test.py tests/fixtures/dockerignore tests/fixtures/gost.yaml
   chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs
