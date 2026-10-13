@@ -41,7 +41,8 @@ elif tool != "open":
 class PortableBrowserTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
-        self.base = Path(self.temporary.name)
+        # macOS exposes /var through a symlink; registry entries must be canonical.
+        self.base = Path(self.temporary.name).resolve()
         self.root = self.base / "source"
         (self.root / "scripts").mkdir(parents=True)
         shutil.copy(ROOT / "scripts/tailnet-browser.sh", self.root / "scripts")

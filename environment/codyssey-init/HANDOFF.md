@@ -119,8 +119,9 @@ The previous `786432` value meant Control-Option-Space, not Control-Shift-Space.
 
 The existing `scripts/verify-macos-vm.sh --disposable` workflow remains available for destructive
 preference/VM verification, but it does not test a physical Control-Space event or authenticated
-Tailnet browsing. No fresh VM was created during this session; that run is intentionally left to
-the owner. A successful synthetic preference check does not resolve the current Gureum `-50` issue.
+Tailnet browsing. A successful automated VM preference check does not establish physical keyboard
+handling or resolve input-method selection in every login session. Follow the interactive steps
+above, and keep any VM execution evidence in ignored storage.
 
 ## Verification and delivery boundaries
 

@@ -405,10 +405,10 @@ step is intentionally mutable and is not a reproducible package snapshot: Homebr
 formula or cask versions on a later run.
 
 Verification first runs `scripts/check.sh --native-python`, then runs the actual `init.sh` twice.
-This mode runs only `macos-setup-test.py` and `vm-orchestration-test.py` natively on the macOS guest
+This mode runs `portable-browser-test.py`, `macos-setup-test.py`, and `vm-orchestration-test.py` natively on the macOS guest
 with synthetic state and fake commands. The pinned Linux container runs the Bash/zsh bootstrap suites
 and always runs `vm-guest-test.py`, whose fake Homebrew, Colima, and Docker guest boundaries must never
-execute natively on macOS. No checks are omitted; native execution of the two safe Python suites avoids
+execute natively on macOS. No checks are omitted; native execution of the three safe Python suites avoids
 expensive process startup under x86 emulation. The default `scripts/check.sh` runs all suites inside
 the isolated container.
 Verification checks the
