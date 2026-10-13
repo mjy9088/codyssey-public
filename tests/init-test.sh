@@ -53,7 +53,7 @@ run_remote() {
     /bin/sh <"$root/init.sh"
 }
 
-default_ref=5d70214354d4f8b0f6024b85ed91acdb94513639
+default_ref=95de4b0b882b7f3e15cab05e4d847a01de36c1b9
 default_base=https://raw.githubusercontent.com/mjy9088/codyssey-public
 unset TEST_REF TEST_BASE TEST_STATUS TEST_FETCH_FAIL
 run_remote >"$tmp/output"
