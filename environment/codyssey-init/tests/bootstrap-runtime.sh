@@ -125,7 +125,7 @@ for argument in "$@"; do printf '<%s>' "$argument" >>"$TEST_LOG"; done
 printf '\n' >>"$TEST_LOG"
 case "$*" in
   'compose ps --status running --services') printf 'tailscale\n' ;;
-  'compose exec -T tailscale sh -c command -v bash') exit "${BASH_PROBE_STATUS:-0}" ;;
+  'compose exec -T tailscale sh -c command -v bash && command -v mise && command -v zellij') exit "${BASH_PROBE_STATUS:-0}" ;;
   'compose exec -T tailscale bash') exit 17 ;;
   'compose exec -T tailscale ssh user name@host') exit 23 ;;
 esac
@@ -141,13 +141,18 @@ grep -q '<docker><compose><build><tailscale>' "$log"
 grep -q '<docker><compose><up><-d><--no-deps><--force-recreate><tailscale>' "$log"
 
 : >"$log"
+BASH_PROBE_STATUS=1 bash "$work/tailnet.sh" zellij --help
+grep -q '<docker><compose><build><tailscale>' "$log"
+grep -q '<docker><compose><exec><-T><tailscale><zellij><--help>' "$log"
+
+: >"$log"
 set +e
 bash "$work/tailnet.sh" ssh 'user name@host'
 status=$?
 set -e
 [[ $status -eq 23 ]]
 grep -q '<docker><compose><exec><-T><tailscale><ssh><user name@host>' "$log"
-if grep -Eq '<ps>|<build>|<sh><-c><command -v bash>' "$log"; then
+if grep -Eq '<ps>|<build>|<sh><-c><command -v bash' "$log"; then
   printf 'arbitrary command was probed or rebuilt\n' >&2
   exit 1
 fi
@@ -155,7 +160,7 @@ fi
 write_runtime_docker
 rm -f "$work/.env"
 pty_output=$(printf 'tskey-auth-secret_value-token_2\n' | script -q -e -c \
-  "before=\$(stty -g); zsh '$work/next-script.zsh'; result=\$?; after=\$(stty -g); [ \"\$before\" = \"\$after\" ] && [ \"\$result\" -eq 0 ] && printf 'TTY-RESTORED\\n'" /dev/null)
+  "before=\$(stty -g); CODYSSEY_INTERACTIVE_SHELL=0 zsh '$work/next-script.zsh'; result=\$?; after=\$(stty -g); [ \"\$before\" = \"\$after\" ] && [ \"\$result\" -eq 0 ] && printf 'TTY-RESTORED\\n'" /dev/null)
 printable_output=$(printf '%s' "$pty_output" | tr -d '\r')
 printf '%s\n' "$printable_output" | grep -q '^TTY-RESTORED$'
 

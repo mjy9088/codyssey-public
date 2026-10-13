@@ -10,9 +10,9 @@ else
   command=("$@")
 fi
 
-if [[ ${command[0]} == bash ]] && docker compose ps --status running --services | grep -qx tailscale; then
-  if ! docker compose exec -T tailscale sh -c 'command -v bash' >/dev/null 2>&1; then
-    printf 'Rebuilding the Tailscale service to add Bash...\n'
+if [[ ${command[0]} == bash || ${command[0]} == zellij ]] && docker compose ps --status running --services | grep -qx tailscale; then
+  if ! docker compose exec -T tailscale sh -c 'command -v bash && command -v mise && command -v zellij' >/dev/null 2>&1; then
+    printf 'Rebuilding the Tailscale service to add terminal tools...\n'
     docker compose build tailscale
     docker compose up -d --no-deps --force-recreate tailscale
   fi

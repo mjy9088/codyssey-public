@@ -18,6 +18,7 @@ remote_files=(
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh
+  scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh
 )
 remote_staging=
 mise_download=

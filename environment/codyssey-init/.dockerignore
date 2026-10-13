@@ -1,3 +1,7 @@
 *
 !Dockerfile
 !tailscale-entrypoint.sh
+!scripts/
+scripts/*
+!scripts/install-tailnet-tools.sh
+!scripts/tailnet-dns.sh

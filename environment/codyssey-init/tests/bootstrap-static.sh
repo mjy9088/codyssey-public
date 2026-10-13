@@ -34,5 +34,7 @@ fi
 
 bash -n "$root/tailscale-entrypoint.sh" "$root/init.sh"
 sh -n "$root/install.sh"
-grep -q -- '--state=mem:' "$root/tailscale-entrypoint.sh"
+grep -q -- 'tailscaled.state' "$root/tailscale-entrypoint.sh"
+grep -q 'tailscale-state:/var/lib/tailscale' "$root/docker-compose.yml"
+grep -q '100.100.100.100' "$root/scripts/tailnet-dns.sh"
 grep -q 'codyssey-tailscale' "$root/Dockerfile"

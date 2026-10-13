@@ -64,7 +64,7 @@ post-login activation remain part of the future VM test.
 | just | 1.43.0 |
 | Installed Google Chrome | 146.0.7680.165 |
 | Portable Chrome for Testing | 155.0.8059.39, mac-x64 |
-| Tailscale container | 1.88.3, `--state=mem:` |
+| Tailscale container | 1.88.3, persistent `tailscale-state` volume |
 | System Python | 3.9.6; too old for the native Python test suites |
 
 Swift/Xcode Command Line Tools are available on the reference machine. They are required by the
@@ -74,9 +74,9 @@ Its presence and behavior on another macOS version are not assumed.
 
 Tailscale's upstream container startup wrapper timed out during browser authentication and
 invalidated login URLs by restarting. The replacement entry point waits without that timeout and
-keeps state in memory, making the node ephemeral. The bootstrap uses the current `AuthURL` from
-status before falling back to the latest logged URL. Restarting the node requires authentication
-again unless a reusable auth key is configured. Existing old state volumes are left untouched.
+persists identity and login state in a named volume. The bootstrap uses the current `AuthURL` from
+status before falling back to the latest logged URL. Container restarts reuse the existing identity;
+the old memory-only setup needs one login when migrating to persistent state.
 
 The portable browser downloads a pinned, SHA-256-verified Google archive, extracts it into the user
 cache, and uses a separate user profile. `just browser` loads the extension automatically. Tailnet
@@ -111,8 +111,9 @@ additional forwarding; that is a fresh-VM compatibility check, not a proven port
    intercepts the keys, distinguish VM-client forwarding from guest shortcut registration.
 7. Confirm `mise` and `just` are available in the setup's final zsh. Run `just bash`, type a command,
    then exit. Run `just browser` and test an authorized Tailnet website. Toggle routing off and on.
-8. Run `bash init.sh` again to check reuse and idempotence. If testing a container restart, expect
-   fresh login for the ephemeral node. Keep all private VM evidence outside the public repository.
+8. Run `bash init.sh` again to check reuse and idempotence. Verify a container restart reconnects
+   with the same node identity and that short MagicDNS names resolve in `just`. Check `mise --version`
+   and `zellij --version` in that shell. Keep private VM evidence outside the public repository.
 
 Shortcut 60 must be enabled with `[32, 49, 262144]`. Shortcut 61 must use `[32, 49, 393216]`.
 The previous `786432` value meant Control-Option-Space, not Control-Shift-Space.
