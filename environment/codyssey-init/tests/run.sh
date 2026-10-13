@@ -3,7 +3,8 @@ set -euo pipefail
 node --test /src/tests/chrome-extension-test.mjs
 python3 /src/tests/portable-browser-test.py
 
-for test_script in /src/tests/bootstrap-static.sh /src/tests/bootstrap-remote.sh /src/tests/bootstrap-runtime.sh; do
+for test_script in /src/tests/bootstrap-static.sh /src/tests/bootstrap-remote.sh /src/tests/bootstrap-runtime.sh \
+  /src/tests/managed-j-runtime.sh; do
   bash "$test_script"
 done
 if [[ ${CODYSSEY_NATIVE_PYTHON_CHECKS:-0} != 1 ]]; then

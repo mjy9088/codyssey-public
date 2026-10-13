@@ -28,7 +28,7 @@ tar -C "$root" -cf - \
   Dockerfile docker-compose.yml init.sh next-script.zsh tailnet.sh justfile mise.toml \
   README.md HANDOFF.md verify-macos-setup.py macos-setup.sh enable-korean.swift install.sh tailscale-entrypoint.sh .env.example lib/auth.sh \
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh \
-  tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/fixtures/dockerignore \
+  tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/managed-j-runtime.sh tests/fixtures/dockerignore \
   tests/macos-fake-tools.py tests/macos-setup-test.py tests/fixtures/gost.yaml \
   tests/vm-orchestration-test.py tests/vm-guest-test.py scripts/check.sh scripts/create-macos-vm.sh scripts/prepare-macos-vm.sh \
   scripts/verify-macos-vm.sh scripts/vm-files.sh \
