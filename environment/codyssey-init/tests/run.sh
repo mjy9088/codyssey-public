@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 node --test /src/tests/chrome-extension-test.mjs
+bash /src/tests/tailnet-dns-test.sh
 if [[ ${CODYSSEY_NATIVE_PYTHON_CHECKS:-0} != 1 ]]; then
   python3 /src/tests/portable-browser-test.py
 fi

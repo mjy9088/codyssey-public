@@ -4,6 +4,9 @@ default:
 bash:
     bash ./tailnet.sh
 
+zellij:
+    bash ./tailnet.sh zellij
+
 chrome-extension:
     sh ./scripts/install-chrome-extension.sh
 

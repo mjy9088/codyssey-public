@@ -17,12 +17,14 @@ services:
       TS_SOCKS5_SERVER: "127.0.0.1:1055"
 
       TS_ACCEPT_DNS: "true"
+      TS_STATE_DIR: /var/lib/tailscale
       TS_EXTRA_ARGS: >-
         --accept-routes=true
         --shields-up=true
 
     volumes:
       - ${HOME}:/host:rw
+      - tailscale-state:/var/lib/tailscale
 
     devices:
       - /dev/net/tun:/dev/net/tun
@@ -59,3 +61,6 @@ services:
       - "127.0.0.1:18081:80"
 
     restart: unless-stopped
+
+volumes:
+  tailscale-state:

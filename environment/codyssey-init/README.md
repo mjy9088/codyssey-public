@@ -146,8 +146,11 @@ On OrbStack, host networking refers to its Linux VM, not the macOS host network.
 at `127.0.0.1:1055` and the GOST chain remain available alongside kernel networking; The entry point configures that listener alongside the TUN device. See the
 [Tailscale Docker parameters](https://tailscale.com/docs/features/containers/docker/docker-params).
 
-Tailscale uses `--state=mem:` and registers as an ephemeral node. Restarting it requires fresh
-authentication unless a reusable auth key is configured. Existing old state volumes are left untouched. The GOST API listens only on
+Tailscale stores its identity and login state in the `tailscale-state` named volume at
+`/var/lib/tailscale`. Restarting or recreating the container reuses that state without requiring
+another login. The previous memory-only node needs one login after migration; an existing state
+volume is reused. Key expiry, explicit logout, and deliberately ephemeral auth keys can still require
+authentication. The GOST API listens only on
 `127.0.0.1:18080`, and the UI is published only on `127.0.0.1:18081`. No forwarding service is enabled
 by default. Add services with loopback listener addresses unless deliberate external exposure is
 required.
@@ -170,9 +173,20 @@ bash tailnet.sh bash -lc 'command-one | command-two'
 ```
 
 Arguments, spaces, and the command exit status are preserved. Interactive terminals retain a TTY;
-redirected calls use Compose's non-TTY mode. Bash is probed through `sh -c 'command -v bash'`, and an
-old image is rebuilt only when Bash is the requested command (implicitly through no arguments or
-explicitly as the first argument). Arbitrary commands are never probed, prefixed, or rebuilt. Existing old state volumes are not removed.
+redirected calls use Compose's non-TTY mode. Bash and zellij commands probe for the image's Bash,
+mise, and zellij tools, rebuilding an older image only when those tools are missing. Arbitrary
+commands are never probed, prefixed, or rebuilt. The persistent state volume is retained.
+
+The image includes checksum-verified mise 2026.10.5 and zellij 0.45.1 installed through mise.
+Interactive Bash activates mise automatically, and its shims are also available to direct commands.
+Use `just zellij` to start the terminal multiplexer; plain `just` continues to open Bash. Global
+container tools live under `/opt/mise` with configuration in `/etc/mise`, separate from `/host`.
+
+Once connected, the entry point updates only the container's Docker-mounted `/etc/resolv.conf`
+in place: it points to Tailscale's `100.100.100.100` resolver and adds the current tailnet's MagicDNS
+search domain. Thus both `ssh peer-name` and fully qualified tailnet names work in this shell.
+The original Docker resolver remains in use before login and is restored after `tailscale down`.
+Tailnet DNS forwarding remains enabled, and host-network mode does not change the macOS resolver.
 
 ## Portable Tailnet browser
 
@@ -363,8 +377,23 @@ docker compose logs -f
 docker compose down
 ```
 
-`docker compose down` stops the ephemeral node. This project no longer creates a Tailscale state
-volume; any volume from an older installation remains untouched.
+`docker compose down` stops services while retaining login state. `docker compose restart tailscale`
+reconnects the same node. Removing the `tailscale-state` volume (including `down --volumes`) discards
+that identity and requires a fresh login.
+
+For an isolated real authentication, restart/recreation, and MagicDNS test in a disposable Docker
+environment, build the image and run from a source checkout:
+
+```sh
+docker compose build tailscale
+python3 scripts/verify-tailnet-runtime.py --disposable
+```
+
+This uses a checksum-pinned Headscale 0.26.1 binary, an internal Docker network, and two local
+Tailscale nodes with one-use lab auth keys. It verifies identity/IP persistence without reusing an
+auth key, short and fully qualified MagicDNS names, resolver restoration, and mise/zellij commands.
+It removes only its randomized lab containers, volumes, and network. This establishes local
+control-plane behavior, not external tailnet ACLs, expiry policy, or remote peer reachability.
 
 ## Verification in a macOS VM outside the classroom
 
