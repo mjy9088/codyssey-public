@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-DEFAULT_REF=7a4feac9bbf6aa3c547141b0cfbbfb76bbb5168b
+DEFAULT_REF=5bf84e10d35a8f30d317e3bb8d61f80218922efc
 DEFAULT_HTTPS_BASE=https://raw.githubusercontent.com/mjy9088/codyssey-public
 REF=${CODYSSEY_INIT_REF:-$DEFAULT_REF}
 HTTPS_BASE=${CODYSSEY_INIT_BASE_URL:-$DEFAULT_HTTPS_BASE}
