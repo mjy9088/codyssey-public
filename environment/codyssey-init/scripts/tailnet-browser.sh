@@ -63,6 +63,53 @@ printf '{"enableOnInstall":true}\n' >"$extension/startup.json"
 printf 'Portable browser: %s\nProfile: %s\n' "$binary" "$profile"
 if (( prepare_only )); then exit 0; fi
 if (( $# == 0 )); then set -- 'http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080'; fi
+
+# codyssey-init: unpacked-extension-registry-v1
+extensions=$extension
+registry="$support/unpacked-extension-paths"
+registered_extensions=("$extension")
+if [[ -r $registry ]]; then
+  while IFS= read -r registered || [[ -n $registered ]]; do
+    if [[ -z $registered ]]; then
+      printf 'tailnet-browser: ignoring empty extension registry entry.\n' >&2
+      continue
+    fi
+    if [[ $registered != /* ]]; then
+      printf 'tailnet-browser: ignoring non-absolute extension path: %s\n' "$registered" >&2
+      continue
+    fi
+    if [[ $registered == *,* || $registered == *$'\r'* || $registered == *$'\n'* ]]; then
+      printf 'tailnet-browser: ignoring extension path containing a separator: %s\n' "$registered" >&2
+      continue
+    fi
+    if [[ ! -d $registered ]]; then
+      printf 'tailnet-browser: ignoring stale extension path: %s\n' "$registered" >&2
+      continue
+    fi
+    canonical=$(CDPATH= cd -- "$registered" && pwd -P)
+    if [[ $canonical != "$registered" ]]; then
+      printf 'tailnet-browser: ignoring non-canonical extension path: %s\n' "$registered" >&2
+      continue
+    fi
+    if [[ ! -f $registered/manifest.json ]]; then
+      printf 'tailnet-browser: ignoring extension without a regular manifest.json: %s\n' "$registered" >&2
+      continue
+    fi
+    duplicate=0
+    for accepted in "${registered_extensions[@]}"; do
+      if [[ $accepted == "$registered" ]]; then duplicate=1; break; fi
+    done
+    if (( duplicate )); then
+      printf 'tailnet-browser: ignoring duplicate extension path: %s\n' "$registered" >&2
+      continue
+    fi
+    registered_extensions+=("$registered")
+    extensions+=",$registered"
+  done <"$registry"
+elif [[ -e $registry || -L $registry ]]; then
+  printf 'tailnet-browser: ignoring unreadable extension registry: %s\n' "$registry" >&2
+fi
+
 open -na "$app" --args \
-  "--user-data-dir=$profile" "--load-extension=$extension" \
+  "--user-data-dir=$profile" "--load-extension=$extensions" \
   --no-first-run --no-default-browser-check "$@"
