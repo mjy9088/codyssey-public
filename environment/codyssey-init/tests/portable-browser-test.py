@@ -70,7 +70,7 @@ class PortableBrowserTests(unittest.TestCase):
 
     def run_launcher(self, *args, **environment):
         return subprocess.run(["bash", str(self.root / "scripts/tailnet-browser.sh"), *args],
-            env=dict(self.env, **environment), text=True, capture_output=True)
+            env=dict(self.env, **environment), text=True, capture_output=True, timeout=5)
 
     def calls(self, tool):
         if not self.log.exists(): return []
@@ -137,6 +137,53 @@ class PortableBrowserTests(unittest.TestCase):
         launcher = (self.root / "scripts/tailnet-browser.sh").read_text()
 
         self.assertIn("# codyssey-init: unpacked-extension-registry-v1", launcher.splitlines())
+
+    def test_directory_registry_is_ignored_without_blocking_builtin_extension(self):
+        registry = self.support / "unpacked-extension-paths"
+        registry.mkdir(parents=True)
+
+        result = self.run_launcher("about:blank")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        built_in = self.support / "tailnet-chrome-extension"
+        self.assertIn(f"--load-extension={built_in}", self.calls("open")[0])
+
+    def test_fifo_registry_is_ignored_without_opening_it(self):
+        registry = self.support / "unpacked-extension-paths"
+        registry.parent.mkdir(parents=True)
+        os.mkfifo(registry)
+
+        result = self.run_launcher("about:blank")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        built_in = self.support / "tailnet-chrome-extension"
+        self.assertIn(f"--load-extension={built_in}", self.calls("open")[0])
+
+    def test_failed_extension_canonicalization_is_ignored(self):
+        extension = self.base / "canonicalization-failure"
+        extension.mkdir()
+        (extension / "manifest.json").write_text("{}")
+        registry = self.support / "unpacked-extension-paths"
+        registry.parent.mkdir(parents=True)
+        registry.write_text(f"{extension}\n")
+        bash_environment = self.base / "bash-environment"
+        bash_environment.write_text(
+            'cd() {\n'
+            '  for argument in "$@"; do\n'
+            '    [[ $argument != "$FAIL_CANONICAL_PATH" ]] || return 1\n'
+            '  done\n'
+            '  builtin cd "$@"\n'
+            '}\n'
+        )
+
+        result = self.run_launcher(
+            "about:blank", BASH_ENV=str(bash_environment), FAIL_CANONICAL_PATH=str(extension)
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        built_in = self.support / "tailnet-chrome-extension"
+        self.assertIn(f"--load-extension={built_in}", self.calls("open")[0])
+        self.assertIn(str(extension), result.stderr)
 
     def test_failures_leave_no_installed_browser_or_staging(self):
         for failure in ["FAIL_DOWNLOAD", "BAD_CHECKSUM", "FAIL_EXTRACT"]:

@@ -68,7 +68,7 @@ if (( $# == 0 )); then set -- 'http://localhost:18081/?api=http%3A%2F%2Flocalhos
 extensions=$extension
 registry="$support/unpacked-extension-paths"
 registered_extensions=("$extension")
-if [[ -r $registry ]]; then
+if [[ -f $registry && -r $registry ]]; then
   while IFS= read -r registered || [[ -n $registered ]]; do
     if [[ -z $registered ]]; then
       printf 'tailnet-browser: ignoring empty extension registry entry.\n' >&2
@@ -86,7 +86,11 @@ if [[ -r $registry ]]; then
       printf 'tailnet-browser: ignoring stale extension path: %s\n' "$registered" >&2
       continue
     fi
-    canonical=$(CDPATH= cd -- "$registered" && pwd -P)
+    canonical=
+    if ! canonical=$(CDPATH= cd -- "$registered" 2>/dev/null && pwd -P); then
+      printf 'tailnet-browser: ignoring extension path that could not be canonicalized: %s\n' "$registered" >&2
+      continue
+    fi
     if [[ $canonical != "$registered" ]]; then
       printf 'tailnet-browser: ignoring non-canonical extension path: %s\n' "$registered" >&2
       continue
