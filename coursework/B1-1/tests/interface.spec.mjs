@@ -2,6 +2,25 @@ import { mkdir } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { test, expect } from "./fixtures.mjs";
 
+test("identity copy is truthful and learner-oriented", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page).toHaveTitle("Juyeong Maing — Software engineering learner");
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /Juyeong Maing.*learning software engineering/i);
+  await expect(page.locator(".wordmark")).toHaveText("Juyeong Maing");
+  await expect(page.locator("#hero-title")).toHaveText(/Learning software,\s*one step at a time\./);
+  await expect(page.locator(".hero-lead")).toContainText("interested in software engineering");
+  await expect(page.locator("#about .about-copy")).toContainText("continue exploring software engineering");
+  await expect(page.locator("#skills-title")).toContainText("learning and practicing");
+  await expect(page.locator("#projects .section-heading")).toContainText("linked GitHub profile");
+  await expect(page.locator("#contact-title")).toHaveText("Want to share a note?");
+  await expect(page.locator('a[href="https://github.com/mjy9088"]')).not.toHaveCount(0);
+
+  const visibleCopy = await page.locator("body").innerText();
+  expect(visibleCopy).not.toContain("mjy9088");
+  expect(visibleCopy).not.toMatch(/Developer \/ curious builder|Useful software|My practice is|practical toolkit|latest work|problem worth making smaller|Designed and built/i);
+});
+
 test("semantic page, local assets, responsive layout and screenshot", async ({ page }, info) => {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
