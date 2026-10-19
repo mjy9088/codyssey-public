@@ -11,6 +11,7 @@
 }
 .icon-button:hover { border-color: var(--line-strong); background: var(--sheet-strong); }
 .icon-button:active, .button:active { transform: scale(.97); }
+.site-header .icon-button { will-change: transform; }
 .icon-button svg { width: var(--space-5); fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.75; }
 .menu-icon-close, [aria-expanded="true"] .menu-icon-open { display: none; }
 [aria-expanded="true"] .menu-icon-close { display: inline; }
