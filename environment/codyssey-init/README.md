@@ -148,6 +148,8 @@ to inspect the logs if no URL is available:
 docker compose logs tailscale
 ```
 
+The login URL opens automatically in the system default browser, without waiting for the portable
+browser download or profile setup and without using its unauthenticated Tailnet proxy.
 It then waits for the local GOST UI and opens Chrome when available, falling back to the default
 portable Tailnet browser by default (or the installed browser with `CODYSSEY_BROWSER=system`). Interactive runs finish in zsh with `mise` and `just` available. The URL is:
 
