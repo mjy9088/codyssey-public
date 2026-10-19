@@ -85,7 +85,8 @@ ORDER BY total_copies DESC, c.name;
 SELECT 'Q11 average completed duration' AS result_set;
 SELECT ROUND(AVG(julianday(returned_on) - julianday(borrowed_on)), 2) AS average_days
 FROM rentals
-WHERE status = 'returned';
+WHERE status = 'returned'
+GROUP BY status;
 
 -- Q12 Subquery: books whose inventory is above the overall average.
 SELECT 'Q12 above-average inventory' AS result_set;
