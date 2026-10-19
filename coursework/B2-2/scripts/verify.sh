@@ -8,6 +8,7 @@ case "$mode" in
   *) printf 'Unknown verification mode\n' >&2; exit 2 ;;
 esac
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+sh "$root/verify/test-source-contract.sh" "$root"
 project="collaboration-lab-$mode-$$"
 compose() { docker compose -p "$project" -f "$root/compose.yaml" --profile vm "$@"; }
 trap 'compose down --volumes --remove-orphans >/dev/null 2>&1 || true' EXIT
