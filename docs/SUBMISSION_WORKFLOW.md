@@ -33,27 +33,25 @@ tracked path, moves the selected coursework subtree to the repository root, and
 creates one submission-layout commit. It never applies those deletion or move
 operations to the normal working tree.
 
-First run it without publication enabled and review the commit summary:
+Set the coursework identifier and approved destination, then run the script:
 
 ```sh
-scripts/publish-coursework.sh B6-1 \
-  git@github.com:mjy9088/codyssey-submit.git
+coursework_id=YOUR_COURSEWORK_ID
+destination=YOUR_SUBMISSION_REPOSITORY_URL
+scripts/publish-coursework.sh "$coursework_id" "$destination" main
 ```
 
-After confirming the selected subtree, destination, and target branch, repeat
-the command with the explicit destructive option:
+The script displays the prepared commit and its root entries, then asks for
+confirmation on the terminal. Answering `y` force-pushes the target branch;
+pressing Enter or answering anything else cancels without changing the
+destination. With no interactive terminal, the script only prepares and reports
+the commit. A confirmed push replaces the destination branch even when it has
+diverged, so its previous tip may become unreachable. Confirm that the repository
+and branch are dedicated to this submission before answering `y`.
 
-```sh
-scripts/publish-coursework.sh --force-push B6-1 \
-  git@github.com:mjy9088/codyssey-submit.git main
-```
-
-`--force-push` replaces the destination branch even when it has diverged. The
-destination's previous branch tip may consequently become unreachable; confirm
-that the repository and branch are dedicated to this submission before using
-the option. The destination's tip contains only the selected coursework files,
-but its parent commits retain the complete public monorepo history. Therefore
-this method is suitable only when that public history is acceptable at the
+The destination's tip contains only the selected coursework files, but its
+parent commits retain the complete public monorepo history. Therefore this
+method is suitable only when that public history is acceptable at the
 destination.
 
 The script intentionally creates the submission-layout commit in a disposable
@@ -66,7 +64,8 @@ Use an archive instead when the destination must not receive any Git history:
 
 ```sh
 revision=$(git rev-parse --verify HEAD)
-subtree=coursework/B1-1
+coursework_id=YOUR_COURSEWORK_ID
+subtree=coursework/$coursework_id
 staging=$(mktemp -d)
 git archive "$revision" -- "$subtree" \
   | tar -x -C "$staging" --strip-components=2

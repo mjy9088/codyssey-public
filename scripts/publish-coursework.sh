@@ -4,33 +4,27 @@ set -eu
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/publish-coursework.sh [--force-push] SUBTREE DESTINATION [TARGET_BRANCH]
+  scripts/publish-coursework.sh SUBTREE DESTINATION [TARGET_BRANCH]
 
 Prepare a standalone-root submission commit from the latest origin/public.
-The source checkout is not modified. Without --force-push, the script creates
-and inspects the temporary commit but does not update DESTINATION.
+The source checkout is not modified. After preparing the commit, the script asks
+for confirmation on a terminal before force-pushing to DESTINATION.
 
 Arguments:
-  SUBTREE       Repository-relative coursework directory, for example B6-1 or
-                coursework/B6-1
+  SUBTREE       Coursework identifier or repository-relative coursework path
   DESTINATION   Git remote URL for the submission repository
   TARGET_BRANCH Destination branch (default: main)
 
 Examples:
-  scripts/publish-coursework.sh B6-1 git@github.com:mjy9088/codyssey-submit.git
-  scripts/publish-coursework.sh --force-push B6-1 \
-    git@github.com:mjy9088/codyssey-submit.git main
+  coursework_id=YOUR_COURSEWORK_ID
+  destination=YOUR_SUBMISSION_REPOSITORY_URL
+  scripts/publish-coursework.sh "$coursework_id" "$destination" main
 EOF
 }
 
-force_push=0
 if [ "${1-}" = --help ] || [ "${1-}" = -h ]; then
   usage
   exit 0
-fi
-if [ "${1-}" = --force-push ]; then
-  force_push=1
-  shift
 fi
 
 if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
@@ -97,11 +91,21 @@ git -C "$worktree" show --shortstat --oneline HEAD
 printf '\nSubmission root:\n'
 git -C "$worktree" ls-tree --name-only HEAD
 
-if [ "$force_push" -ne 1 ]; then
-  printf '\nDry run only; the destination was not changed.\n'
-  printf 'Re-run with --force-push after reviewing the output.\n'
+if [ ! -t 0 ]; then
+  printf '\nNo interactive terminal; the destination was not changed.\n'
   exit 0
 fi
+
+printf '\nForce-push this commit to %s (%s)? [y/N] ' \
+  "$destination" "$target_branch"
+IFS= read -r answer
+case $answer in
+  y|Y|yes|YES|Yes) ;;
+  *)
+    printf 'Cancelled; the destination was not changed.\n'
+    exit 0
+    ;;
+esac
 
 printf '\nForce-pushing %s to %s (%s)...\n' "$commit" "$destination" "$target_branch"
 git -C "$worktree" push --force "$destination" \
