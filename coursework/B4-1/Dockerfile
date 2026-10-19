@@ -7,6 +7,8 @@ RUN apk add --no-cache \
       procps-ng=4.0.4-r3
 WORKDIR /work
 COPY bin/ bin/
+COPY scripts/verify.sh scripts/verify.sh
 COPY tests/ tests/
+COPY verify/private/guest-init verify/private/guest-init
 RUN chmod 0755 bin/*.sh tests/*.sh
 ENTRYPOINT ["bash", "tests/run.sh"]

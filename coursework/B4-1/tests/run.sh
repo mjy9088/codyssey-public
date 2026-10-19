@@ -9,6 +9,8 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+bash "$root/tests/private-contract.sh"
+
 AGENT_PORT=15034 "$root/tests/synthetic-app.sh" >"$tmp/app.log" 2>&1 &
 app_pid=$!
 for _ in $(seq 1 20); do

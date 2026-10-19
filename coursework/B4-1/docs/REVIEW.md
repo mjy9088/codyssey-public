@@ -20,8 +20,10 @@ Private validation is optional for public reviewers because its input is intenti
 authorized locally, confirm the container is created before `docker cp`, the image build context is
 only this public subtree, and the archive is added to an ephemeral initramfs at runtime. The guest
 must bound extraction size, use the x86 target, run it as a non-root account, impose a timeout, require
-five successful boot checks/readiness/port listening, and store serial output only below ignored
-private evidence. Never publish that log or the supplied archive.
+five successful boot checks/readiness/port listening, and pass `AGENT_KEY_PATH` as the exact
+`t_secret.key` file. That synthetic key must contain one expected line and have
+`agent-admin:agent-core` ownership with mode 640. Store serial output only below ignored private
+evidence. Never publish that log or the supplied archive.
 
 This lab demonstrates local emulated controls, not configuration of a classroom host, DIM, cloud
 server, or production firewall. Runtime state disappears at guest shutdown.

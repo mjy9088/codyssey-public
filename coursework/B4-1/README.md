@@ -54,7 +54,8 @@ sh scripts/verify-private.sh /absolute/path/to/input.zip /absolute/path/to/priva
 That workflow builds a digest-pinned glibc guest, creates a stopped container, copies the untouched
 archive into it with `docker cp`, and only then constructs an ephemeral initramfs inside the runtime.
 The guest extracts one bounded x86 target into RAM, executes it as a non-root service user with a
-40-second limit, checks its readiness/listener, and runs the public monitor. It does not unpack or
+40-second limit, provides exactly one synthetic key through the `t_secret.key` file path, checks its
+readiness/listener, and runs the public monitor. It does not unpack or
 execute the input on the agent host, reverse engineer it, or copy it into an image. The raw serial log
 is written only to the caller's ignored private evidence path.
 
