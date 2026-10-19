@@ -2,9 +2,10 @@ FROM mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312
 WORKDIR /work
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund && mkdir -p artifacts && chown -R pwuser:pwuser artifacts
-COPY playwright.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json ./
+COPY playwright.config.ts vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json ./
 COPY tests/ tests/
 COPY src/ src/
-RUN chmod -R a+rX /work
+RUN chmod -R a+rX /work && chown -R pwuser:pwuser /work/artifacts && chown pwuser:pwuser /work
 USER pwuser
-CMD ["npx", "playwright", "test"]
+ENV HOME=/tmp
+CMD ["sh", "-c", "npm test && npx playwright test"]
