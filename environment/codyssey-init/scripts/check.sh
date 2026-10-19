@@ -27,9 +27,11 @@ context=$(mktemp -d)
 trap 'rm -rf "$context"' EXIT HUP INT TERM
 tar -C "$root" -cf "$context/payload.tar" \
   Dockerfile docker-compose.yml init.sh next-script.zsh tailnet.sh justfile mise.toml \
-  README.md HANDOFF.md verify-macos-setup.py macos-setup.sh enable-korean.swift install.sh tailscale-entrypoint.sh .env.example lib/auth.sh \
+  README.md HANDOFF.md verify-macos-setup.py macos-setup.sh enable-korean.swift install.sh tailscale-entrypoint.sh .env.example \
+  lib/auth.sh lib/preparation.sh lib/readiness.zsh \
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh \
-  tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/managed-j-runtime.sh tests/fixtures/dockerignore \
+  tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/managed-j-runtime.sh tests/startup-overlap-test.sh \
+  tests/preparation-safety-test.sh tests/auth-prompt-test.sh tests/fixtures/dockerignore \
   tests/macos-fake-tools.py tests/macos-setup-test.py tests/fixtures/gost.yaml \
   tests/vm-orchestration-test.py tests/vm-guest-test.py scripts/check.sh scripts/create-macos-vm.sh scripts/prepare-macos-vm.sh \
   scripts/verify-macos-vm.sh scripts/vm-files.sh \
@@ -38,7 +40,7 @@ tar -C "$root" -cf "$context/payload.tar" \
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh tests/chrome-extension-test.mjs \
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh tests/portable-browser-test.py \
   scripts/configure-tailnet-browser.py \
-  scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh scripts/verify-tailnet-runtime.py \
+  scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh scripts/prepare-startup.sh scripts/verify-tailnet-runtime.py \
   tests/tailnet-dns-test.sh
 tar -C "$context" -xf "$context/payload.tar"
 rm "$context/payload.tar"

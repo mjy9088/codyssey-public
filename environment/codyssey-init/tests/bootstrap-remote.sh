@@ -29,7 +29,10 @@ cp "$source_file" "$output"
 EOF
 cat >"$fakebin/docker" <<'EOF'
 #!/bin/sh
-[ "$1" = info ]
+case "$*" in
+  info|'compose build tailscale'|'compose pull gost gost-ui') exit 0 ;;
+  *) exit 1 ;;
+esac
 EOF
 cat >"$fakebin/mise" <<'EOF'
 #!/bin/sh
@@ -70,7 +73,8 @@ mkdir -p "$home" "$stage" "$target/gost"
 printf 'TS_AUTHKEY=preserved\n' >"$target/.env"
 printf 'services: [preserved]\n' >"$target/gost/gost.yaml"
 run_pipe "$home" "$target" "$stage"
-for file in init.sh verify-macos-setup.py next-script.zsh lib/auth.sh Dockerfile; do
+for file in init.sh verify-macos-setup.py next-script.zsh lib/auth.sh lib/preparation.sh \
+  lib/readiness.zsh scripts/prepare-startup.sh Dockerfile; do
   [[ -f "$target/$file" ]] || { printf 'missing remote file: %s\n' "$file" >&2; exit 1; }
 done
 grep -qx 'TS_AUTHKEY=preserved' "$target/.env"

@@ -44,13 +44,14 @@ prepare_docker() {
 remote_files=(
   .dockerignore .env.example Dockerfile README.md HANDOFF.md docker-compose.yml init.sh justfile
   macos-setup.sh mise.toml next-script.zsh tailnet.sh verify-macos-setup.py
-  lib/auth.sh gost/gost.yaml enable-korean.swift install.sh tailscale-entrypoint.sh
+  lib/auth.sh lib/preparation.sh lib/readiness.zsh gost/gost.yaml enable-korean.swift install.sh tailscale-entrypoint.sh
   chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh
   scripts/configure-tailnet-browser.py
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh
+  scripts/prepare-startup.sh
 )
 remote_staging=
 mise_download=
@@ -120,8 +121,13 @@ install_remote_files() {
     curl --fail --location --silent --show-error \
       "$base_url/$ref/environment/codyssey-init/$file" -o "$staging/$file"
   done
-  bash -n "$staging/init.sh" "$staging/tailnet.sh" "$staging/lib/auth.sh" "$staging/macos-setup.sh"
-  zsh -n "$staging/next-script.zsh"
+  for file in init.sh tailnet.sh lib/auth.sh lib/preparation.sh macos-setup.sh \
+    scripts/prepare-startup.sh; do
+    bash -n "$staging/$file"
+  done
+  for file in next-script.zsh lib/readiness.zsh; do
+    zsh -n "$staging/$file"
+  done
   for file in "${remote_files[@]}"; do
     destination="$target/$file"
     if [[ $file == gost/gost.yaml && -e $destination ]]; then
@@ -203,6 +209,14 @@ prepare_docker
 command -v zsh >/dev/null 2>&1 || die 'zsh is required.'
 export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
 command -v mise >/dev/null 2>&1 || install_mise
+. "$init_dir/lib/preparation.sh"
+. "$init_dir/lib/auth.sh"
+trap finish_startup EXIT
+trap 'interrupt_startup 129' HUP
+trap 'interrupt_startup 130' INT
+trap 'interrupt_startup 143' TERM
+printf 'codyssey-init: starting background preparation.\n'
+start_startup_preparation "$init_dir"
 
 if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then
   printf 'Install the global j command in %s? [y/N] ' "$HOME/.local/bin" >/dev/tty
@@ -249,10 +263,15 @@ if [[ ${CODYSSEY_MACOS_SETUP:-0} == 1 || $(uname -s) == Darwin ]]; then
   fi
 fi
 
+cd "$init_dir"
+configure_tailscale_auth
+printf 'codyssey-init: waiting for preparation.\n'
+wait_startup_preparation
+printf 'codyssey-init: preparation complete.\n'
 if [[ -t 0 ]]; then
-  exec zsh -i "$init_dir/next-script.zsh"
+  exec zsh -i "$init_dir/next-script.zsh" --prepared
 fi
 if { true </dev/tty; } 2>/dev/null; then
-  exec zsh -i "$init_dir/next-script.zsh" </dev/tty
+  exec zsh -i "$init_dir/next-script.zsh" --prepared </dev/tty
 fi
-exec zsh -i "$init_dir/next-script.zsh" </dev/null
+exec zsh -i "$init_dir/next-script.zsh" --prepared </dev/null

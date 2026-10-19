@@ -171,7 +171,10 @@ install_home="$tmp/install-home"
 mkdir -p "$install_bin" "$install_home"
 cat >"$install_bin/docker" <<'EOF'
 #!/bin/sh
-[ "$1" = info ]
+case "$*" in
+  info|'compose build tailscale'|'compose pull gost gost-ui') exit 0 ;;
+  *) exit 1 ;;
+esac
 EOF
 cat >"$install_bin/zsh" <<'EOF'
 #!/bin/sh

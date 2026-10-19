@@ -12,7 +12,10 @@ python=$(command -v python3)
 
 cat >"$fakebin/docker" <<'EOF'
 #!/bin/sh
-[ "$1" = info ]
+case "$*" in
+  info|'compose build tailscale'|'compose pull gost gost-ui') exit 0 ;;
+  *) exit 1 ;;
+esac
 EOF
 cat >"$fakebin/zsh" <<'EOF'
 #!/bin/sh

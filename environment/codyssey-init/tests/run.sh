@@ -7,7 +7,8 @@ if [[ ${CODYSSEY_NATIVE_PYTHON_CHECKS:-0} != 1 ]]; then
 fi
 
 for test_script in /src/tests/bootstrap-static.sh /src/tests/bootstrap-remote.sh /src/tests/bootstrap-runtime.sh \
-  /src/tests/managed-j-runtime.sh; do
+  /src/tests/managed-j-runtime.sh /src/tests/startup-overlap-test.sh \
+  /src/tests/preparation-safety-test.sh /src/tests/auth-prompt-test.sh; do
   bash "$test_script"
 done
 if [[ ${CODYSSEY_NATIVE_PYTHON_CHECKS:-0} != 1 ]]; then
