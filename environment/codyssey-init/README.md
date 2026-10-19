@@ -461,6 +461,66 @@ and authentication is never completed. No coursework, remote tailnet access, or 
 tested. The VM must be disposable: verification changes its user's `.zshrc`, Dock, keyboard settings,
 and text preferences. The local lab authenticates synthetic nodes only to its own isolated Headscale server; it never logs into an external tailnet. Successful preference verification leaves the requested settings applied.
 
+### Build a base with preinstalled applications
+
+To reproduce the classroom's earlier startup stage, create a separate stopped base from an existing
+reviewed Tart VM. The source must already have a logged-in desktop, Tart Guest Agent, Chrome,
+Python 3 from Command Line Tools, and Swift. No Docker engine needs to be running:
+
+```sh
+bash scripts/create-preinstalled-macos-image.sh \
+  --image reviewed-stopped-base --name codyssey-preinstalled
+```
+
+The builder clones the source and changes only that new VM. It installs checksum-pinned OrbStack
+2.2.4 in `~/Applications` and Gureum 1.13.2 in `~/Library/Input Methods` without launching onboarding,
+activating input sources, sudo, or a Homebrew installation. The OrbStack archive pins come from the
+[official Homebrew cask](https://github.com/Homebrew/homebrew-cask/blob/master/Casks/o/orbstack.rb).
+The reference diagnostic used OrbStack 2.2.3 on Intel macOS 15.7.4; this newer pinned app and an ARM
+Tart guest are not an exact hardware/version reproduction.
+
+When cloning one of the earlier Colima verification VMs, the builder stops its dedicated test
+profile, unlinks Homebrew's Docker CLI packages, and removes only the bootstrap-owned OrbStack PATH
+block from `.zshrc`, keeping a private backup. Packages, disks, unrelated shell settings and commands
+are preserved. An unexpected Docker command remaining on the login PATH causes failure rather than
+being silently deleted. The original VM is never modified. Successful creation prints `READY`, stops
+and retains the new base; it does not claim that the OrbStack engine has run.
+
+Use the base for a fresh startup test:
+
+```sh
+bash scripts/create-macos-vm.sh --image codyssey-preinstalled --preinstalled
+# In an existing disposable VM with nested virtualization support:
+bash scripts/verify-macos-vm.sh --disposable --preinstalled
+```
+
+This mode skips Colima/Homebrew provisioning, requires installed OrbStack and Gureum, rejects a
+working initial Docker engine and explicit Docker targets, and exercises the same startup helper
+used by `init.sh`. It resolves bundled Docker tools and missing plugins before Docker-dependent
+checks, freezes a local Unix-socket context, then performs the ordinary bootstrap/runtime tests.
+With Python 3.9, it prepares user-local Python 3.13.7 through the checksum-verified mise installer;
+no system Python is changed. Only the OrbStack engine started by this run is stopped on exit,
+including after readiness failure. No Tailscale auth key is used. Gureum approval remains manual.
+
+**Virtualization boundary:** building and inspecting this base works in a Tart macOS VM, but running
+OrbStack requires another Linux VM inside it. [Tart's FAQ](https://tart.run/faq/) currently limits
+nested virtualization support to Linux guests on supported hosts; enabling `--nested` is not proof
+that a macOS guest can host OrbStack. Unsupported engine startup must fail visibly, with no automatic
+Colima substitution. Use a disposable macOS VM/hypervisor that provides the required virtualization
+for full real OrbStack execution. Switching to UTM on Apple Silicon does not by itself remove this
+constraint: its [macOS guest backend](https://docs.getutm.app/settings-apple/settings-apple/) also
+uses Apple Virtualization, and its documented [nested support](https://docs.getutm.app/updates/v4.6/)
+is for Linux guests. The guest installer and verifier themselves contain no Tart calls and can be
+run after copying the allowlisted source to another disposable macOS VM; only the clone/boot/stop
+wrapper depends on Tart.
+
+Synthetic cold-start tests cover missing CLI, existing plugins,
+start failure, timeout and target preservation independently:
+
+```sh
+python3 tests/preinstalled-tools-test.py
+```
+
 ### An existing disposable VM
 
 With Docker already running, Python 3.10+, Chrome, a logged-in desktop user, and ordinary macOS
