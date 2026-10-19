@@ -16,8 +16,11 @@ awk '
     if (count == 0 || mem > mem_max) mem_max=mem
     if (count == 0 || disk > disk_max) disk_max=disk
     cpu_sum+=cpu; mem_sum+=mem; disk_sum+=disk; count++
+    next
   }
+  NF { invalid=1 }
   END {
+    if (invalid) { print "[ERROR] malformed sample" > "/dev/stderr"; exit 1 }
     if (count == 0) { print "[ERROR] no valid samples" > "/dev/stderr"; exit 1 }
     print "====== STATISTICS REPORT ======"
     printf "CPU avg=%.1f min=%.1f max=%.1f\n", cpu_sum/count, cpu_min, cpu_max
