@@ -41,6 +41,33 @@ def test_execute_standardizes_invalid_and_unknown_errors() -> None:
     assert execute(repository, "ancestors missing")[0] == "Unknown commit: missing"
 
 
+def test_execute_handles_parse_option_and_unknown_command_boundaries() -> None:
+    # Given
+    repository = repo()
+    _ = execute(repository, 'init "Ada Lovelace"')
+    _ = execute(repository, 'commit "Initial work"')
+
+    # When / Then
+    assert execute(repository, 'commit "unterminated')[0] == "Invalid args"
+    assert execute(repository, "status")[0] == "Unknown command: status"
+    assert execute(repository, "log --sort-by=unknown")[0] == "Invalid args"
+    assert "Initial work" in execute(repository, 'search --author="Ada Lovelace"')[0]
+    assert "Initial work" in execute(repository, "log")[0]
+
+
+def test_execute_formats_start_equals_end_and_unknown_path_errors() -> None:
+    # Given
+    repository = repo()
+    _ = execute(repository, "init Ada")
+    created, _ = execute(repository, 'commit "only"')
+    commit_id = created.split("]", 1)[0].removeprefix("[")
+
+    # When / Then
+    assert execute(repository, f"path {commit_id} {commit_id}")[0] == f"Path: {commit_id}"
+    assert execute(repository, f"path missing {commit_id}")[0] == "Unknown commit: missing"
+    assert execute(repository, f"path {commit_id} missing")[0] == "Unknown commit: missing"
+
+
 def test_repl_runs_happy_and_error_paths_through_main_entrypoint() -> None:
     # Given
     commands = "\n".join(

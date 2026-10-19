@@ -1,6 +1,7 @@
 """Repository state and index tests."""
 
 from datetime import UTC, datetime, timedelta
+from typing import final
 
 import pytest
 from mini_git.repository import Repository
@@ -16,6 +17,15 @@ class StepClock:
         result = self.current
         self.current += timedelta(seconds=1)
         return result
+
+
+@final
+class SequenceClock:
+    def __init__(self, timestamps: list[datetime]) -> None:
+        self._timestamps = iter(timestamps)
+
+    def __call__(self) -> datetime:
+        return next(self._timestamps)
 
 
 def repository() -> Repository:
@@ -96,3 +106,34 @@ def test_commit_identifiers_do_not_repeat_after_reinitialization() -> None:
 
     # Then
     assert len({first.commit_id, second.commit_id, third.commit_id}) == 3
+
+
+def test_log_date_and_author_modes_apply_deterministic_ordering() -> None:
+    # Given
+    later = datetime(2026, 1, 3, tzinfo=UTC)
+    earlier = datetime(2026, 1, 1, tzinfo=UTC)
+    repo = Repository(SequenceClock([later, earlier]))
+    repo.initialize("ada")
+    later_commit = repo.commit("later timestamp")
+    earlier_commit = repo.commit("earlier timestamp")
+
+    # When
+    by_date = repo.log("date")
+    by_author = repo.log("author")
+
+    # Then
+    assert by_date == [earlier_commit, later_commit]
+    assert by_author == [earlier_commit, later_commit]
+
+
+def test_path_handles_identity_and_unknown_endpoint_boundaries() -> None:
+    # Given
+    repo = repository()
+    commit = repo.commit("root")
+
+    # When / Then
+    assert repo.path(commit.commit_id, commit.commit_id) == [commit.commit_id]
+    with pytest.raises(RuntimeError, match="Unknown commit: missing"):
+        _ = repo.path("missing", commit.commit_id)
+    with pytest.raises(RuntimeError, match="Unknown commit: missing"):
+        _ = repo.path(commit.commit_id, "missing")
