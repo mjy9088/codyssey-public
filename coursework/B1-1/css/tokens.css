@@ -17,7 +17,7 @@
 
   --font-display: Georgia, "Times New Roman", serif;
   --font-body: "Avenir Next", Avenir, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --font-mono: "Liberation Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
   --type-display: clamp(3rem, 10vw, 7.5rem);
   --type-h1: clamp(2.5rem, 6vw, 4.75rem);
   --type-h2: clamp(1.65rem, 3vw, 2.35rem);

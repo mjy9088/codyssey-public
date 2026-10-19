@@ -48,7 +48,7 @@ Local/system stacks only:
 
 - Display: `Georgia, "Times New Roman", serif`
 - Body: `"Avenir Next", Avenir, "Segoe UI", sans-serif`
-- Mono/meta: `ui-monospace, "SFMono-Regular", Consolas, monospace`
+- Mono/meta: `"Liberation Mono", ui-monospace, "SFMono-Regular", Consolas, monospace`
 
 | Token | Size | Weight | Line height | Tracking | Use |
 |---|---:|---:|---:|---:|---|
