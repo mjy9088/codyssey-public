@@ -118,6 +118,18 @@ apply_text() {
   fi
 }
 
+file_url() {
+  local LC_ALL=C path=$1 character encoded index
+  printf 'file://'
+  for ((index=0; index<${#path}; index++)); do
+    character=${path:index:1}
+    case $character in
+      [a-zA-Z0-9/._~-]) printf '%s' "$character" ;;
+      *) printf -v encoded '%%%02X' "'$character"; printf '%s' "$encoded" ;;
+    esac
+  done
+}
+
 apply_dock() {
   local terminal_app chrome_app terminal_url chrome_url launcher launcher_url temporary failed=0
   backup_domain dock com.apple.dock || return
@@ -143,9 +155,9 @@ apply_dock() {
     printf '%s\n' 'exec just "$@"'
   } >"$temporary"
   chmod 0700 "$temporary" && mv -f "$temporary" "$launcher" || { rm -f "$temporary"; return 1; }
-  launcher_url="file://${launcher// /%20}"
-  terminal_url="file://${terminal_app// /%20}/"
-  chrome_url="file://${chrome_app// /%20}/"
+  launcher_url=$(file_url "$launcher")
+  terminal_url=$(file_url "$terminal_app/")
+  chrome_url=$(file_url "$chrome_app/")
   "$defaults_bin" write com.apple.dock persistent-apps -array \
     "{tile-data={file-data={_CFURLString=\"$terminal_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" \
     "{tile-data={file-data={_CFURLString=\"$chrome_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" >/dev/null 2>&1 || failed=1

@@ -205,9 +205,9 @@ def test_last_existing_domain_export_failure_is_not_absence() -> None:
         assert list(backup_root.glob("*/hotkeys.missing")) == []
 
 
-def run_verifier(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def run_verifier(env: dict[str, str], *arguments: str) -> subprocess.CompletedProcess[str]:
     verifier_env = env | {"CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST": "1"}
-    return subprocess.run(("python3", str(ROOT / "verify-macos-setup.py")), env=verifier_env, text=True, capture_output=True, check=False)
+    return subprocess.run(("python3", str(ROOT / "verify-macos-setup.py"), *arguments), env=verifier_env, text=True, capture_output=True, check=False)
 
 
 def test_verifier_leaves_applied_state_on_success_and_restores_on_failure() -> None:
@@ -282,7 +282,23 @@ def test_launcher_executes_from_another_directory_and_preserves_arguments() -> N
         assert launcher.read_text() == "user owned\n"
 
 
+def test_desktop_verifier_preserves_keyboard_and_text() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        env, state = environment(Path(temporary))
+        baseline(state)
+        original = {domain: read_domain(state, domain) for domain in ("NSGlobalDomain", "com.apple.HIToolbox", "com.apple.symbolichotkeys")}
+        just = Path(env["HOME"]) / ".local/bin/just"
+        just.parent.mkdir(parents=True)
+        just.write_text("#!/bin/sh\ntest \"$1\" = --list\n")
+        just.chmod(0o700)
+        result = run_verifier(env, "--desktop-only")
+        assert result.returncode == 0, result.stderr
+        assert all(read_domain(state, domain) == value for domain, value in original.items())
+        assert len(read_domain(state, "com.apple.dock")["persistent-others"]) == 1
+
+
 def main() -> None:
+    test_desktop_verifier_preserves_keyboard_and_text()
     test_launcher_executes_from_another_directory_and_preserves_arguments()
     test_success_and_repeat()
     test_missing_chrome_preserves_entire_dock()
@@ -292,7 +308,7 @@ def main() -> None:
     test_verifier_leaves_applied_state_on_success_and_restores_on_failure()
     test_verifier_retains_snapshot_when_restoration_fails()
     test_verifier_restores_after_keyboard_interrupt()
-    print("macOS setup isolated tests: 9 passed")
+    print("macOS setup isolated tests: 10 passed")
 
 
 if __name__ == "__main__":

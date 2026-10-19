@@ -281,6 +281,7 @@ group, it creates a private per-run backup under
 `CODYSSEY_INPUT_SWITCH` accepts `control-space` or `caps-lock`; `CODYSSEY_DOCK_SETUP` accepts `0` or `1`.
 Without a terminal, defaults are Control-Space and no Dock changes. The legacy
 `CODYSSEY_MACOS_SETUP=1` still opts into Dock cleanup in unattended runs.
+`CODYSSEY_MACOS_SETUP=0` explicitly skips all macOS preferences during bootstrap.
 `macos-setup.sh --input-only` changes input settings only; `--no-dock` also disables text automation.
 `macos-setup.sh --shortcuts-only` applies and verifies the shortcut bindings without changing input sources.
 The helper applies shortcuts even when System Settings is open, registers the live WindowServer
@@ -361,7 +362,7 @@ log lines and preserve the command's exit status. Temporary logs are removed aft
 
 `verify-macos-setup.py` is a deliberately destructive live test requiring Python 3.10 or newer. It
 privately snapshots every preference domain before any write, requires an existing Latin keyboard
-layout, removes only the exact Korean input mode and symbolic-hotkey entries 60/61 from its
+layout, removes only the exact Korean input mode and symbolic-hotkey entries 60/61/64/65 from its
 baseline-derived fixture, clears Dock pins, and enables all nine text-automation settings. It never
 inserts a synthetic input source. It then applies the setup twice and verifies parsed plist values,
 including exact Dock entries, typed hotkey parameters, and preservation of unrelated input sources
@@ -370,6 +371,10 @@ and shortcuts. It will not run without both Darwin and this exact opt-in:
 ```sh
 CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 verify-macos-setup.py
 ```
+
+`--desktop-only` snapshots only Dock, applies the desktop setup twice, verifies the real launcher
+with `--list`, and preserves keyboard/text preferences. The unattended VM uses this mode plus
+independent live shortcut verification, so input-source approval cannot block its service tests.
 
 On success, the requested setup remains applied and the temporary verifier snapshot is removed. On
 any failure or interruption, restoration is attempted for every captured domain before the original
@@ -454,7 +459,7 @@ These scripts verify only this environment bootstrap. They use real Docker servi
 preferences without an auth key. Tailscale must remain in `NeedsLogin`; browser launching is disabled
 and authentication is never completed. No coursework, remote tailnet access, or authenticated forwarding is
 tested. The VM must be disposable: verification changes its user's `.zshrc`, Dock, keyboard settings,
-and text preferences. Successful preference verification leaves the requested settings applied.
+and text preferences. The local lab authenticates synthetic nodes only to its own isolated Headscale server; it never logs into an external tailnet. Successful preference verification leaves the requested settings applied.
 
 ### An existing disposable VM
 
@@ -495,8 +500,7 @@ expensive process startup under x86 emulation. The default `scripts/check.sh` ru
 the isolated container.
 Verification checks the
 unauthenticated state, Bash/client tools, TUN device and home mount, GOST API and UI HTTP readiness,
-and the single shell activation block. It finally runs the live macOS preference verifier twice via
-its existing idempotence check. GOST API readiness also checks whether this Docker environment makes
+and the single shell activation block. It then runs the private local Headscale lab for identity persistence, short-name DNS and terminal tools, and verifies the real Dock launcher twice plus live shortcut registration. Input-method approval and physical Hangul typing remain an interactive check; the unattended VM does not wait for or bypass macOS approval dialogs. Run the full live preference verifier separately in an approved desktop session. GOST API readiness also checks whether this Docker environment makes
 the Linux host's loopback listener accessible from the macOS guest; failure is a real incompatibility,
 not a simulated success. UI HTTP readiness does not prove browser rendering or API interaction.
 
@@ -508,7 +512,7 @@ existing production container names, occupied management ports, or a pre-existin
 its randomized project; rejected resources are not cleaned up because the verifier does not own them.
 It removes only its own containers and state volume on exit. Cleanup failure retains the private
 working directory, reports its location, returns nonzero, and suppresses terminal PASS. Docker's
-built images and check image remain cached. Guest preferences and `.zshrc` remain modified. To stop
+built images and check image remain cached. Guest preferences and `.zshrc` remain modified. The Dock launcher targets the retained source tree, and the verifier checks its `--list` command before removing the temporary workload. To stop
 or remove the prepared Docker VM afterward:
 
 ```sh

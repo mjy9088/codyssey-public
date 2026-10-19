@@ -24,9 +24,10 @@ class GuestScriptTests(unittest.TestCase):
             "nc": "#!/bin/sh\nexit 1\n",
             "sleep": "#!/bin/sh\nexit 0\n",
             "zsh": "#!/bin/sh\nexit 0\n",
+            "swift": "#!/bin/sh\nexit 0\n",
             "sh": "#!/bin/sh\nexit 0\n",
             "bash": '#!/bin/sh\nif [ "${1:-}" = init.sh ]; then grep -q "^# codyssey-init: mise$" "$HOME/.zshrc" 2>/dev/null || echo "# codyssey-init: mise" >> "$HOME/.zshrc"; fi\nexit 0\n',
-            "python3": '#!/bin/sh\ncase "$*" in *verify-macos-setup.py*) exit "${VM_LIVE_STATUS:-0}";; esac\ncat >/dev/null || true\nexit 0\n',
+            "python3": '#!/bin/sh\ncase "$*" in *verify-tailnet-runtime.py*) exit "${VM_LAB_STATUS:-0}";; *verify-macos-setup.py*) exit "${VM_LIVE_STATUS:-0}";; esac\ncat >/dev/null || true\nexit 0\n',
             "curl": '#!/bin/sh\ncase "$*" in *18081*) kind=ui; ready=${VM_UI_READY_AT:-1};; *) kind=api; ready=${VM_API_READY_AT:-1};; esac\ncount_file="$VM_CURL_COUNT-$kind"; count=0; [ ! -f "$count_file" ] || count=$(cat "$count_file"); count=$((count + 1)); echo "$count" > "$count_file"; [ "$count" -ge "$ready" ]\n',
             "colima": '#!/bin/sh\nprintf "%s\\n" "$*" >> "$VM_CALLS"\nif [ "$1" = stop ] && [ "${VM_GUEST_SCENARIO:-}" = docker-and-stop-failure ]; then exit 23; fi\nexit 0\n',
             "rm": '#!/bin/sh\nprintf "rm %s\\n" "$*" >> "$VM_CALLS"\nif [ "${VM_GUEST_SCENARIO:-}" = removal-failure ]; then case "${1:-}:${2:-}" in -rf:"$HOME"/codyssey-vm-test.*) exit 41;; esac; fi\nexec /bin/rm "$@"\n',
@@ -119,6 +120,12 @@ sys.exit(0)
         self.assertIn("PASS:", result.stdout)
         self.assertEqual(sum("compose down --volumes" in call for call in calls), 1)
         self.assertLess(result.stdout.index("COMPOSE_CLEANUP_COMPLETE"), result.stdout.index("PASS:"))
+
+    def test_verifier_local_lab_failure_prevents_success_and_cleans(self) -> None:
+        result, calls = self.run_script("verify-macos-vm.sh", VM_LAB_STATUS="27")
+        self.assertEqual(result.returncode, 27, result.stderr)
+        self.assertNotIn("PASS:", result.stdout)
+        self.assertEqual(sum("compose down --volumes" in call for call in calls), 1)
 
     def test_verifier_freezes_context_and_clears_compose_overrides(self) -> None:
         result, calls = self.run_script("verify-macos-vm.sh", DOCKER_CONTEXT="local-test",

@@ -87,9 +87,11 @@ cp "$root/tests/fixtures/gost.yaml" "$work/gost/gost.yaml"
 cd "$work"
 # Never inherit a real key, .env, project, or alternate Compose file from the caller.
 export TS_AUTHKEY='' CODYSSEY_MACOS_SETUP=0 CODYSSEY_OPEN_BROWSER=0
+export CODYSSEY_DOCK_SETUP=0 CODYSSEY_INTERACTIVE_SHELL=0
 unset CODYSSEY_INIT_DIR CODYSSEY_TTY_PATH ZDOTDIR
 unset UNAME_BIN DEFAULTS_BIN PLISTBUDDY_BIN PLUTIL_BIN KILLALL_BIN
 unset CODYSSEY_APPLICATIONS_DIR CODYSSEY_SYSTEM_APPLICATIONS_DIR
+unset CODYSSEY_INPUT_SWITCH
 sh scripts/check.sh --native-python
 started=1
 for pass in 1 2; do
@@ -98,7 +100,7 @@ for pass in 1 2; do
   [[ ! -e .env ]] || { printf 'Exported empty key unexpectedly created .env.\n' >&2; exit 1; }
   state=$(docker compose exec -T tailscale tailscale status --json)
   printf '%s' "$state" | python3 -c 'import json,sys; assert json.load(sys.stdin)["BackendState"] == "NeedsLogin", "Expected unauthenticated NeedsLogin"'
-  bash tailnet.sh bash -lc 'test -c /dev/net/tun; test -d /host; command -v bash; command -v ssh; command -v curl; command -v git'
+  bash tailnet.sh bash -c 'test -c /dev/net/tun; test -d /host; command -v bash; command -v ssh; command -v curl; command -v git; mise --version; zellij --version'
   for endpoint in http://localhost:18080/config http://localhost:18081/; do
     endpoint_ready=0
     for (( attempt=0; attempt<60; attempt++ )); do
@@ -112,10 +114,16 @@ for pass in 1 2; do
   done
 done
 [[ $(grep -c '^# codyssey-init: mise$' "$HOME/.zshrc") == 1 ]]
-CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 verify-macos-setup.py
+# Exercise persistent state and local DNS using a private control plane, never a real tailnet.
+python3 scripts/verify-tailnet-runtime.py --disposable
+# Use the retained source tree, so Dock never points into the removed test copy.
+CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 "$root/verify-macos-setup.py" --desktop-only
+swift "$root/enable-korean.swift" --shortcuts
+swift "$root/enable-korean.swift" --verify-shortcuts
+printf 'Input-source approval and physical Hangul typing require an interactive desktop check.\n'
 if cleanup 0; then
   :
 else
   exit $?
 fi
-printf 'PASS: real macOS preferences and Docker bootstrap; Tailscale remains unauthenticated.\n'
+printf 'PASS: real Dock launcher, live shortcuts and Docker bootstrap; Tailscale remains unauthenticated.\n'

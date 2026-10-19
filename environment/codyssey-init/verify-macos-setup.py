@@ -147,16 +147,11 @@ def prepare_fixture(baseline: tuple[DomainSnapshot, ...], directory: Path) -> tu
     return unrelated_sources, unrelated_hotkeys
 
 
-def verify_preferences(directory: Path, unrelated_sources: list[dict[str, PlistValue]], unrelated_hotkeys: dict[str, PlistValue]) -> tuple[dict[str, PlistValue], ...]:
-    values = tuple(export(domain, directory, "applied") for domain in DOMAINS)
-    global_values, dock_values, input_values, hotkey_values = values
-    if not all(global_values.get(key) is False for key in TEXT_KEYS):
-        raise VerificationError("not all text automation preferences are false")
-
+def verify_dock(dock_values: dict[str, PlistValue]) -> None:
     terminal = Path(os.environ.get("CODYSSEY_SYSTEM_APPLICATIONS_DIR", "/System/Applications")) / "Utilities/Terminal.app"
     primary_chrome = Path(os.environ.get("CODYSSEY_APPLICATIONS_DIR", "/Applications")) / "Google Chrome.app"
     chrome = primary_chrome if primary_chrome.is_dir() else Path.home() / "Applications/Google Chrome.app"
-    expected_urls = [f"file://{str(terminal).replace(' ', '%20')}/", f"file://{str(chrome).replace(' ', '%20')}/"]
+    expected_urls = [terminal.as_uri() + "/", chrome.as_uri() + "/"]
     apps = dictionaries(dock_values.get("persistent-apps", []), "persistent-apps")
     urls: list[PlistValue] = []
     for app in apps:
@@ -171,6 +166,15 @@ def verify_preferences(directory: Path, unrelated_sources: list[dict[str, PlistV
         raise VerificationError("Dock preferences do not exactly match the requested state")
     if not launcher.is_file() or not os.access(launcher, os.X_OK):
         raise VerificationError("Dock terminal launcher is missing or not executable")
+
+
+def verify_preferences(directory: Path, unrelated_sources: list[dict[str, PlistValue]], unrelated_hotkeys: dict[str, PlistValue]) -> tuple[dict[str, PlistValue], ...]:
+    values = tuple(export(domain, directory, "applied") for domain in DOMAINS)
+    global_values, dock_values, input_values, hotkey_values = values
+    if not all(global_values.get(key) is False for key in TEXT_KEYS):
+        raise VerificationError("not all text automation preferences are false")
+
+    verify_dock(dock_values)
 
     sources = dictionaries(input_values.get("AppleEnabledInputSources", []), "AppleEnabledInputSources")
     if any(source not in sources for source in unrelated_sources) or sources.count(KOREAN) != 1:
@@ -208,6 +212,25 @@ def restore(baseline: tuple[DomainSnapshot, ...]) -> list[str]:
     return failures
 
 
+def verify_desktop(root: Path) -> None:
+    directory = Path(tempfile.mkdtemp(prefix="macos-desktop-verify-"))
+    directory.chmod(0o700)
+    baseline: tuple[DomainSnapshot, ...] = ()
+    try:
+        baseline = (snapshot("com.apple.dock", directory),)
+        for _ in range(2):
+            run(("bash", str(root / "macos-setup.sh"), "--desktop-only"))
+            verify_dock(export("com.apple.dock", directory, "desktop"))
+            run(("zsh", str(Path.home() / "Library/Application Support/codyssey-init/Codyssey j.command"), "--list"))
+    except BaseException:
+        if restore(baseline):
+            print(f"Dock restoration failed; backup retained at {directory}", file=sys.stderr)
+        else:
+            shutil.rmtree(directory)
+        raise
+    shutil.rmtree(directory)
+
+
 def main() -> None:
     if os.environ.get("CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST") != "1":
         raise VerificationError("set CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 after reading the warning")
@@ -217,6 +240,11 @@ def main() -> None:
 
     os.umask(0o077)
     root = Path(__file__).resolve().parent
+    if sys.argv[1:] == ["--desktop-only"]:
+        verify_desktop(root)
+        return
+    if sys.argv[1:]:
+        raise VerificationError("Usage: verify-macos-setup.py [--desktop-only]")
     snapshot_root = Path(tempfile.mkdtemp(prefix="macos-live-verify-"))
     snapshot_root.chmod(0o700)
     baseline: tuple[DomainSnapshot, ...] = ()
