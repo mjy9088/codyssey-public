@@ -1,23 +1,108 @@
 # Folio lending library
 
-Folio is a FastAPI and SQLite lending application with persistent users, books, loans, and
-server-side sessions. Authentication and authorization are injected with FastAPI `Depends`; every
-state-changing form carries a session-bound CSRF token. The seeded local account is `reader` with
-password `correct-horse-battery-staple`.
+Folio is a server-rendered FastAPI and SQLite lending application with persistent users, books,
+loans, and server-side sessions. The interface follows the reusable contract in
+[`DESIGN.md`](DESIGN.md) and includes catalog search and management, borrowing, returns, explicit
+destructive-action confirmation, empty states, and recovery-oriented error pages.
 
-The responsive server-rendered interface follows the reusable contract in [`DESIGN.md`](DESIGN.md).
-It includes signed-out and authenticated shells, searchable inventory cards, catalog forms, explicit
-destructive-action confirmation, loan filters, empty states, and recovery-oriented error pages.
+## Runtime versions
 
-## Run
+These versions come from `pyproject.toml` and the resolved `uv.lock`.
+
+| Runtime | Version | Source |
+| --- | --- | --- |
+| Python | `>=3.13` | `pyproject.toml` |
+| FastAPI | `0.143.0` | `uv.lock` |
+| Jinja2 | `3.1.6` | `uv.lock` |
+| python-multipart | `0.0.32` | `uv.lock` |
+| SQLAlchemy | `2.1.4` | `uv.lock` |
+| Uvicorn | `0.54.0` | `uv.lock` |
+
+## Environment and installation
+
+Install Python 3.13 or newer and `uv`, then create the locked environment from this directory:
 
 ```sh
 uv sync --locked
+```
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CATALOG_DATABASE_URL` | `sqlite+pysqlite:///data/catalog.db` | Selects the SQLite database |
+| `CATALOG_CSRF_SECRET` | Local development value | Signs public and session-bound CSRF tokens |
+
+Use a stable, private `CATALOG_CSRF_SECRET` outside local development. No external service or cloud
+account is required.
+
+## Start
+
+```sh
 uv run uvicorn book_catalog.main:app --host 0.0.0.0 --port 8000
 ```
 
-Set `CATALOG_DATABASE_URL` to select another SQLite database and set a stable, private
-`CATALOG_CSRF_SECRET` outside local development.
+Open `http://127.0.0.1:8000/login` after the server starts.
+
+## Local data
+
+The seed data is deterministic and intended only for local testing.
+
+| Fact | Value | Purpose |
+| --- | --- | --- |
+| Username | `reader` | Seeded local test account |
+| Password | `correct-horse-battery-staple` | Seeded local test credential |
+| Default database | `data/catalog.db` | SQLite file relative to the project working directory |
+| Docker volume | `catalog-data` | Persists `/app/data` between application container runs |
+
+## Route policy
+
+`Public` routes can be reached without a session. Every `Protected` route uses the shared
+`require_auth` dependency; state-changing forms also validate a session-bound CSRF token.
+
+| Access | Method | Path | Purpose |
+| --- | --- | --- | --- |
+| Public | GET | `/login` | Render the sign-in form |
+| Public | POST | `/login` | Create a server session |
+| Protected | GET | `/` | Show the lending dashboard |
+| Protected | GET | `/showcase` | Show the interface component showcase |
+| Protected | GET | `/books` | List and search books |
+| Protected | GET | `/books/new` | Render the new-book form |
+| Protected | POST | `/books` | Create a book |
+| Protected | GET | `/books/{book_id}` | Show book details |
+| Protected | GET | `/books/{book_id}/edit` | Render the edit form |
+| Protected | POST | `/books/{book_id}` | Update a book |
+| Protected | POST | `/books/{book_id}/delete` | Delete an unloaned book |
+| Protected | GET | `/loans` | List the signed-in member's loans |
+| Protected | POST | `/books/{book_id}/borrow` | Borrow an available book |
+| Protected | POST | `/loans/{loan_id}/return` | Return the member's active loan |
+| Protected | POST | `/logout` | Revoke the current session |
+
+Static assets are mounted at `/static`. The hidden `/__vm-proof` endpoint exists only for the local
+VM verifier and is not part of the application route policy or OpenAPI schema.
+
+## Major feature paths
+
+| Feature | Path | Outcome |
+| --- | --- | --- |
+| Sign in | `/login` -> `/` | Establish a session and open the dashboard |
+| Browse and search | `/books?q=...` -> `/books/{book_id}` | Filter inventory and inspect availability |
+| Catalog management | `/books/new` -> `/books/{book_id}/edit` | Create or update catalog records |
+| Borrow | `/books/{book_id}/borrow` -> `/loans?loan_status=borrowed` | Create an owned active loan |
+| Return | `/loans/{loan_id}/return` -> `/loans` | Complete an owned active loan |
+
+## Why server-side sessions
+
+This single-application workflow needs a browser login, not an OAuth integration or a role
+hierarchy. The browser receives an opaque `HttpOnly`, `SameSite=Strict` cookie while the database
+stores only its digest, expiry, and owning user. Keeping session state on the server makes logout
+immediately revoke that session and supports CSRF tokens bound to the current session. This is
+simpler than introducing externally issued tokens while preserving explicit expiry and revocation.
+
+## Data ownership
+
+A user owns sessions and loans, so deleting a user cascades to both and cannot leave security or
+lending rows orphaned. Books retain lending history: book deletion is rejected while any associated
+loan exists. A member may borrow an available title once at a time and may return only their own
+active loan.
 
 ## Verify
 
@@ -27,10 +112,10 @@ sh scripts/verify.sh docker
 sh scripts/verify.sh vm
 ```
 
-`scripts/check.sh` runs formatting, static analysis, and the Python test suite. Both verification
-paths drive the rendered application through pinned Chromium with Playwright. The scenarios cover
-the authentication boundary, invalid credentials, missing records, catalog validation and CRUD,
-search, borrowing conflicts, loan filters, and return completion.
+`scripts/check.sh` runs formatting, static analysis, and the Python test suite. Both full
+verification paths drive the rendered application through pinned Chromium with Playwright. The
+scenarios cover the authentication boundary, invalid credentials, missing records, catalog
+validation and CRUD, search, borrowing conflicts, loan filters, and return completion.
 
 For an already running development server, run the browser suite directly:
 
@@ -47,9 +132,3 @@ TCG and runs the same Uvicorn application inside the guest. These are local simu
 evidence of cloud deployment or external collaboration. Runtime databases, browser traces,
 screenshots, videos, logs, and reports remain untracked because generated evidence becomes stale,
 duplicates the automation, and can expose environment details.
-
-## Data ownership
-
-A user owns sessions and loans, so deleting a user cascades to both. Books retain lending history:
-book deletion is rejected while any associated loan exists. A member may borrow an available title
-once at a time and may return only their own active loan.

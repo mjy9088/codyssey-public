@@ -57,6 +57,7 @@ class BookService:
             raise BookInventoryConflictError(book_id, active_loans, draft.total_copies)
         return self._view(self._repository.update(book, draft))
 
+    # Lending records are historical data, so catalog deletion stops before repository mutation.
     def delete(self, book_id: int) -> None:
         if self._repository.has_loan_history(book_id):
             raise BookHasLoansError(book_id)
