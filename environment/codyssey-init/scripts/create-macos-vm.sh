@@ -3,14 +3,16 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: bash scripts/create-macos-vm.sh --image SOURCE [--name NAME] [--delete-on-success]
+Usage: bash scripts/create-macos-vm.sh --image SOURCE [--name NAME] [--delete-on-success] [--preinstalled]
 SOURCE: reviewed local Tart base VM or registry image pinned with @sha256:...
-Requires Apple Silicon macOS 14+, mise-managed Tart, and a base with Homebrew, a logged-in
-desktop user, and Tart Guest Agent. Creates, provisions, and verifies a fresh VM.
+Requires Apple Silicon macOS 14+, mise-managed Tart, and a logged-in desktop with Guest Agent.
+Default provisioning needs Homebrew; --preinstalled uses installed OrbStack and Gureum.
+Real OrbStack needs nested virtualization, which Tart macOS guests may not provide.
+Creates, provisions, and verifies a fresh VM.
 Stops and retains the VM on failure. No host home directory is shared.
 EOF
 }
-image= name="codyssey-verify-$(date +%Y%m%d-%H%M%S)-$$" delete_on_success=0
+image= name="codyssey-verify-$(date +%Y%m%d-%H%M%S)-$$" delete_on_success=0 preinstalled=0 build_preinstalled=0
 while (( $# )); do
   case $1 in
     --help) usage; exit 0 ;;
@@ -18,10 +20,13 @@ while (( $# )); do
       [[ $# -ge 2 && -n $2 ]] || { usage >&2; exit 1; }
       if [[ $1 == --image ]]; then image=$2; else name=$2; fi
       shift 2 ;;
+    --build-preinstalled) build_preinstalled=1; shift ;;
+    --preinstalled) preinstalled=1; shift ;;
     --delete-on-success) delete_on_success=1; shift ;;
     *) usage >&2; exit 1 ;;
   esac
 done
+(( !build_preinstalled || !delete_on_success )) || { printf "A base image cannot be deleted on success.\n" >&2; exit 1; }
 [[ -n $image && $image != -* && $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { usage >&2; exit 1; }
 if [[ $image == */* && ! $image =~ @sha256:[0-9a-f]{64}$ ]]; then
   printf 'Registry VM images must be pinned with @sha256:<64 lowercase hex digits>.\n' >&2; exit 1
@@ -29,7 +34,7 @@ fi
 [[ $(uname -s) == Darwin && $(uname -m) == arm64 ]] || { printf 'Tart requires an Apple Silicon Mac.\n' >&2; exit 1; }
 [[ $(sw_vers -productVersion | cut -d . -f 1) -ge 14 ]] || { printf 'tart exec requires macOS 14+.\n' >&2; exit 1; }
 command -v mise >/dev/null || { printf 'Configure Tart with mise on the host first.\n' >&2; exit 1; }
-tart() { mise exec tart@2.40.1 -- tart "$@"; }
+tart() { MISE_QUIET=1 mise exec tart@2.40.1 -- tart "$@"; }
 tart --version >/dev/null
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 . "$root/scripts/vm-files.sh"
@@ -87,7 +92,7 @@ trap 'exit 143' TERM
 tart clone "$image" "$name"
 created=1
 tart set "$name" --cpu 4 --memory 8192
-mise exec tart@2.40.1 -- tart run --no-graphics "$name" &
+MISE_QUIET=1 mise exec tart@2.40.1 -- tart run --no-graphics "$name" &
 runner=$!
 ready=0
 deadline=$((SECONDS + 360))
@@ -105,13 +110,23 @@ tar -C "$root" -cf "$transfer" "${vm_files[@]}"
 tart exec -i "$name" /usr/bin/tar -xf - -C "$guest_root" <"$transfer"
 rm -f "$transfer"
 transfer=
-tart exec "$name" /bin/bash "$guest_root/scripts/prepare-macos-vm.sh" --disposable
-prepared=1
-tart exec "$name" /usr/bin/env DOCKER_CONTEXT=colima-codyssey-verify \
-  /bin/bash "$guest_root/scripts/verify-macos-vm.sh" --disposable
+if (( build_preinstalled )); then
+  tart exec "$name" /bin/bash "$guest_root/scripts/install-preinstalled-apps.sh" --disposable
+elif (( preinstalled )); then
+  tart exec "$name" /bin/bash "$guest_root/scripts/verify-macos-vm.sh" --disposable --preinstalled
+else
+  tart exec "$name" /bin/bash "$guest_root/scripts/prepare-macos-vm.sh" --disposable
+  prepared=1
+  tart exec "$name" /usr/bin/env DOCKER_CONTEXT=colima-codyssey-verify \
+    /bin/bash "$guest_root/scripts/verify-macos-vm.sh" --disposable
+fi
 if cleanup 0; then
   :
 else
   exit $?
 fi
-printf 'PASS: fresh macOS VM %s completed environment verification.\n' "$name"
+if (( build_preinstalled )); then
+  printf 'READY: stopped preinstalled base %s (OrbStack engine not exercised).\n' "$name"
+else
+  printf 'PASS: fresh macOS VM %s completed environment verification.\n' "$name"
+fi

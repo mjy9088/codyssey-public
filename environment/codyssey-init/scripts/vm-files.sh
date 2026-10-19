@@ -2,10 +2,10 @@
 # The VM payload is an allowlist: never send .env, runtime GOST edits, or host files.
 vm_files=(
   .dockerignore .env.example Dockerfile README.md HANDOFF.md docker-compose.yml init.sh
-  justfile lib/auth.sh lib/preparation.sh lib/readiness.zsh macos-setup.sh enable-korean.swift install.sh tailscale-entrypoint.sh mise.toml next-script.zsh tailnet.sh
+  justfile lib/auth.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh macos-setup.sh enable-korean.swift install.sh tailscale-entrypoint.sh mise.toml next-script.zsh tailnet.sh
   verify-macos-setup.py scripts/check.sh scripts/vm-files.sh
-  scripts/create-macos-vm.sh tests/vm-orchestration-test.py tests/vm-guest-test.py
-  scripts/prepare-macos-vm.sh scripts/verify-macos-vm.sh
+  scripts/create-macos-vm.sh tests/vm-orchestration-test.py tests/vm-guest-test.py tests/preinstalled-tools-test.py
+  scripts/prepare-macos-vm.sh scripts/verify-macos-vm.sh scripts/install-preinstalled-apps.sh scripts/create-preinstalled-macos-image.sh
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh
   tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/managed-j-runtime.sh tests/startup-overlap-test.sh
   tests/preparation-safety-test.sh tests/auth-prompt-test.sh tests/macos-fake-tools.py

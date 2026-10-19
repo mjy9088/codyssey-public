@@ -117,7 +117,7 @@ run_quiet_step() (
   else
     result=$?
     printf '%s failed (exit %s).\n' "$label" "$result" >&2
-    tail -n 12 "$log" >&2
+    tail -n 12 "$log" | cut -c 1-240 >&2
   fi
   rm -f "$log"
   return "$result"

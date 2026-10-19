@@ -108,6 +108,28 @@ class OrchestrationTests(unittest.TestCase):
         self.assertTrue(any("/Users/synthetic/guest work/scripts/verify-macos-vm.sh" in cmd for cmd in commands))
         self.assertLess(result.stdout.index("TART_STOP_COMPLETE"), result.stdout.index("PASS:"))
 
+    def test_preinstalled_mode_skips_homebrew_colima_and_context_override(self):
+        result, commands, names = self.run_case(extra=("--preinstalled",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(any("prepare-macos-vm.sh" in arg or "colima" in arg for arg in cmd) for cmd in commands))
+        self.assertTrue(any(cmd[-2:] == ["--disposable", "--preinstalled"] for cmd in commands))
+        self.assertIn("lib/bootstrap-tools.sh", names)
+
+    def test_build_preinstalled_stops_and_retains_new_base_without_verification(self):
+        result, commands, names = self.run_case(extra=("--build-preinstalled",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("READY: stopped preinstalled base", result.stdout)
+        self.assertNotIn("PASS:", result.stdout)
+        self.assertTrue(any(any("install-preinstalled-apps.sh" in arg for arg in cmd) for cmd in commands))
+        self.assertFalse(any(any("verify-macos-vm.sh" in arg or "prepare-macos-vm.sh" in arg or "colima" in arg for arg in cmd) for cmd in commands))
+        self.assertFalse(any(cmd[0] == "delete" for cmd in commands))
+        self.assertIn("scripts/install-preinstalled-apps.sh", names)
+
+    def test_build_base_refuses_delete_on_success_before_clone(self):
+        result, commands, _ = self.run_case(extra=("--build-preinstalled", "--delete-on-success"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(commands, [])
+
     def test_success_can_delete_owned_vm(self):
         result, commands, _ = self.run_case(extra=("--delete-on-success",))
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -185,7 +207,7 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(commands, [])
 
     def test_help_never_provisions(self):
-        for script in ("create-macos-vm.sh", "prepare-macos-vm.sh", "verify-macos-vm.sh"):
+        for script in ("create-macos-vm.sh", "create-preinstalled-macos-image.sh", "prepare-macos-vm.sh", "verify-macos-vm.sh"):
             result = subprocess.run(["bash", str(ROOT / "scripts" / script), "--help"],
                                     text=True, capture_output=True, timeout=5)
             self.assertEqual(result.returncode, 0)

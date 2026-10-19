@@ -1,50 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MISE_VERSION=v2026.10.5
-MISE_MACOS_ARM64_SHA256=41c4028257d30f5f5742c99247c461f417143d6c7301f167a0c185247c8f206e
-MISE_MACOS_X64_SHA256=204c7d64e8b0b62c0a95847ab6442bf23bf88247d52967e99c5cad53f56eaa0c
-
 die() {
   printf 'codyssey-init: %s\n' "$*" >&2
   exit 1
 }
 
-prepare_docker() {
-  local app tools plugin_dir plugin attempt
-  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-    return
-  fi
-  if [[ $(uname -s) == Darwin && -z ${DOCKER_HOST:-} && -z ${DOCKER_CONTEXT:-} ]]; then
-    for app in /Applications/OrbStack.app "$HOME/Applications/OrbStack.app"; do
-      tools="$app/Contents/MacOS/xbin"
-      [[ -x $app/Contents/MacOS/bin/orb && -x $tools/docker ]] || continue
-      # Keep an existing Docker CLI ahead of the bundled fallback.
-      export PATH="$PATH:$tools"
-      plugin_dir="${DOCKER_CONFIG:-$HOME/.docker}/cli-plugins"
-      mkdir -p "$plugin_dir"
-      for plugin in docker-compose docker-buildx; do
-        if [[ ! -e $plugin_dir/$plugin && ! -L $plugin_dir/$plugin && -x $tools/$plugin ]]; then
-          ln -s "$tools/$plugin" "$plugin_dir/$plugin"
-        fi
-      done
-      printf 'Starting OrbStack through its bundled CLI.\n'
-      "$app/Contents/MacOS/bin/orb" start || die 'OrbStack could not start.'
-      for ((attempt = 0; attempt < 60; attempt++)); do
-        docker info >/dev/null 2>&1 && return
-        sleep 1
-      done
-      die 'OrbStack started but Docker did not become ready within 60 seconds.'
-    done
-  fi
-  command -v docker >/dev/null 2>&1 || die 'Docker is required; install OrbStack in /Applications first.'
-  die 'Docker is installed but its selected engine is not running.'
-}
-
 remote_files=(
   .dockerignore .env.example Dockerfile README.md HANDOFF.md docker-compose.yml init.sh justfile
   macos-setup.sh mise.toml next-script.zsh tailnet.sh verify-macos-setup.py
-  lib/auth.sh lib/preparation.sh lib/readiness.zsh gost/gost.yaml enable-korean.swift install.sh tailscale-entrypoint.sh
+  lib/auth.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh gost/gost.yaml enable-korean.swift install.sh tailscale-entrypoint.sh
   chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh
@@ -54,15 +19,11 @@ remote_files=(
   scripts/prepare-startup.sh scripts/quiet-desktop.swift
 )
 remote_staging=
-mise_download=
 
 cleanup_remote_staging() {
   [[ -z $remote_staging ]] || rm -rf "$remote_staging"
 }
 
-cleanup_mise_download() {
-  [[ -z $mise_download ]] || rm -f "$mise_download"
-}
 
 write_shell_quoted() {
   local value=$1
@@ -118,7 +79,7 @@ install_remote_files() {
     curl --fail --location --silent --show-error \
       "https://raw.githubusercontent.com/mjy9088/codyssey-public/main/environment/codyssey-init/$file" -o "$staging/$file"
   done
-  for file in init.sh tailnet.sh lib/auth.sh lib/preparation.sh macos-setup.sh \
+  for file in init.sh tailnet.sh lib/auth.sh lib/preparation.sh lib/bootstrap-tools.sh macos-setup.sh \
     scripts/prepare-startup.sh; do
     bash -n "$staging/$file"
   done
@@ -150,38 +111,6 @@ install_remote_files() {
   trap - EXIT
 }
 
-install_mise() {
-  local machine asset checksum download dependency
-  [[ $(uname -s) == Darwin ]] || die 'automatic mise installation supports macOS only.'
-  machine=$(uname -m)
-  case $machine in
-    arm64)
-      asset="mise-$MISE_VERSION-macos-arm64"
-      checksum=$MISE_MACOS_ARM64_SHA256
-      ;;
-    x86_64)
-      asset="mise-$MISE_VERSION-macos-x64"
-      checksum=$MISE_MACOS_X64_SHA256
-      ;;
-    *) die "automatic mise installation does not support macOS architecture $machine." ;;
-  esac
-  for dependency in curl shasum cut install mktemp; do
-    command -v "$dependency" >/dev/null 2>&1 || die "installing mise requires $dependency."
-  done
-  download=$(mktemp) || die 'could not create a mise download file.'
-  mise_download=$download
-  trap cleanup_mise_download EXIT
-  curl --fail --location --silent --show-error \
-    "https://github.com/jdx/mise/releases/download/$MISE_VERSION/$asset" -o "$download"
-  [[ $(shasum -a 256 "$download" | cut -d ' ' -f 1) == "$checksum" ]] \
-    || die "mise $MISE_VERSION checksum verification failed."
-  mkdir -p "$HOME/.local/bin"
-  install -m 0755 "$download" "$HOME/.local/bin/mise"
-  rm -f "$download"
-  mise_download=
-  trap - EXIT
-}
-
 source_path=${BASH_SOURCE[0]:-}
 if [[ -n $source_path && -f $source_path ]]; then
   source_dir=$(CDPATH= cd -- "$(dirname -- "$source_path")" && pwd -P)
@@ -199,6 +128,7 @@ else
 fi
 init_dir=$(CDPATH= cd -- "$init_dir" && pwd -P)
 
+. "$init_dir/lib/bootstrap-tools.sh"
 prepare_docker
 command -v zsh >/dev/null 2>&1 || die 'zsh is required.'
 export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"

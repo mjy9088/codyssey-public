@@ -25,9 +25,11 @@ class GuestScriptTests(unittest.TestCase):
             "sleep": "#!/bin/sh\nexit 0\n",
             "zsh": "#!/bin/sh\nexit 0\n",
             "swift": "#!/bin/sh\nexit 0\n",
+            "mise": '#!/bin/sh\necho "mise $*" >> "$VM_CALLS"\ncase "$*" in "install python@3.13.7") touch "$HOME/python-ready";; "where python@3.13.7") dirname "$0";; esac\n',
+
             "sh": "#!/bin/sh\nexit 0\n",
             "bash": '#!/bin/sh\nif [ "${1:-}" = init.sh ]; then grep -q "^# codyssey-init: mise$" "$HOME/.zshrc" 2>/dev/null || echo "# codyssey-init: mise" >> "$HOME/.zshrc"; fi\nexit 0\n',
-            "python3": '#!/bin/sh\ncase "$*" in *verify-tailnet-runtime.py*) exit "${VM_LAB_STATUS:-0}";; *verify-macos-setup.py*) exit "${VM_LIVE_STATUS:-0}";; esac\ncat >/dev/null || true\nexit 0\n',
+            "python3": '#!/bin/sh\nif [ "$1" = -c ] && [ "${VM_GUEST_SCENARIO:-}" = preinstalled-old-python ] && [ ! -f "$HOME/python-ready" ]; then exit 1; fi\ncase "$*" in *verify-tailnet-runtime.py*) exit "${VM_LAB_STATUS:-0}";; *verify-macos-setup.py*) exit "${VM_LIVE_STATUS:-0}";; esac\ncat >/dev/null || true\nexit 0\n',
             "curl": '#!/bin/sh\ncase "$*" in *18081*) kind=ui; ready=${VM_UI_READY_AT:-1};; *) kind=api; ready=${VM_API_READY_AT:-1};; esac\ncount_file="$VM_CURL_COUNT-$kind"; count=0; [ ! -f "$count_file" ] || count=$(cat "$count_file"); count=$((count + 1)); echo "$count" > "$count_file"; [ "$count" -ge "$ready" ]\n',
             "colima": '#!/bin/sh\nprintf "%s\\n" "$*" >> "$VM_CALLS"\nif [ "$1" = stop ] && [ "${VM_GUEST_SCENARIO:-}" = docker-and-stop-failure ]; then exit 23; fi\nexit 0\n',
             "rm": '#!/bin/sh\nprintf "rm %s\\n" "$*" >> "$VM_CALLS"\nif [ "${VM_GUEST_SCENARIO:-}" = removal-failure ]; then case "${1:-}:${2:-}" in -rf:"$HOME"/codyssey-vm-test.*) exit 41;; esac; fi\nexec /bin/rm "$@"\n',
@@ -39,6 +41,11 @@ with open(os.environ["VM_CALLS"], "a") as stream:
     if args and args[0] == "compose":
         stream.write("env " + json.dumps({key: os.environ.get(key) for key in ("DOCKER_CONTEXT", "DOCKER_HOST", "COMPOSE_FILE", "COMPOSE_ENV_FILES", "COMPOSE_PROJECT_NAME")}) + "\n")
 scenario = os.environ.get("VM_GUEST_SCENARIO", "success")
+if args == ["--context", "orbstack", "info"]:
+    sys.exit(0 if scenario == "preinstalled-active" else 1)
+if args == ["info"] and scenario.startswith("preinstalled"):
+    marker = os.path.join(os.environ["HOME"], "orb-started")
+    sys.exit(1 if scenario == "preinstalled-readiness-failure" or not os.path.exists(marker) else 0)
 if args[:2] == ["context", "show"]:
     print(os.environ.get("DOCKER_CONTEXT", "local-test")); sys.exit(0)
 if args[:2] == ["context", "inspect"]:
@@ -64,9 +71,17 @@ sys.exit(0)
             target = fakebin / name
             target.write_text(script)
             target.chmod(0o755)
+        # Repeated readiness probes must not launch an emulated Python runtime
+        # sixty times. Keep info state in a shell wrapper; other Docker calls
+        # still use the structured Python fixture below.
+        backend = fakebin / "docker-backend"
+        (fakebin / "docker").rename(backend)
+        docker = fakebin / "docker"
+        docker.write_text('#!/bin/sh\nif [ "$#" = 1 ] && [ "$1" = info ]; then\n  echo "docker info" >> "$VM_CALLS"\n  case "${VM_GUEST_SCENARIO:-}" in preinstalled*) [ "$VM_GUEST_SCENARIO" != preinstalled-readiness-failure ] && [ -f "$HOME/orb-started" ]; exit $?;; esac\n  exit 0\nfi\nexec "' + str(backend) + '" "$@"\n')
+        docker.chmod(0o755)
         return fakebin
 
-    def run_script(self, script: str, scenario: str = "success", **overrides: str) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    def run_script(self, script: str, scenario: str = "success", extra: tuple[str, ...] = (), **overrides: str) -> tuple[subprocess.CompletedProcess[str], list[str]]:
         with tempfile.TemporaryDirectory(prefix="vm-guest-") as directory:
             work = Path(directory)
             home = work / "home"
@@ -77,9 +92,53 @@ sys.exit(0)
             env.pop("DOCKER_HOST", None)
             env.update(overrides)
             env["PATH"] = str(self.make_tools(work)) + os.pathsep + os.environ["PATH"]
-            result = subprocess.run(["/bin/bash", str(ROOT / "scripts" / script), "--disposable"],
+            if scenario.startswith("preinstalled"):
+                contents = home / "Applications/OrbStack.app/Contents/MacOS"
+                (contents / "bin").mkdir(parents=True)
+                (contents / "xbin").mkdir()
+                orb = contents / "bin/orb"
+                orb.write_text('#!/bin/sh\necho "orb $*" >> "$VM_CALLS"\nif [ "$1" = start ]; then touch "$HOME/orb-started"; fi\n')
+                orb.chmod(0o700)
+                (contents / "xbin/docker").symlink_to(work / "bin/docker")
+                (home / "Library/Input Methods/Gureum.app").mkdir(parents=True)
+                env.pop("DOCKER_CONTEXT", None)
+            result = subprocess.run(["/bin/bash", str(ROOT / "scripts" / script), "--disposable", *extra],
                                     env=env, text=True, capture_output=True, timeout=25)
             return result, calls.read_text().splitlines() if calls.exists() else []
+
+    def test_preinstalled_bootstraps_stopped_orbstack_and_stops_it_after_cleanup(self):
+        result, calls = self.run_script("verify-macos-vm.sh", "preinstalled", extra=("--preinstalled",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls.count("orb start"), 1)
+        self.assertEqual(calls.count("orb stop"), 1)
+        self.assertLess(calls.index("orb start"), next(i for i, call in enumerate(calls) if "compose" in call))
+        self.assertLess(next(i for i, call in enumerate(calls) if "compose down" in call), calls.index("orb stop"))
+        self.assertIn("PASS:", result.stdout)
+        self.assertFalse(any("colima" in call for call in calls))
+
+    def test_preinstalled_refuses_running_bundled_engine_without_stopping_it(self):
+        result, calls = self.run_script("verify-macos-vm.sh", "preinstalled-active", extra=("--preinstalled",))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any(call.startswith("orb ") or "compose" in call for call in calls))
+
+    def test_preinstalled_old_python_is_prepared_in_user_space(self):
+        result, calls = self.run_script("verify-macos-vm.sh", "preinstalled-old-python", extra=("--preinstalled",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("mise install python@3.13.7", calls)
+        self.assertIn("mise where python@3.13.7", calls)
+        self.assertEqual(calls.count("orb stop"), 1)
+
+    def test_preinstalled_readiness_failure_stops_owned_engine_before_workloads(self):
+        result, calls = self.run_script("verify-macos-vm.sh", "preinstalled-readiness-failure", extra=("--preinstalled",))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(calls.count("orb stop"), 1)
+        self.assertFalse(any("compose" in call for call in calls))
+        self.assertNotIn("PASS:", result.stdout)
+
+    def test_preinstalled_refuses_target_override_before_engine_use(self):
+        result, calls = self.run_script("verify-macos-vm.sh", extra=("--preinstalled",), DOCKER_HOST="tcp://remote:2376")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(calls, [])
 
     def test_prepare_stops_owned_colima_after_readiness_failure(self) -> None:
         result, calls = self.run_script("prepare-macos-vm.sh", "docker-readiness-failure")

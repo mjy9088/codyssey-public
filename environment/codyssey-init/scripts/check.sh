@@ -16,6 +16,7 @@ case ${1:-} in
     python3 "$root/tests/portable-browser-test.py"
     python3 "$root/tests/macos-setup-test.py"
     python3 "$root/tests/vm-orchestration-test.py"
+    python3 "$root/tests/preinstalled-tools-test.py"
     native_python=1
     ;;
   *) printf 'Usage: sh scripts/check.sh [--native-python]\n' >&2; exit 1 ;;
@@ -28,13 +29,13 @@ trap 'rm -rf "$context"' EXIT HUP INT TERM
 tar -C "$root" -cf "$context/payload.tar" \
   Dockerfile docker-compose.yml init.sh next-script.zsh tailnet.sh justfile mise.toml \
   README.md HANDOFF.md verify-macos-setup.py macos-setup.sh enable-korean.swift install.sh tailscale-entrypoint.sh .env.example \
-  lib/auth.sh lib/preparation.sh lib/readiness.zsh \
+  lib/auth.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh \
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh \
   tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/managed-j-runtime.sh tests/startup-overlap-test.sh \
   tests/preparation-safety-test.sh tests/auth-prompt-test.sh tests/fixtures/dockerignore \
   tests/macos-fake-tools.py tests/macos-setup-test.py tests/fixtures/gost.yaml \
-  tests/vm-orchestration-test.py tests/vm-guest-test.py scripts/check.sh scripts/create-macos-vm.sh scripts/prepare-macos-vm.sh \
-  scripts/verify-macos-vm.sh scripts/vm-files.sh \
+  tests/vm-orchestration-test.py tests/vm-guest-test.py tests/preinstalled-tools-test.py scripts/check.sh scripts/create-macos-vm.sh scripts/prepare-macos-vm.sh \
+  scripts/verify-macos-vm.sh scripts/install-preinstalled-apps.sh scripts/create-preinstalled-macos-image.sh scripts/vm-files.sh \
   chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs \
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs \
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh tests/chrome-extension-test.mjs \
