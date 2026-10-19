@@ -9,6 +9,7 @@ case "$mode" in
   *) printf 'Unknown verification mode: %s\n' "$mode" >&2; exit 2 ;;
 esac
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+sh "$root/verify/test-source-contract.sh" "$root"
 project="ai-review-$mode-$$"
 compose() { docker compose -p "$project" -f "$root/compose.yaml" --profile verify --profile vm "$@"; }
 cleanup() { compose down --volumes --remove-orphans >/dev/null 2>&1 || true; }
