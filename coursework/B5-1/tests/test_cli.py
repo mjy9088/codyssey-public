@@ -35,3 +35,13 @@ def test_repl_runs_complete_user_scenario() -> None:
     assert '"Alice Example"' in transcript
     assert "(integer) 1" in transcript
     assert '1) "user"' in transcript
+
+
+def test_negative_maxmemory_is_rejected_without_changing_limit() -> None:
+    store = MiniRedis()
+    assert execute(store, "CONFIG SET maxmemory 12") == "OK"
+
+    result = execute(store, "CONFIG SET maxmemory -1")
+
+    assert result == "(error) ERR value is not an integer or out of range"
+    assert "maxmemory:12" in execute(store, "INFO memory")

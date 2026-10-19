@@ -25,7 +25,7 @@ sh scripts/verify.sh vm
 sh scripts/verify.sh all
 ```
 
-Docker mode runs eleven deterministic structure, cache, boundary, and REPL scenarios, then drives the
+Docker mode runs seventeen deterministic structure, cache, boundary, policy, and REPL scenarios, then drives the
 real CLI with piped commands. VM mode boots an x86_64 Alpine kernel under QEMU TCG and runs the same
 Python tests inside the guest. It needs no KVM, privileged container, host socket mount, parent path,
 or credentials. The first build needs network access for pinned images and exact Alpine packages.
