@@ -240,7 +240,13 @@ EOF
 fi
 
 if [[ ${CODYSSEY_MACOS_SETUP:-0} == 1 || $(uname -s) == Darwin ]]; then
-  bash "$init_dir/macos-setup.sh"
+  if bash "$init_dir/macos-setup.sh"; then
+    :
+  else
+    preference_status=$?
+    printf 'codyssey-init: macOS preferences failed (exit %s); continuing container and browser setup.\n' "$preference_status" >&2
+    printf 'Retry preferences separately: bash "%s/macos-setup.sh"\n' "$init_dir" >&2
+  fi
 fi
 
 if [[ -t 0 ]]; then

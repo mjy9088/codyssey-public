@@ -142,6 +142,10 @@ Set `CODYSSEY_OPEN_BROWSER=0` for unattended or headless runs. Both URLs are sti
 browser is launched. VM verification uses this mode to avoid first-launch browser dialogs blocking
 the bootstrap.
 
+macOS preference failures print a warning and a command to retry them separately.
+They do not prevent container startup or browser setup. Docker, tool installation,
+and service readiness failures still stop the bootstrap.
+
 ## Container privilege and mount boundary
 
 The Tailscale service intentionally uses kernel networking (`TS_USERSPACE=false`), host networking,
@@ -262,10 +266,10 @@ OrbStack installation. Other Docker engines may need port forwarding from their 
 
 This environment disables text automation and configures **Gureum 1.13.2 Hangul 2-set**
 with **Control-Space for input switching and Command-Space for Spotlight**.
-Interactive setup asks which Korean/English switching key to use (Control-Space or Caps Lock),
-then asks whether to keep only Terminal and Chrome pinned in the Dock. Caps Lock is currently unsupported
-in the reference environment: selecting it stops setup before changes, without replacing the input method.
-Pressing Enter selects Control-Space and preserves the Dock. Both prompts use `/dev/tty`, including under `curl | sh`.
+Control-Space is applied automatically without a switching-key prompt. Interactive setup
+asks only whether to keep Terminal and Chrome pinned in the Dock; Enter preserves the Dock.
+Caps Lock remains unsupported. Independent preference groups continue after a failure and
+report a nonzero summary status; the bootstrap continues container and browser setup.
 To provide choices without prompting:
 
 ```sh
@@ -289,8 +293,8 @@ Without a terminal, defaults are Control-Space and no Dock changes. The legacy
 `CODYSSEY_MACOS_SETUP=1` still opts into Dock cleanup in unattended runs.
 `macos-setup.sh --input-only` changes input settings only; `--no-dock` also disables text automation.
 `macos-setup.sh --shortcuts-only` applies and verifies the shortcut bindings without changing input sources.
-Close System Settings before applying shortcuts: its Keyboard panel can overwrite new bindings with stale
-cached values. The helper checks the active WindowServer bindings after reloading, not only saved values.
+The helper applies shortcuts even when System Settings is open, registers the live WindowServer
+bindings directly, and verifies them in a fresh process as well as the writer.
 No Screen Recording, Accessibility, administrator privileges, or logout are needed for shortcut setup.
 
 The reference environment is macOS 15.7.5 on x86_64 with Gureum 1.13.2 installed at
@@ -298,7 +302,7 @@ The reference environment is macOS 15.7.5 on x86_64 with Gureum 1.13.2 installed
 configuration tool. On a fresh machine, `scripts/install-gureum.sh` downloads the exact 1.13.2 package,
 verifies its pinned SHA-256, and extracts it into `~/Library/Input Methods/Gureum.app` without sudo.
 An existing matching installation is reused. Swift and the Xcode Command Line Tools are required for
-Carbon registration and selection. The prompt explicitly identifies the input method for each choice.
+Carbon registration and selection.
 
 `enable-korean.swift` registers the installed app, enables its parent source
 `org.youknowone.inputmethod.Korean` and Hangul mode `org.youknowone.inputmethod.Gureum.han2`, and attempts
@@ -308,7 +312,7 @@ sources added by the earlier bootstrap. Activation requests can return success b
 the macOS dialog. The helper stays alive for up to 120 seconds per source, services its run loop,
 and waits for actual activation before enabling the next source. Choose Allow when prompted.
 Already-enabled sources are not prompted again. Selection is verified against the current input source;
-timeout or selection failure stops setup with an actionable error. No logout is performed or required
+timeout or selection failure reports an actionable error while other preference groups continue. No logout is performed or required
 by the setup flow. To retry input setup in the current session:
 
 ```sh
@@ -317,9 +321,9 @@ bash macos-setup.sh --input-only
 
 Control-Space uses symbolic hotkey 60 with parameters `[65535, 49, 262144]`; Control-Shift-Space uses 61
 with `[65535, 49, 393216]`. The old value `786432` was Control-Option-Space. After synchronizing preferences through CFPreferences,
-the setup calls this reference environment's
-Apple helper, `/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u`.
-This is an environment-specific private helper, and its availability is a prerequisite for live reload.
+the setup registers and enables the live bindings through SkyLight, waits for asynchronous application,
+and verifies their values and enabled state. These private APIs target the reference macOS version;
+missing symbols produce an error for this group while other setup groups continue.
 Loaded shortcut registration does not prove physical key handling; test both Korean and English in a
 focused text field. The setup does not automatically replace Gureum with Apple Korean when Caps Lock fails.
 See [HANDOFF.md](HANDOFF.md) for installed input-source details and fresh-VM steps.

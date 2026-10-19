@@ -23,17 +23,6 @@ func configureShortcuts(verifyOnly: Bool) {
     let bindings: [(String, UInt32)] = [("60", 262144), ("61", 393216), ("64", 1048576), ("65", 1572864)]
 
     if !verifyOnly {
-        // Keyboard Settings can write its stale cached bindings back over ours.
-        // Leave the user's application alone and require it to be closed first.
-        let settings = Process()
-        settings.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
-        settings.arguments = ["-x", "System Settings"]
-        settings.standardOutput = FileHandle.nullDevice
-        do { try settings.run() } catch { fail("could not check whether System Settings is open: \(error)") }
-        settings.waitUntilExit()
-        guard settings.terminationStatus == 1 else {
-            fail("close System Settings and rerun setup so it cannot overwrite the shortcut bindings; no shortcuts were changed.")
-        }
         let domain = "com.apple.symbolichotkeys" as CFString
         var keys = CFPreferencesCopyAppValue("AppleSymbolicHotKeys" as CFString, domain) as? [String: Any] ?? [:]
         for (identifier, modifiers) in bindings {
@@ -43,12 +32,37 @@ func configureShortcuts(verifyOnly: Bool) {
         guard CFPreferencesAppSynchronize(domain) else { fail("could not save symbolic hotkeys.") }
         CFPreferencesSetAppValue("TISRomanSwitchState" as CFString, 0 as CFNumber, kCFPreferencesAnyApplication)
         guard CFPreferencesAppSynchronize(kCFPreferencesAnyApplication) else { fail("could not disable Caps Lock switching.") }
-        let reload = Process()
-        reload.executableURL = URL(fileURLWithPath: "/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings")
-        reload.arguments = ["-u"]
-        do { try reload.run() } catch { fail("could not reload shortcuts: \(error)") }
-        reload.waitUntilExit()
-        guard reload.terminationStatus == 0 else { fail("live shortcut reload failed.") }
+        // Register live values directly; activateSettings can restore stale
+        // bindings while preferences are being synchronized.
+        typealias SetHotKey = @convention(c) (Int32, UInt16, UInt16, UInt32) -> Int32
+        typealias SetEnabled = @convention(c) (Int32, Bool) -> Int32
+        guard let setAddress = dlsym(library, "CGSSetSymbolicHotKeyValue"),
+              let enableAddress = dlsym(library, "CGSSetSymbolicHotKeyEnabled") else {
+            fail("live shortcut registration is unavailable on this macOS version.")
+        }
+        let set = unsafeBitCast(setAddress, to: SetHotKey.self)
+        let setEnabled = unsafeBitCast(enableAddress, to: SetEnabled.self)
+        for (identifier, modifiers) in bindings {
+            let id = Int32(identifier)!
+            guard set(id, 65535, 49, modifiers) == 0 else {
+                fail("could not register shortcut \(identifier).")
+            }
+        }
+        for (identifier, _) in bindings {
+            guard setEnabled(Int32(identifier)!, true) == 0 else { fail("could not enable shortcut \(identifier).") }
+        }
+        // WindowServer applies registrations asynchronously.
+        let deadline = Date(timeIntervalSinceNow: 5)
+        repeat {
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+            let ready = bindings.allSatisfy { identifier, expected in
+                var character: UInt16 = 0, key: UInt16 = 0
+                var modifiers: UInt32 = 0
+                let id = Int32(identifier)!
+                return get(id, &character, &key, &modifiers) == 0 && key == 49 && modifiers == expected && enabled(id)
+            }
+            if ready { break }
+        } while Date() < deadline
     }
 
     for (identifier, expectedModifiers) in bindings {
@@ -57,7 +71,7 @@ func configureShortcuts(verifyOnly: Bool) {
         var modifiers: UInt32 = 0
         guard get(id, &character, &key, &modifiers) == 0,
               key == 49, modifiers == expectedModifiers, enabled(id) else {
-            fail("binding \(identifier) was not applied in the active session. Close Keyboard settings and rerun setup; no logout is needed.")
+            fail("binding \(identifier) was not applied in the active session (key \(key), modifiers \(modifiers), enabled \(enabled(id))).")
         }
     }
     print("Live shortcuts verified: Control-Space input switching; Command-Space Spotlight.")

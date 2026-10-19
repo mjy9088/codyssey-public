@@ -75,6 +75,7 @@ def environment(root: Path) -> tuple[dict[str, str], Path]:
     env.update(
         {
             "HOME": str(home),
+            "CODYSSEY_DOCK_SETUP": "1",
             "USER": "test-user",
             "FAKE_DEFAULTS_STATE": str(state),
             "UNAME_BIN": str(fake_bin / "uname"),
@@ -86,6 +87,7 @@ def environment(root: Path) -> tuple[dict[str, str], Path]:
             "CODYSSEY_SYSTEM_APPLICATIONS_DIR": str(systems),
         }
     )
+    env.pop("CODYSSEY_INPUT_SWITCH", None)
     return env, state
 
 
@@ -97,6 +99,7 @@ def assert_success_contract(state: Path) -> None:
     text = read_domain(state, "NSGlobalDomain")
     assert all(text[key] is False for key in TEXT_KEYS)
     assert text["UnrelatedText"] == "keep"
+    assert text["TISRomanSwitchState"] == 0
     dock = read_domain(state, "com.apple.dock")
     assert dock["show-recents"] is False and dock["static-only"] is False
     assert dock["persistent-others"] == []
@@ -163,11 +166,15 @@ def test_export_and_write_failures_are_isolated_and_rolled_back() -> None:
         env["FAKE_WRITE"] = "NSGlobalDomain:NSAutomaticSpellingCorrectionEnabled"
         env["FAKE_EXPORT"] = "com.apple.HIToolbox"
         result = apply(env)
-        assert result.returncode == 0
-        assert state_path(state, "NSGlobalDomain").read_bytes() == original_text
+        assert result.returncode == 1
+        assert "continuing remaining groups" in result.stderr
+        remaining_text = read_domain(state, "NSGlobalDomain")
+        assert remaining_text.pop("TISRomanSwitchState") == 0
+        assert remaining_text == plistlib.loads(original_text)
         assert state_path(state, "com.apple.HIToolbox").read_bytes() == original_input
         assert read_domain(state, "com.apple.dock")["show-recents"] is False
-        assert "AppleSymbolicHotKeys" in read_domain(state, "com.apple.symbolichotkeys")
+        hotkeys = read_domain(state, "com.apple.symbolichotkeys")["AppleSymbolicHotKeys"]
+        assert hotkeys["60"]["value"]["parameters"] == [32, 49, 262144]
 
 
 def test_absent_domain_is_created_only_after_confirmed_absent() -> None:
@@ -190,7 +197,7 @@ def test_last_existing_domain_export_failure_is_not_absence() -> None:
         original = state_path(state, "com.apple.symbolichotkeys").read_bytes()
         env["FAKE_EXPORT"] = "com.apple.symbolichotkeys"
         result = apply(env)
-        assert result.returncode == 0
+        assert result.returncode == 1
         assert state_path(state, "com.apple.symbolichotkeys").read_bytes() == original
         backup_root = Path(env["HOME"]) / "Library/Application Support/codyssey-init/macos-backups"
         assert list(backup_root.glob("*/hotkeys.missing")) == []

@@ -206,3 +206,19 @@ INSTALL_LOG="$tmp/install.log" HOME="$install_home" PATH="$install_bin:/usr/bin:
 [[ -x "$install_home/.local/bin/mise" ]]
 [[ ! -e "$install_home/.local/bin/j" ]]
 grep -q 'releases/download/v2026.10.5/mise-v2026.10.5-macos-arm64' "$tmp/install.log"
+
+# A running Docker engine must still reach service/browser setup when the
+# independent macOS preference phase fails (for example, Gureum installation).
+cat >"$work/macos-setup.sh" <<'EOF'
+#!/bin/sh
+exit 17
+EOF
+cat >"$install_bin/zsh" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >>"$INSTALL_LOG"
+EOF
+INSTALL_LOG="$tmp/preference-failure.log" HOME="$install_home" PATH="$install_bin:/usr/bin:/bin" \
+  CODYSSEY_INIT_DIR="$work" bash "$work/init.sh" >"$tmp/preference-failure.out" 2>&1
+grep -q 'macOS preferences failed (exit 17)' "$tmp/preference-failure.out"
+grep -q 'Retry preferences separately:' "$tmp/preference-failure.out"
+grep -Fq -- "-i $work/next-script.zsh" "$tmp/preference-failure.log"

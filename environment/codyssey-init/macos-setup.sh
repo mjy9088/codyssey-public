@@ -15,7 +15,7 @@ system_applications_dir=${CODYSSEY_SYSTEM_APPLICATIONS_DIR:-/System/Applications
   exit 1
 }
 
-input_switch=${CODYSSEY_INPUT_SWITCH:-}
+input_switch=${CODYSSEY_INPUT_SWITCH:-control-space}
 dock_setup=${CODYSSEY_DOCK_SETUP:-}
 case ${1:-} in
   '') ;;
@@ -25,15 +25,6 @@ case ${1:-} in
 esac
 # Use the controlling terminal so curl | sh does not consume installer text.
 if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then
-  while [[ -z $input_switch ]]; do
-    printf 'Korean/English switching: [1] Control-Space (Gureum) [2] Caps Lock (requires compatible input source) (default 1): ' >/dev/tty
-    IFS= read -r answer </dev/tty || answer=1
-    case $answer in
-      ''|1) input_switch=control-space ;;
-      2) input_switch=caps-lock ;;
-      *) printf 'Choose 1 or 2.\n' >/dev/tty ;;
-    esac
-  done
   if [[ -z $dock_setup ]]; then
     printf 'Keep only Terminal and Chrome pinned in the Dock, and remove stacks/recent apps? [y/N] ' >/dev/tty
     IFS= read -r answer </dev/tty || answer=n
@@ -265,32 +256,35 @@ reload_hotkeys() {
   fi
 }
 
-if [[ ${1:-} == --shortcuts-only ]]; then
-  apply_switch_mode && apply_hotkeys && reload_hotkeys || exit 1
-  printf 'Shortcut settings applied; input sources unchanged. Backups: %s\n' "$backup_root"
-  exit 0
-fi
+# Run independent groups even when an earlier group fails. Return a failure
+# summary so callers can report incomplete preferences while continuing setup.
+preference_status=0
+run_group() {
+  local group=$1
+  shift
+  if "$@"; then
+    return 0
+  else
+    local status=$?
+    warn "$group failed (exit $status); continuing remaining groups"
+    preference_status=1
+  fi
+}
 
-if [[ ${1:-} == --input-only ]]; then
-  apply_input_sources
-  keyboard_status=0
-  enable_korean || keyboard_status=$?
-  [[ $keyboard_status == 0 ]] || exit "$keyboard_status"
-  apply_switch_mode || exit 1
-  if [[ $input_switch == control-space ]]; then apply_hotkeys || exit 1; fi
-  reload_hotkeys || exit 1
-  printf 'Korean input configured with %s switching. Test Korean and English in a text field. Backups: %s\n' "$input_switch" "$backup_root"
-  exit 0
+if [[ ${1:-} != --input-only && ${1:-} != --shortcuts-only ]]; then
+  run_group text apply_text
+  if [[ $dock_setup == 1 ]]; then run_group dock apply_dock; fi
 fi
-
-apply_text
-[[ $dock_setup != 1 ]] || apply_dock
-apply_input_sources
-keyboard_status=0
-enable_korean || keyboard_status=$?
-[[ $keyboard_status == 0 ]] || exit "$keyboard_status"
-apply_switch_mode || exit 1
-if [[ $input_switch == control-space ]]; then apply_hotkeys || exit 1; fi
-reload_hotkeys || exit 1
-printf 'macOS preferences applied with group isolation. Backups: %s\n' "$backup_root"
-exit 0
+if [[ ${1:-} != --shortcuts-only ]]; then
+  run_group input-sources apply_input_sources
+  run_group gureum enable_korean
+fi
+run_group input-switch apply_switch_mode
+run_group shortcuts apply_hotkeys
+run_group shortcut-verification reload_hotkeys
+if [[ $preference_status == 0 ]]; then
+  printf 'macOS preferences applied. Backups: %s\n' "$backup_root"
+else
+  printf 'macOS preferences partially applied; review warnings. Backups: %s\n' "$backup_root" >&2
+fi
+exit "$preference_status"

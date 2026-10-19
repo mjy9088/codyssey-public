@@ -92,6 +92,8 @@ def defaults(arguments: list[str]) -> int:
     option = rest[2]
     if option == "-bool":
         data[key] = rest[3].lower() == "true"
+    elif option == "-int":
+        data[key] = int(rest[3])
     elif option == "-array":
         entries: list[PlistValue] = []
         for literal in rest[3:]:

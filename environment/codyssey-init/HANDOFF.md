@@ -13,10 +13,10 @@ Already-enabled sources are reused. If approval times out, rerun input setup and
 Do not log out or reboot the classroom session to complete this flow.
 
 Interactive setup defaults to Control-Space for input switching and Command-Space for Spotlight,
-and asks separately whether to clean up Dock pins. Caps Lock is not reliable in the reference
+without a switching-key prompt, and asks only whether to clean up Dock pins. Caps Lock is not reliable in the reference
 environment; that choice stops before changes rather than silently replacing the input method.
-Close System Settings before applying shortcuts to prevent stale Keyboard-panel preferences from
-restoring old bindings. The shortcut helper reloads and verifies the live WindowServer mappings.
+System Settings being open does not block setup. The shortcut helper registers and verifies the live
+WindowServer mappings; close Keyboard settings and retry only if that verification fails.
 `bash macos-setup.sh --shortcuts-only` changes only shortcuts and leaves input sources alone.
 Verify both Korean composition and English typing in a focused text field.
 
@@ -67,9 +67,9 @@ post-login activation remain part of the future VM test.
 | System Python | 3.9.6; too old for the native Python test suites |
 
 Swift/Xcode Command Line Tools are available on the reference machine. They are required by the
-Carbon input-source helper. The environment-specific live shortcut helper is
-`/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u`.
-Its presence and behavior on another macOS version are not assumed.
+Carbon input-source helper. Live shortcut registration uses SkyLight symbolic-hotkey setters
+and getters, with a bounded wait and independent verification. Their availability and behavior
+on another macOS version are not assumed.
 
 Tailscale's upstream container startup wrapper timed out during browser authentication and
 invalidated login URLs by restarting. The replacement entry point waits without that timeout and
@@ -102,7 +102,7 @@ additional forwarding; that is a fresh-VM compatibility check, not a proven port
 4. Run `bash init.sh`. Leave the auth-key prompt blank for browser login. The script installs/reuses
    the pinned Gureum package and portable browser, starts the services, and opens authentication.
    For an initial unattended pass use `CODYSSEY_OPEN_BROWSER=0 bash init.sh`, then `just browser`.
-5. Choose the switching key and Dock behavior at the prompts. Choose Allow in macOS input-source
+5. Control-Space is applied automatically; choose Dock behavior at the prompt. Choose Allow in macOS input-source
    activation dialogs while the helper waits. If approval times out, rerun
    `bash macos-setup.sh --input-only` in the same session.
 6. In a text field, use the selected switching key in both directions and verify Hangul composition
