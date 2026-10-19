@@ -51,6 +51,17 @@ assert_contains() {
   printf 'ASSERT PASS: %s contains %q\n' "$label" "$expected_fragment"
 }
 
+assert_not_empty() {
+  local label="$1"
+  local actual="$2"
+
+  if [[ -z "$actual" ]]; then
+    printf 'ASSERT FAIL: %s is empty\n' "$label" >&2
+    return 1
+  fi
+  printf 'ASSERT PASS: %s is non-empty\n' "$label"
+}
+
 cleanup_container() {
   docker rm -f "$1" >/dev/null 2>&1 || true
 }
