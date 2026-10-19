@@ -72,5 +72,5 @@ consistency. Explain any necessary cross-project change in the commit message.
 - Keep each coursework subtree independently buildable and limit its build
   contexts to that subtree.
 - Prefer submitting the canonical subtree unchanged. If a destination requires a
-  standalone root, use the temporary export described in
-  `docs/SUBMISSION_WORKFLOW.md`; do not merge export-only changes back.
+  standalone root, use the disposable-worktree or history-free archive procedure
+  in `docs/SUBMISSION_WORKFLOW.md`; do not merge submission-only changes back.

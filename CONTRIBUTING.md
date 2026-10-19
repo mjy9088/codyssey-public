@@ -30,6 +30,7 @@ the entire monorepo.
 ## Submission
 
 Submit the coursework subtree directly when the destination accepts the monorepo
-layout. If a destination requires a standalone root, create a temporary export by
-following `docs/SUBMISSION_WORKFLOW.md`. Do not apply submission-only deletion or
-renaming to this repository.
+layout. If a destination requires a standalone root, follow the history-preserving
+temporary-worktree procedure in `docs/SUBMISSION_WORKFLOW.md`, or use its archive
+procedure when history must be omitted. Do not apply submission-only deletion or
+renaming to the normal `public` working tree.

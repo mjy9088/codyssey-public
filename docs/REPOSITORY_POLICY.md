@@ -11,8 +11,8 @@ boundaries. A file belongs in exactly one canonical location.
 | Private workspace | Private | Assignment text, restricted references, private notes, credentials, personal data, publication-uncertain material | Public collaboration or a hand-in URL |
 
 `codyssey-public` is the source of truth for publishable work. Any temporary
-submission export must be reproducible from a reviewed public revision and must
-not become the only copy of implementation work.
+submission worktree or history-free export must be reproducible from a reviewed
+public revision and must not become the only copy of implementation work.
 
 ## Classification rule
 
