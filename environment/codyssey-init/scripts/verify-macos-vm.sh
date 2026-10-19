@@ -9,6 +9,8 @@ fi
 [[ $(uname -s) == Darwin ]] || { printf 'This verifier requires macOS.\n' >&2; exit 1; }
 export PATH="/opt/homebrew/opt/python@3.13/libexec/bin:/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/bin:$PATH"
 [[ $(id -u) != 0 ]] || { printf 'Run as the VM desktop user, not root.\n' >&2; exit 1; }
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+. "$root/lib/preparation.sh"
 started=0 cleaned=0 work=
 cleanup() {
   result=$1 cleanup_result=0
@@ -16,7 +18,7 @@ cleanup() {
   cleaned=1
   trap - EXIT
   if (( started )); then
-    if ! (cd "$work" && docker compose down --volumes); then
+    if ! (cd "$work" && run_quiet_step 'Removing test services' docker compose down --volumes); then
       printf 'Cleanup failed; private working directory retained at %s\n' "$work" >&2
       cleanup_result=1
     fi
@@ -40,7 +42,6 @@ trap finish EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 for tool in docker python3 curl zsh nc; do
   command -v "$tool" >/dev/null || { printf 'Missing guest tool: %s\n' "$tool" >&2; exit 1; }
 done

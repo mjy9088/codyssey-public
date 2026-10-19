@@ -38,6 +38,7 @@ tart() { MISE_QUIET=1 mise exec tart@2.40.1 -- tart "$@"; }
 tart --version >/dev/null
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 . "$root/scripts/vm-files.sh"
+. "$root/lib/preparation.sh"
 export TART_NO_AUTO_PRUNE=1
 created=0 prepared=0 runner= transfer= cleaned=0
 cleanup() {
@@ -49,7 +50,7 @@ cleanup() {
   if (( created )); then
     # Flush the nested Linux disk before stopping macOS; otherwise removed
     # containers can reappear when a retained VM is booted or cloned.
-    if (( prepared )) && ! tart exec "$name" /opt/homebrew/bin/colima stop --profile codyssey-verify; then
+    if (( prepared )) && ! run_quiet_step 'Stopping test Docker' tart exec "$name" /opt/homebrew/bin/colima stop --profile codyssey-verify; then
       printf 'Could not cleanly stop the guest Docker VM.\n' >&2
       cleanup_result=1
     fi

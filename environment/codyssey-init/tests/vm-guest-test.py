@@ -120,7 +120,7 @@ sys.exit(0)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("PASS:", result.stdout)
         self.assertEqual(sum("compose down --volumes" in call for call in calls), 1)
-        self.assertLess(result.stdout.index("COMPOSE_CLEANUP_COMPLETE"), result.stdout.index("PASS:"))
+        self.assertNotIn("COMPOSE_CLEANUP_COMPLETE", result.stdout)
 
     def test_verifier_local_lab_failure_prevents_success_and_cleans(self) -> None:
         result, calls = self.run_script("verify-macos-vm.sh", VM_LAB_STATUS="27")
