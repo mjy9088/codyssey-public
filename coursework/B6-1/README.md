@@ -2,6 +2,8 @@
 
 This SQL-first exercise models a small library using SQLite 3.49.2. It contains no backend framework or network service: the deliverables are schema, deterministic sample records, 17 documented queries, and the required query-result text.
 
+Database dialect: SQLite 3.49.2.
+
 ## Run
 
 With a local SQLite CLI:

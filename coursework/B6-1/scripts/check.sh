@@ -26,6 +26,34 @@ tables=$(sqlite3 -batch "$database" \
   "SELECT group_concat(name, '|') FROM (SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name);")
 test "$tables" = 'books|categories|members|rentals' || { printf 'Table inventory mismatch: %s\n' "$tables" >&2; exit 1; }
 
+column_affinities=$(sqlite3 -batch "$database" "
+  WITH columns(table_name, cid, name, declared_type) AS (
+    SELECT 'books', cid, name, type FROM pragma_table_xinfo('books')
+    UNION ALL SELECT 'categories', cid, name, type FROM pragma_table_xinfo('categories')
+    UNION ALL SELECT 'members', cid, name, type FROM pragma_table_xinfo('members')
+    UNION ALL SELECT 'rentals', cid, name, type FROM pragma_table_xinfo('rentals')
+  )
+  SELECT group_concat(item, '|') FROM (
+    SELECT table_name || '.' || name || ':' ||
+      CASE
+        WHEN instr(upper(declared_type), 'INT') > 0 THEN 'INTEGER'
+        WHEN instr(upper(declared_type), 'CHAR') > 0
+          OR instr(upper(declared_type), 'CLOB') > 0
+          OR instr(upper(declared_type), 'TEXT') > 0 THEN 'TEXT'
+        WHEN declared_type = '' OR instr(upper(declared_type), 'BLOB') > 0 THEN 'BLOB'
+        WHEN instr(upper(declared_type), 'REAL') > 0
+          OR instr(upper(declared_type), 'FLOA') > 0
+          OR instr(upper(declared_type), 'DOUB') > 0 THEN 'REAL'
+        ELSE 'NUMERIC'
+      END AS item
+    FROM columns
+    ORDER BY table_name, cid
+  );")
+expected_column_affinities='books.book_id:INTEGER|books.category_id:INTEGER|books.isbn:TEXT|books.title:TEXT|books.author:TEXT|books.published_year:INTEGER|books.copy_count:INTEGER|categories.category_id:INTEGER|categories.name:TEXT|categories.shelf_code:TEXT|members.member_id:INTEGER|members.full_name:TEXT|members.email:TEXT|members.joined_on:TEXT|members.membership_status:TEXT|rentals.rental_id:INTEGER|rentals.member_id:INTEGER|rentals.book_id:INTEGER|rentals.borrowed_on:TEXT|rentals.due_on:TEXT|rentals.returned_on:TEXT|rentals.status:TEXT'
+test "$column_affinities" = "$expected_column_affinities" || {
+  printf 'Column/affinity contract mismatch: %s\n' "$column_affinities" >&2; exit 1;
+}
+
 primary_keys=$(sqlite3 -batch "$database" "
   SELECT group_concat(item, '|') FROM (
     SELECT 'books.' || name AS item FROM pragma_table_info('books') WHERE pk = 1
@@ -70,6 +98,35 @@ unique_columns=$(sqlite3 -batch "$database" "
   );")
 test "$unique_columns" = 'books.isbn|categories.name|categories.shelf_code|members.email' || {
   printf 'UNIQUE inventory mismatch: %s\n' "$unique_columns" >&2; exit 1;
+}
+
+indexes=$(sqlite3 -batch "$database" "
+  WITH explicit_indexes(table_name, index_name, is_unique, is_partial) AS (
+    SELECT 'books', name, \"unique\", partial FROM pragma_index_list('books') WHERE origin = 'c'
+    UNION ALL SELECT 'categories', name, \"unique\", partial FROM pragma_index_list('categories') WHERE origin = 'c'
+    UNION ALL SELECT 'members', name, \"unique\", partial FROM pragma_index_list('members') WHERE origin = 'c'
+    UNION ALL SELECT 'rentals', name, \"unique\", partial FROM pragma_index_list('rentals') WHERE origin = 'c'
+  )
+  SELECT group_concat(item, '|') FROM (
+    SELECT table_name || '.' || index_name || ':' || is_unique || ':' || is_partial || ':' ||
+      (SELECT group_concat(name, ',') FROM (
+        SELECT name FROM pragma_index_info(index_name) ORDER BY seqno
+      )) AS item
+    FROM explicit_indexes
+    ORDER BY table_name, index_name
+  );")
+test "$indexes" = 'rentals.idx_rentals_book_status:0:0:book_id,status|rentals.idx_rentals_member_id:0:0:member_id' || {
+  printf 'Index contract mismatch: %s\n' "$indexes" >&2; exit 1;
+}
+
+grep -Fqx 'Database dialect: SQLite 3.49.2.' "$root/README.md" || {
+  printf 'README must identify the pinned SQLite 3.49.2 dialect\n' >&2; exit 1;
+}
+grep -Fqx -- '-- SQLite-specific: julianday() performs date arithmetic.' "$root/sql/03_queries.sql" || {
+  printf 'Q11 must identify julianday() as SQLite-specific\n' >&2; exit 1;
+}
+grep -Fqx -- '-- SQLite-specific: sqlite_master provides schema introspection.' "$root/sql/03_queries.sql" || {
+  printf 'Q17 must identify sqlite_master introspection as SQLite-specific\n' >&2; exit 1;
 }
 
 expect_rejected() {

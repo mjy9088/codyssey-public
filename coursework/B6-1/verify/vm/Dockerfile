@@ -3,6 +3,7 @@ ARG ALPINE_IMAGE=alpine@sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d
 FROM ${ALPINE_IMAGE} AS runtime-root
 RUN apk add --no-cache sqlite=3.49.2-r1
 WORKDIR /app
+COPY README.md README.md
 COPY sql/ sql/
 COPY results/ results/
 COPY scripts/check.sh scripts/check.sh

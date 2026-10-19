@@ -82,6 +82,7 @@ GROUP BY c.category_id, c.name
 ORDER BY total_copies DESC, c.name;
 
 -- Q11 Aggregate: SQLite julianday computes average completed-loan duration.
+-- SQLite-specific: julianday() performs date arithmetic.
 SELECT 'Q11 average completed duration' AS result_set;
 SELECT ROUND(AVG(julianday(returned_on) - julianday(borrowed_on)), 2) AS average_days
 FROM rentals
@@ -123,6 +124,7 @@ VALUES (16, 10, 2, '2026-02-10', '2026-02-24', NULL, 'borrowed');
 SELECT rental_id, member_id, book_id, status FROM rentals WHERE rental_id = 16;
 
 -- Q17 Index: SQLite metadata confirms the search index used for member loan lookups.
+-- SQLite-specific: sqlite_master provides schema introspection.
 SELECT 'Q17 member lookup index' AS result_set;
 CREATE INDEX IF NOT EXISTS idx_rentals_member_id ON rentals(member_id);
 SELECT name, sql
