@@ -75,9 +75,13 @@ The script reuses `mise` from the current path or `$HOME/.local/bin`. When it is
 and x86_64 use the official `mise` v2026.10.5 release binary with a repository-pinned SHA-256 value.
 No mutable shell installer is executed. Automatic installation requires `curl`, `shasum`, `cut`,
 `install`, and `mktemp`; unsupported systems and architectures fail clearly. The repository-owned
-`mise.toml` pins `just` to `1.43.0`. `next-script.zsh` runs under real zsh, trusts the local config,
-explicitly installs `just@1.43.0`, and refreshes the shell environment with `mise env -s zsh` before
-Compose starts.
+`mise.toml` pins `just` to `1.43.0`. Startup preparation runs with an explicitly empty exported
+`TS_AUTHKEY`: it trusts the local config, installs `just@1.43.0`, builds the Tailscale image, and
+pulls the pinned GOST images. `next-script.zsh` refreshes the shell environment with
+`mise env -s zsh` before Compose starts.
+Portable-browser preparation is deliberately not part of this worker: `--prepare` updates the
+dedicated profile and extension copy, so it stays in the foreground browser path rather than racing
+another profile operation.
 
 `init.sh` reuses a working Docker engine. Otherwise, on macOS with no explicit `DOCKER_HOST` or
 `DOCKER_CONTEXT`, it starts the installed OrbStack through its bundled `orb start` command, bypassing
@@ -88,8 +92,14 @@ The fallback tools path is also added to `.zshrc` for later terminals. OrbStack 
 be installed; the bootstrap does not download it. The CLI is documented in
 [OrbStack commands](https://docs.orbstack.dev/machines/commands).
 
-`init.sh` then adds the user-local `mise` path and zsh activation block once,
-and launches `next-script.zsh` as an interactive zsh script with terminal input restored when a controlling terminal is available. Secret input is read directly and silently from `/dev/tty`.
+`init.sh` then starts preparation in the background before any optional `j` or Dock prompt and keeps
+ownership of that worker through Tailscale input and preparation completion. It prints concise start,
+wait, and completion status while preparation output stays in a private temporary log, so build output
+cannot interleave with prompts. The log is removed after success, failure, or cancellation. Only after
+successful preparation does `init.sh` launch `next-script.zsh --prepared`; no live worker crosses the
+Bash-to-zsh boundary. Running `next-script.zsh` directly performs the same preparation under zsh's
+ownership. Secret input is read directly and silently from `/dev/tty`, and the exact saved terminal
+state is restored.
 
 When standard output is a terminal and a controlling terminal is available, `init.sh` offers to
 install `~/.local/bin/j`, reading and writing the prompt through `/dev/tty`. This also works when the
@@ -116,13 +126,18 @@ matched. Terminal echo is restored from the exact saved `stty -g` state on succe
 signals. If no controlling terminal exists, the script safely creates an empty mode-`0600` `.env` and
 continues to the browser-login path without attempting to read or truncate `/dev/tty`.
 
-Compose is started with a build:
+Authentication and input-independent preparation may overlap, but services do not start until both
+are complete. After the prepared build and pulls succeed, Compose starts without rebuilding:
 
 ```sh
-docker compose up -d --build
+docker compose up -d --no-build
 ```
 
-The bootstrap waits for all three containers and a Tailscale `Running` or `NeedsLogin` state. A
+Preparation failure stops startup before any service is created. Caller-supplied legacy preparation
+variables are ignored. Signals terminate only worker-owned process groups, allow a bounded grace
+period, then kill and reap stubborn descendants before removing the private log. The bootstrap then
+waits for all three containers and a
+Tailscale `Running` or `NeedsLogin` state. A
 `NeedsLogin` state is not reported as a connected tailnet: the script extracts and prints the actual
 `https://login.tailscale.com/...` authentication URL from Tailscale's output. The entry point keeps the daemon alive throughout browser
 authentication, avoiding the upstream container wrapper's 60-second startup timeout. It reads the current URL from status, with the latest logged URL as a fallback, and waits up to 60 seconds
@@ -392,7 +407,9 @@ caches, and unrelated artifacts; it injects a synthetic GOST fixture instead. Bo
 successful, failed, repeated, and conflicting immutable remote installs; preflight atomicity and
 staging cleanup; verified missing-`mise` installation; exported-key and existing-`.env` precedence;
 real-zsh execution; exact terminal-state restoration; browser-login URL handling; argument and exit
-status preservation; and Bash-only rebuild scope. The same command also runs stateful macOS tests for
+status preservation; Bash-only rebuild scope; preparation overlap across unanswered PTY prompts;
+service-start gating; failure propagation; signal cleanup; and secret-free buffered output. The same
+command also runs stateful macOS tests for
 all preference groups, idempotence, private backups, confirmed absence versus export failure,
 group-level rollback, interruption recovery, failed-rollback snapshot retention, app guards, and
 current-user Dock restart behavior.
