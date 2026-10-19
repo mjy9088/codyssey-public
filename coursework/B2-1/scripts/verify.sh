@@ -11,6 +11,7 @@ case "$mode" in
 esac
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+sh "$root/verify/test-source-contract.sh" "$root"
 project="ledger-$mode-$$"
 compose() { docker compose -p "$project" -f "$root/compose.yaml" "$@"; }
 cleanup() { compose --profile verify --profile vm down --volumes --remove-orphans >/dev/null 2>&1 || true; }
