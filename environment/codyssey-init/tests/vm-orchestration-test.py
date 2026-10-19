@@ -43,6 +43,8 @@ if args[0] == "exec":
         open(marker, "w").write(str(count))
         if count < 3:
             sys.exit(1)
+    elif any("check-preinstalled-apps.py" in item for item in args) and scenario == "preflight-failure":
+        sys.exit(21)
     elif any("prepare-macos-vm.sh" in item for item in args):
         if scenario == "prepare-failure": sys.exit(17)
         if scenario == "prepare-interrupt": sys.exit(130)
@@ -108,12 +110,23 @@ class OrchestrationTests(unittest.TestCase):
         self.assertTrue(any("/Users/synthetic/guest work/scripts/verify-macos-vm.sh" in cmd for cmd in commands))
         self.assertLess(result.stdout.index("TART_STOP_COMPLETE"), result.stdout.index("PASS:"))
 
-    def test_preinstalled_mode_skips_homebrew_colima_and_context_override(self):
+    def test_preinstalled_checks_apps_and_cold_start_before_test_docker(self):
         result, commands, names = self.run_case(extra=("--preinstalled",))
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse(any(any("prepare-macos-vm.sh" in arg or "colima" in arg for arg in cmd) for cmd in commands))
-        self.assertTrue(any(cmd[-2:] == ["--disposable", "--preinstalled"] for cmd in commands))
-        self.assertIn("lib/bootstrap-tools.sh", names)
+        def position(suffix):
+            return next(i for i, cmd in enumerate(commands) if any(arg.endswith(suffix) for arg in cmd))
+        self.assertLess(position("check-preinstalled-apps.py"), position("preinstalled-tools-test.py"))
+        self.assertLess(position("preinstalled-tools-test.py"), position("prepare-macos-vm.sh"))
+        self.assertLess(position("prepare-macos-vm.sh"), position("verify-macos-vm.sh"))
+        self.assertIn("scripts/check-preinstalled-apps.py", names)
+        self.assertTrue(any("DOCKER_CONTEXT=colima-codyssey-verify" in cmd for cmd in commands))
+
+    def test_bad_preinstalled_image_fails_before_provisioning(self):
+        result, commands, _ = self.run_case('preflight-failure', ('--preinstalled',))
+        self.assertEqual(result.returncode, 21, result.stderr)
+        self.assertFalse(any(any('prepare-macos-vm.sh' in arg for arg in cmd) for cmd in commands))
+        self.assertIn(['stop', 'synthetic-test'], commands)
+        self.assertNotIn('PASS:', result.stdout)
 
     def test_build_preinstalled_stops_and_retains_new_base_without_verification(self):
         result, commands, names = self.run_case(extra=("--build-preinstalled",))

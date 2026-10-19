@@ -6,8 +6,8 @@ usage() {
 Usage: bash scripts/create-macos-vm.sh --image SOURCE [--name NAME] [--delete-on-success] [--preinstalled]
 SOURCE: reviewed local Tart base VM or registry image pinned with @sha256:...
 Requires Apple Silicon macOS 14+, mise-managed Tart, and a logged-in desktop with Guest Agent.
-Default provisioning needs Homebrew; --preinstalled uses installed OrbStack and Gureum.
-Real OrbStack needs nested virtualization, which Tart macOS guests may not provide.
+Provisioning needs Homebrew. --preinstalled checks installed apps and cold-start fixtures
+before using software-emulated Docker; the OrbStack engine is never required.
 Creates, provisions, and verifies a fresh VM.
 Stops and retains the VM on failure. No host home directory is shared.
 EOF
@@ -112,9 +112,11 @@ rm -f "$transfer"
 transfer=
 if (( build_preinstalled )); then
   tart exec "$name" /bin/bash "$guest_root/scripts/install-preinstalled-apps.sh" --disposable
-elif (( preinstalled )); then
-  tart exec "$name" /bin/bash "$guest_root/scripts/verify-macos-vm.sh" --disposable --preinstalled
 else
+  if (( preinstalled )); then
+    tart exec "$name" /usr/bin/python3 "$guest_root/scripts/check-preinstalled-apps.py"
+    tart exec "$name" /usr/bin/python3 "$guest_root/tests/preinstalled-tools-test.py"
+  fi
   tart exec "$name" /bin/bash "$guest_root/scripts/prepare-macos-vm.sh" --disposable
   prepared=1
   tart exec "$name" /usr/bin/env DOCKER_CONTEXT=colima-codyssey-verify \

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Synthetic cold-start checks; never install apps or start a real engine."""
 import os
+import importlib.util
+import plistlib
 from pathlib import Path
 import subprocess
 import tempfile
@@ -10,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ColdStartTests(unittest.TestCase):
-    def run_case(self, scenario="cold", **overrides):
+    def run_case(self, scenario="cold", entrypoint=False, **overrides):
         with tempfile.TemporaryDirectory(prefix="orb-cold-") as directory:
             work = Path(directory)
             home = work / "home"
@@ -46,7 +48,19 @@ class ColdStartTests(unittest.TestCase):
                 env.pop(key, None)
             env.update(overrides)
             script = 'die() { echo "$*" >&2; exit 1; }; . "$1/lib/bootstrap-tools.sh"; prepare_docker; docker info'
-            result = subprocess.run(['/bin/bash', '-c', script, 'test', str(ROOT)], env=env,
+            if entrypoint:
+                for name, content in {
+                    'mise': '#!/bin/sh\nexit 0\n',
+                    'zsh': '#!/bin/sh\nprintf "zsh %s\\n" "$*" >> "$CALLS"\n',
+                }.items():
+                    path = fakebin / name
+                    path.write_text(content)
+                    path.chmod(0o700)
+                env.update(TS_AUTHKEY='', CODYSSEY_MACOS_SETUP='0', CODYSSEY_OPEN_BROWSER='0')
+                command = ['/bin/bash', str(ROOT / 'init.sh')]
+            else:
+                command = ['/bin/bash', '-c', script, 'test', str(ROOT)]
+            result = subprocess.run(command, env=env,
                                     text=True, capture_output=True, timeout=10)
             calls = (work/'calls').read_text() if (work/'calls').exists() else ''
             plugins = {p.name: str(p.readlink()) if p.is_symlink() else p.read_text() for p in plugin_dir.iterdir()}
@@ -58,6 +72,14 @@ class ColdStartTests(unittest.TestCase):
         self.assertEqual(calls, 'start\n')
         self.assertTrue(plugins['docker-compose'].endswith('/xbin/docker-compose'))
         self.assertTrue(plugins['docker-buildx'].endswith('/xbin/docker-buildx'))
+
+    def test_full_installer_reaches_prepared_zsh_from_missing_docker(self):
+        result, calls, plugins = self.run_case(entrypoint=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(calls.startswith('start\n'))
+        self.assertIn('--prepared', calls)
+        self.assertIn('docker-compose', plugins)
+        self.assertIn('Preparing environment', result.stdout)
 
     def test_existing_plugin_is_preserved(self):
         result, _, plugins = self.run_case('existing-plugin')
@@ -84,6 +106,58 @@ class ColdStartTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(message, result.stderr)
                 self.assertEqual(calls, 'start\n')
+
+
+class InstalledAppTests(unittest.TestCase):
+    def fixture(self, work):
+        spec = importlib.util.spec_from_file_location('image_check', ROOT / 'scripts/check-preinstalled-apps.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        home = work / 'home'
+        apps = home / 'Applications'
+        for path, identifier, version in (
+            (apps / 'OrbStack.app', 'dev.kdrag0n.MacVirt', '2.2.4'),
+            (apps / 'Google Chrome.app', 'com.google.Chrome', '155.0'),
+            (home / 'Library/Input Methods/Gureum.app', 'org.youknowone.inputmethod.Gureum', '1.13.2'),
+        ):
+            (path / 'Contents').mkdir(parents=True)
+            (path / 'Contents/Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier': identifier, 'CFBundleShortVersionString': version}))
+        for name in ('bin/orb', 'xbin/docker', 'xbin/docker-compose', 'xbin/docker-buildx'):
+            path = apps / 'OrbStack.app/Contents/MacOS' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('#!/bin/sh\nexit 0\n')
+            path.chmod(0o700)
+        system = work / 'System/Applications'
+        (system / 'Utilities/Terminal.app').mkdir(parents=True)
+        return module, home, work / 'Applications', work / 'Library/Input Methods', system
+
+    def test_user_local_apps_and_bundled_plugins_are_recognized(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module, *arguments = self.fixture(Path(directory))
+            self.assertEqual([path.name for path in module.inspect(*arguments)], ['docker', 'docker-compose', 'docker-buildx'])
+
+    def test_missing_plugin_rejected_before_running_any_app(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module, *arguments = self.fixture(Path(directory))
+            (arguments[0] / 'Applications/OrbStack.app/Contents/MacOS/xbin/docker-compose').unlink()
+            with self.assertRaisesRegex(RuntimeError, 'not executable'):
+                module.inspect(*arguments)
+
+    def test_unexpected_bundle_identity_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module, *arguments = self.fixture(Path(directory))
+            info = arguments[0] / 'Applications/OrbStack.app/Contents/Info.plist'
+            info.write_bytes(plistlib.dumps({'CFBundleIdentifier': 'synthetic.other-app'}))
+            with self.assertRaisesRegex(RuntimeError, 'identity'):
+                module.inspect(*arguments)
+
+    def test_wrong_gureum_version_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module, *arguments = self.fixture(Path(directory))
+            info = arguments[0] / 'Library/Input Methods/Gureum.app/Contents/Info.plist'
+            info.write_bytes(plistlib.dumps({'CFBundleIdentifier': 'org.youknowone.inputmethod.Gureum', 'CFBundleShortVersionString': '0.0'}))
+            with self.assertRaisesRegex(RuntimeError, '1.13.2'):
+                module.inspect(*arguments)
 
 
 if __name__ == '__main__':

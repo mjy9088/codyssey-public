@@ -13,6 +13,10 @@ export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/bin:$PATH"
 [[ $(id -u) != 0 ]] || { printf 'Run as the VM desktop user, not root.\n' >&2; exit 1; }
 command -v brew >/dev/null || { printf 'The guest image must include Homebrew.\n' >&2; exit 1; }
 
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+. "$root/lib/preparation.sh"
+printf 'Preparing software-emulated test Docker…\n'
+
 colima_owned=0
 cleanup() {
   result=$?
@@ -28,9 +32,14 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # Host and guest dependencies are intentionally separate. No nested hypervisor is used.
-brew install colima lima-additional-guestagents docker docker-compose docker-buildx qemu python@3.13
+run_quiet_step 'Installing guest tools' brew install colima lima-additional-guestagents docker docker-compose docker-buildx qemu python@3.13
+# Base-image preparation deliberately unlinks Docker. brew install alone can
+# leave an already installed formula unlinked.
+if ! command -v docker >/dev/null; then
+  run_quiet_step 'Linking test Docker CLI' brew link docker
+fi
 if [[ ! -d '/Applications/Google Chrome.app' && ! -d "$HOME/Applications/Google Chrome.app" ]]; then
-  brew install --cask google-chrome
+  run_quiet_step 'Installing Chrome' brew install --cask google-chrome
 fi
 mkdir -p "$HOME/.docker/cli-plugins"
 for plugin_name in docker-compose docker-buildx; do
@@ -41,10 +50,10 @@ for plugin_name in docker-compose docker-buildx; do
 done
 # Cross-architecture x86_64 on arm64 forces QEMU TCG rather than Apple's hypervisor.
 colima_owned=1
-colima start --profile codyssey-verify --vm-type qemu --arch x86_64 \
+run_quiet_step 'Starting test Docker' colima start --profile codyssey-verify --vm-type qemu --arch x86_64 \
   --cpu-type max --cpus 2 --memory 4 --disk 30 --runtime docker
 docker --context colima-codyssey-verify info >/dev/null
-docker --context colima-codyssey-verify compose version
+docker --context colima-codyssey-verify compose version >/dev/null
 colima_owned=0
 trap - EXIT
 printf 'Docker ready. Run: DOCKER_CONTEXT=colima-codyssey-verify bash scripts/verify-macos-vm.sh --disposable\n'
