@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "playwright test",
+    "test": "npm run test:contracts && npm run test:browser",
+    "test:browser": "playwright test",
+    "test:contracts": "node --test tests/source-contract.contract.mjs",
     "test:list": "playwright test --list"
   },
   "devDependencies": {

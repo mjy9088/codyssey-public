@@ -5,6 +5,10 @@ RUN npm ci --ignore-scripts --no-audit --no-fund \
     && mkdir artifacts && chown pwuser:pwuser artifacts
 COPY playwright.config.mjs ./
 COPY tests/ tests/
+COPY index.html ./
+COPY css/ css/
+COPY js/ js/
+COPY images/ images/
 COPY docs/screenshots/ docs/screenshots/
 RUN chmod -R a+rX /work && chown -R pwuser:pwuser artifacts docs/screenshots
 USER pwuser
