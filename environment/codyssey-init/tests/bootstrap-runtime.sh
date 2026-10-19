@@ -110,6 +110,34 @@ TS_AUTHKEY='' NEXT_STATE=NeedsLogin CODYSSEY_OPEN_BROWSER=1 \
 grep -q '<open><https://login.tailscale.com/a/synthetic>' "$log"
 grep -q '<open><-a><Google Chrome>' "$log"
 
+cat >"$fakebin/uname" <<'EOF'
+#!/bin/sh
+printf 'Darwin\n'
+EOF
+cat >"$work/scripts/tailnet-browser.sh" <<'EOF'
+#!/bin/sh
+printf '<portable><%s>\n' "$1" >>"$TEST_LOG"
+EOF
+chmod 0755 "$fakebin/uname"
+: >"$log"
+TS_AUTHKEY='' NEXT_STATE=NeedsLogin CODYSSEY_BROWSER=portable CODYSSEY_OPEN_BROWSER=1 \
+  zsh "$work/next-script.zsh" </dev/null >"$tmp/macos-browser.out"
+grep -qx '<open><https://login.tailscale.com/a/synthetic>' "$log"
+grep -qx '<portable><http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080>' "$log"
+if grep -q '<portable><https://login.tailscale.com/' "$log"; then
+  printf 'login used the unauthenticated Tailnet browser\n' >&2
+  exit 1
+fi
+: >"$log"
+TS_AUTHKEY='' NEXT_STATE=NeedsLogin CODYSSEY_BROWSER=portable CODYSSEY_OPEN_BROWSER=0 \
+  zsh "$work/next-script.zsh" </dev/null >"$tmp/macos-headless.out"
+if grep -Eq '<open>|<portable>' "$log"; then
+  printf 'headless macOS bootstrap launched a browser\n' >&2
+  exit 1
+fi
+rm "$fakebin/uname"
+cp "$root/scripts/tailnet-browser.sh" "$work/scripts/tailnet-browser.sh"
+
 # Split the synthetic key prefix so secret scanners do not mistake this test
 # fixture for a real Tailscale auth key; shell concatenation preserves its value.
 source "$work/lib/auth.sh"

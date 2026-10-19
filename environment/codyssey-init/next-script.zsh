@@ -28,10 +28,10 @@ fi
 
 open_browser() {
   local url=$1
-  if [[ $(uname -s) == Darwin && ${CODYSSEY_BROWSER:-portable} != system ]]; then
-    bash "$root/scripts/tailnet-browser.sh" "$url"
-  elif [[ $url == https://login.tailscale.com/* ]]; then
+  if [[ $url == https://login.tailscale.com/* ]]; then
     open "$url"
+  elif [[ $(uname -s) == Darwin && ${CODYSSEY_BROWSER:-portable} != system ]]; then
+    bash "$root/scripts/tailnet-browser.sh" "$url"
   else
     open -a 'Google Chrome' "$url" 2>/dev/null || open "$url"
   fi
