@@ -56,9 +56,16 @@ exit values 124 or 137 without that marker remain native target exits.
 The private wrapper must capture timeout/docker output directly to a mode-0600 raw file and save the
 command's status before normalizing carriage returns into a separate local file. Validation requires
 status zero, one completion marker, one case-end marker for each of the six named cases, and no blocked
-or failure marker. Guest extraction failures must emit failure/blocked markers and must never emit the
-completion marker. The synthetic regression test exercises accepted success plus rejected timeout,
-blocked-marker, and missing-case paths without using restricted input.
+or failure marker. The begin, case-end, and completion markers must share the wrapper's fresh run
+identity and input digest, and every case must carry its own run-bound identity. Guest extraction
+failures must emit failure/blocked markers and must never emit the completion marker. The synthetic
+regression test exercises accepted success plus rejected timeout, stale-run, different-input,
+stale-case, blocked-marker, and missing-case paths without using restricted input.
+
+Run identity, input digest, and case identity are accidental-staleness and mixing controls, not a
+trusted provenance system. A local operator can alter the workflow or evidence. These markers do not
+attest that the executable produced the log, that the report is complete, or that its claims are true;
+reviewers must interpret the underlying observations and controls directly.
 
 Any private report must label observations literally. A timeout with a PID is only “unresponsive under
 the observation window” unless thread states and logs support a deadlock. A program exit is not a

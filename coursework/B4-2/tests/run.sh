@@ -28,28 +28,7 @@ metric_max() {
   '
 }
 
-private_result_fixture="$out/private-result.log"
-for name in memory-before memory-after cpu-before cpu-after thread-before thread-after; do
-  echo "PRIVATE-CASE-END name=$name status=0 origin=child-exit termination=test kernel_oom_evidence=no samples=2 survivors=0" >>"$private_result_fixture"
-done
-echo 'PRIVATE-OBSERVATION-COMPLETE' >>"$private_result_fixture"
-"$root/bin/check-private-result.sh" "$private_result_fixture" 0 >/dev/null
-if "$root/bin/check-private-result.sh" "$private_result_fixture" 124 >/dev/null 2>&1; then
-  echo 'private result checker accepted timeout status' >&2
-  exit 1
-fi
-echo 'PRIVATE-OBSERVATION-BLOCKED: synthetic regression fixture' >>"$private_result_fixture"
-if "$root/bin/check-private-result.sh" "$private_result_fixture" 0 >/dev/null 2>&1; then
-  echo 'private result checker accepted blocked marker' >&2
-  exit 1
-fi
-sed -i '$d' "$private_result_fixture"
-sed -i '/^PRIVATE-CASE-END name=thread-after /d' "$private_result_fixture"
-if "$root/bin/check-private-result.sh" "$private_result_fixture" 0 >/dev/null 2>&1; then
-  echo 'private result checker accepted missing case marker' >&2
-  exit 1
-fi
-echo 'PRIVATE-RESULT-REGRESSION-CHECK=yes'
+sh "$root/tests/private-result.sh" "$out"
 
 native_marker="$out/native-124.marker"
 set +e

@@ -77,7 +77,11 @@ and each case requires zero surviving service-account processes after cleanup. R
 restricted evidence and must never be published. The wrapper applies `umask 077`, saves Docker's raw
 stdout/stderr before any transformation, records the timeout/docker exit status directly, and creates
 a CR-normalized local copy. Success requires status zero, exactly one completion marker, all six
-case-end markers, and no blocked/failure marker; `COMPLETE` alone is insufficient.
+case-end markers, and no blocked/failure marker; `COMPLETE` alone is insufficient. The wrapper binds
+those markers to a fresh run identity, the observed input's SHA-256 digest, and a distinct case
+identity. These fields reject accidental replay or mixing across local runs. They are not trusted
+attestation: the operator controls the local workflow and evidence files, so the fields cannot prove
+that a report is authentic, complete, or true.
 
 The public VM image compiles the fixture in a separate stage and omits compiler packages from the
 initramfs. This replaced the earlier 99,943,376-byte compressed initramfs that triggered an early

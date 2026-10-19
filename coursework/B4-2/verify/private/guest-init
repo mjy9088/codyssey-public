@@ -7,7 +7,7 @@ finish() {
   status=$?
   trap - EXIT
   if [[ $status -eq 0 && $observation_result == success ]]; then
-    echo 'PRIVATE-OBSERVATION-COMPLETE'
+    echo "PRIVATE-OBSERVATION-COMPLETE run_id=$run_id input_sha256=$input_digest"
   else
     echo "PRIVATE-OBSERVATION-FAILURE: guest_status=$status"
   fi
@@ -26,6 +26,15 @@ chmod 0711 /run/cases || exit 1
 chmod 0755 /run/target || exit 1
 echo "PRIVATE-VM-BEGIN: $(uname -srvmo)"
 test -s /private/input.zip || { echo 'PRIVATE-OBSERVATION-BLOCKED: archive absent in guest'; exit 20; }
+run_id=$(cat /private/run-id) || exit 1
+input_digest=$(cat /private/input.sha256) || exit 1
+case "$run_id" in run.*) ;; *) echo 'PRIVATE-OBSERVATION-BLOCKED: run identity invalid'; exit 20 ;; esac
+case "$input_digest" in *[!0-9a-f]*|'') echo 'PRIVATE-OBSERVATION-BLOCKED: input digest invalid'; exit 20 ;; esac
+[[ ${#input_digest} -eq 64 ]] || { echo 'PRIVATE-OBSERVATION-BLOCKED: input digest invalid'; exit 20; }
+actual_digest=$(sha256sum /private/input.zip)
+actual_digest=${actual_digest%% *}
+[[ $actual_digest == "$input_digest" ]] || { echo 'PRIVATE-OBSERVATION-BLOCKED: input digest mismatch'; exit 20; }
+echo "PRIVATE-OBSERVATION-BEGIN run_id=$run_id input_sha256=$input_digest"
 ulimit -f 65536
 if ! timeout 20 unzip -qq -j /private/input.zip '*x86*' -d /run/extract; then
   echo 'PRIVATE-OBSERVATION-BLOCKED: bounded x86 member extraction failed'
@@ -138,7 +147,7 @@ observe_case() {
     echo "PRIVATE-CASE-FAILURE: surviving account processes name=$name pids=$survivors"
     return 1
   fi
-  echo "PRIVATE-CASE-END name=$name status=$status origin=$origin termination=$termination kernel_oom_evidence=$kernel_oom samples=$samples survivors=0"
+  echo "PRIVATE-CASE-END name=$name run_id=$run_id input_sha256=$input_digest case_id=$run_id:$name status=$status origin=$origin termination=$termination kernel_oom_evidence=$kernel_oom samples=$samples survivors=0"
   echo "PRIVATE-APP-LOG-BEGIN name=$name"
   sed "s/^/PRIVATE-APP case=$name | /" "$log"
   echo "PRIVATE-APP-LOG-END name=$name"

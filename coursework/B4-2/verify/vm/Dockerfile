@@ -14,9 +14,9 @@ COPY --from=fixture-builder /resource-fixture /rootfs/lab/bin/resource-fixture
 COPY bin/monitor.sh /rootfs/lab/bin/monitor.sh
 COPY bin/check-private-result.sh /rootfs/lab/bin/check-private-result.sh
 COPY bin/supervise.sh /rootfs/lab/bin/supervise.sh
-COPY tests/run.sh /rootfs/lab/tests/run.sh
+COPY tests/ /rootfs/lab/tests/
 COPY verify/vm/guest-init /rootfs/init
-RUN chmod 0755 /rootfs/init /rootfs/lab/bin/* /rootfs/lab/tests/run.sh \
+RUN chmod 0755 /rootfs/init /rootfs/lab/bin/* /rootfs/lab/tests/*.sh \
     && find /rootfs -exec touch -h -d '@0' {} + \
     && (find . -xdev -print0 | sort -z | cpio --null --create --format=newc --owner=0:0 --reproducible 2>/dev/null) | gzip -n -9 > /initramfs.cpio.gz
 
