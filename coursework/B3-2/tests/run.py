@@ -8,6 +8,8 @@ from test_git_cli import test_api_backend_requires_explicit_network_opt_in
 from test_git_cli import test_cli_fixture_default_needs_no_key_or_network
 from test_git_cli import test_cli_reports_clean_repository
 from test_git_cli import test_collect_changes_reads_status_and_worktree_diff
+from test_git_cli import test_collect_changes_includes_staged_and_unstaged_patches
+from test_git_cli import test_draft_generation_does_not_mutate_reviewed_repository
 from test_review import test_fixture_commit_is_valid_and_uses_changed_files
 from test_review import test_fixture_pr_contains_required_sections_and_bullets
 from test_review import test_prompt_contains_parameters_but_not_instructions_from_diff
@@ -23,6 +25,8 @@ def main() -> None:
         test_prompt_contains_parameters_but_not_instructions_from_diff,
         test_validator_rejects_overlong_commit_title,
         test_collect_changes_reads_status_and_worktree_diff,
+        test_collect_changes_includes_staged_and_unstaged_patches,
+        test_draft_generation_does_not_mutate_reviewed_repository,
         test_cli_fixture_default_needs_no_key_or_network,
         test_cli_reports_clean_repository,
         test_api_backend_requires_explicit_network_opt_in,

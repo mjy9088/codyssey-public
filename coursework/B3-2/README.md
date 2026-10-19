@@ -68,7 +68,7 @@ sh scripts/verify.sh vm
 sh scripts/verify.sh all
 ```
 
-Docker mode runs 15 synthetic scenarios (nine offline/CLI checks and six loopback API-protocol checks)
+Docker mode runs 17 synthetic scenarios (11 offline/CLI checks and six loopback API-protocol checks)
 plus the actual CLI. VM mode boots x86_64 Alpine under QEMU TCG and runs the same Python, Git, and
 loopback protocol scenarios inside the guest. Each local server binds an ephemeral loopback port and
 is stopped after its scenario. Neither mode requires KVM, privileged mode, a host Docker socket,
