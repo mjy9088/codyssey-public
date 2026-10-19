@@ -44,3 +44,27 @@ class ConsoleInputTest(unittest.TestCase):
 
         self.assertEqual(quiz.question, "문제")
         self.assertEqual(quiz.answer, 2)
+
+    def test_add_form_retries_each_empty_choice(self) -> None:
+        with (
+            patch(
+                "builtins.input",
+                side_effect=["Question", "", "A", " ", "B", "C", "D", "2"],
+            ),
+            patch("sys.stdout", io.StringIO()),
+        ):
+            quiz = ConsoleUI().ask_new_quiz()
+
+        self.assertEqual(quiz.choices, ("A", "B", "C", "D"))
+
+    def test_add_form_retries_answers_outside_choice_range(self) -> None:
+        with (
+            patch(
+                "builtins.input",
+                side_effect=["Question", "A", "B", "C", "D", "0", "5", "3"],
+            ),
+            patch("sys.stdout", io.StringIO()),
+        ):
+            quiz = ConsoleUI().ask_new_quiz()
+
+        self.assertEqual(quiz.answer, 3)
