@@ -45,3 +45,39 @@ def test_negative_maxmemory_is_rejected_without_changing_limit() -> None:
 
     assert result == "(error) ERR value is not an integer or out of range"
     assert "maxmemory:12" in execute(store, "INFO memory")
+
+
+def test_execute_enforces_documented_command_allowlist() -> None:
+    store = MiniRedis()
+    accepted = (
+        "SET key value",
+        "GET key",
+        "DEL key",
+        "EXISTS key",
+        "DBSIZE",
+        "KEYS",
+        "CONFIG SET maxmemory 0",
+        "INFO memory",
+        "EXPIRE key 1",
+        "TTL key",
+    )
+    rejected = (
+        "SAVE",
+        "BGSAVE",
+        "LOAD snapshot",
+        "PUBLISH channel message",
+        "SUBSCRIBE channel",
+        "MULTI",
+        "EXEC",
+        "WATCH key",
+        "EVAL payload",
+        "SCRIPT LOAD payload",
+        "CONFIG GET maxmemory",
+        "INFO server",
+    )
+
+    for command in accepted:
+        assert "unknown command" not in execute(store, command)
+    for command in rejected:
+        result = execute(store, command)
+        assert "unknown command" in result or "wrong number of arguments" in result

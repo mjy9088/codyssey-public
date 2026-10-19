@@ -25,7 +25,7 @@ sh scripts/verify.sh vm
 sh scripts/verify.sh all
 ```
 
-Docker mode runs seventeen deterministic structure, cache, boundary, policy, and REPL scenarios, then drives the
+Docker mode runs nineteen deterministic structure, cache, boundary, policy, and REPL scenarios, then drives the
 real CLI with piped commands. VM mode boots an x86_64 Alpine kernel under QEMU TCG and runs the same
 Python tests inside the guest. It needs no KVM, privileged container, host socket mount, parent path,
 or credentials. The first build needs network access for pinned images and exact Alpine packages.
@@ -35,8 +35,9 @@ excluded. Expiry is lazily cleaned from the heap whenever a command observes glo
 `EXPIRE` calls leave stale heap records that are safely ignored by comparison with the active expiry.
 TTL values use integer truncation of the injected monotonic clock.
 
-Local Docker/QEMU execution demonstrates only this implementation in those environments. It is not
-evidence of a production Redis deployment, persistence, networking, concurrency, or compatibility
-beyond the documented commands.
+The verifier enforces that exact command allowlist and rejects runtime modules that introduce
+persistence, networking, subprocesses, concurrency, or locks. Local Docker/QEMU execution
+demonstrates only this implementation in those environments. It is not evidence of a production
+Redis deployment or compatibility beyond the documented commands.
 
 See [the review guide](docs/REVIEW.md) for boundary scenarios and implementation inspection points.

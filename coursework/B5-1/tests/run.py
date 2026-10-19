@@ -1,7 +1,9 @@
 from test_cli import test_execute_supports_quoted_values_and_safe_parse_errors
+from test_cli import test_execute_enforces_documented_command_allowlist
 from test_cli import test_negative_maxmemory_is_rejected_without_changing_limit
 from test_cli import test_repl_runs_complete_user_scenario
 from test_policy import test_cache_internals_do_not_delegate_to_prohibited_collections
+from test_policy import test_runtime_modules_enforce_command_and_capability_boundaries
 from test_store import test_delete_cleans_value_lru_and_ttl
 from test_store import test_empty_value_overwrite_and_eviction_keep_memory_exact
 from test_store import test_expire_missing_and_nonpositive_deadlines_clean_state
@@ -33,9 +35,11 @@ def main() -> None:
         test_delete_cleans_value_lru_and_ttl,
         test_empty_value_overwrite_and_eviction_keep_memory_exact,
         test_execute_supports_quoted_values_and_safe_parse_errors,
+        test_execute_enforces_documented_command_allowlist,
         test_negative_maxmemory_is_rejected_without_changing_limit,
         test_repl_runs_complete_user_scenario,
         test_cache_internals_do_not_delegate_to_prohibited_collections,
+        test_runtime_modules_enforce_command_and_capability_boundaries,
     ]
     for test in tests:
         test()

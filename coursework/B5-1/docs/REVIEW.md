@@ -3,7 +3,7 @@
 ## Automated review
 
 Run `sh scripts/verify.sh all`. Docker mode must end with `DOCKER-VERIFY-SUCCESS`; QEMU mode must
-show the guest kernel line, eleven `PASS` lines, `VM-TEST-SUCCESS`, and `VM-VERIFY-SUCCESS`. The script
+show the guest kernel line, nineteen `PASS` lines, `VM-TEST-SUCCESS`, and `VM-VERIFY-SUCCESS`. The script
 returns nonzero when a test, CLI assertion, image build, guest marker, or Compose command fails.
 
 ## Manual REPL review
@@ -37,6 +37,8 @@ and lowering the memory limit after inserts.
 - `store.py`: successful reads touch LRU order, every deletion updates all active structures, stale
   expiry records cannot delete refreshed keys, and a single oversize write returns OOM before mutation.
 - `cli.py`: command matching is explicit and input crosses one `shlex` boundary without `eval`.
+- `test_policy.py`: the dispatcher exactly matches the documented allowlist, and runtime modules do
+  not import persistence, networking, process, concurrency, or lock capabilities.
 
 Runtime logs and test reports are deliberately not tracked: they become stale, duplicate rerunnable
 automation, and may disclose local details. Reviewers should rerun the scripts for current evidence.
