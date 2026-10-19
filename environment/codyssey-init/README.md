@@ -226,9 +226,8 @@ an enabled 1.0.0 Tailnet-only configuration to All websites once; disabled routi
 authenticate Tailscale or provide a system-wide VPN. Keep the Tailscale container running and logged in.
 
 The version and archive integrity pins live in `scripts/browser-version.sh`. The browser does not
-auto-update; update those pins deliberately to adopt another release. Only x86_64 has been exercised
-with a real browser here; the arm64 archive was downloaded and its checksum recorded, and architecture
-selection is covered by synthetic tests. The launcher can override its private locations with
+auto-update; update those pins deliberately to adopt another release. Synthetic tests cover both architecture selections. The disposable browser verifier exercises the
+real executable and fresh profile on the guest architecture. The launcher can override its private locations with
 `CODYSSEY_BROWSER_CACHE_DIR` and `CODYSSEY_BROWSER_SUPPORT_DIR`.
 
 Additional local unpacked extensions can be registered in
@@ -456,8 +455,8 @@ control-plane behavior, not external tailnet ACLs, expiry policy, or remote peer
 ## Verification in a macOS VM outside the classroom
 
 These scripts verify only this environment bootstrap. They use real Docker services and real macOS
-preferences without an auth key. Tailscale must remain in `NeedsLogin`; browser launching is disabled
-and authentication is never completed. No coursework, remote tailnet access, or authenticated forwarding is
+preferences without an auth key. The normal bootstrap must remain in `NeedsLogin`; its authentication browser is disabled.
+A separate browser check uses a fresh private profile and `about:blank`, and never completes external authentication. No coursework, remote tailnet access, or authenticated forwarding is
 tested. The VM must be disposable: verification changes its user's `.zshrc`, Dock, keyboard settings,
 and text preferences. The local lab authenticates synthetic nodes only to its own isolated Headscale server; it never logs into an external tailnet. Successful preference verification leaves the requested settings applied.
 
@@ -486,40 +485,57 @@ are preserved. An unexpected Docker command remaining on the login PATH causes f
 being silently deleted. The original VM is never modified. Successful creation prints `READY`, stops
 and retains the new base; it does not claim that the OrbStack engine has run.
 
-Use the base for a fresh startup test:
+Use the base for the complete pre-deployment check:
 
 ```sh
 bash scripts/create-macos-vm.sh --image codyssey-preinstalled --preinstalled
-# In an existing disposable VM with nested virtualization support:
-bash scripts/verify-macos-vm.sh --disposable --preinstalled
 ```
 
-This mode skips Colima/Homebrew provisioning, requires installed OrbStack and Gureum, rejects a
-working initial Docker engine and explicit Docker targets, and exercises the same startup helper
-used by `init.sh`. It resolves bundled Docker tools and missing plugins before Docker-dependent
-checks, freezes a local Unix-socket context, then performs the ordinary bootstrap/runtime tests.
-With Python 3.9, it prepares user-local Python 3.13.7 through the checksum-verified mise installer;
-no system Python is changed. Only the OrbStack engine started by this run is stopped on exit,
-including after readiness failure. No Tailscale auth key is used. Gureum approval remains manual.
+This mode first inspects the real OrbStack/Gureum/Chrome bundles, checks Gureum's version, executes
+bundled Docker/Compose/Buildx version queries, checks Swift, and confirms that Docker is absent from
+the login PATH. It never starts OrbStack. The cold-start suite then exercises the production startup
+helper and full `init.sh` against temporary synthetic homes and fake engine commands, covering missing
+CLI/plugins, preserved plugins and Docker targets, startup failures, timeout, and preparation handoff.
 
-**Virtualization boundary:** building and inspecting this base works in a Tart macOS VM, but running
-OrbStack requires another Linux VM inside it. [Tart's FAQ](https://tart.run/faq/) currently limits
-nested virtualization support to Linux guests on supported hosts; enabling `--nested` is not proof
-that a macOS guest can host OrbStack. Unsupported engine startup must fail visibly, with no automatic
-Colima substitution. Use a disposable macOS VM/hypervisor that provides the required virtualization
-for full real OrbStack execution. Switching to UTM on Apple Silicon does not by itself remove this
-constraint: its [macOS guest backend](https://docs.getutm.app/settings-apple/settings-apple/) also
-uses Apple Virtualization, and its documented [nested support](https://docs.getutm.app/updates/v4.6/)
-is for Linux guests. The guest installer and verifier themselves contain no Tart calls and can be
-run after copying the allowlisted source to another disposable macOS VM; only the clone/boot/stop
-wrapper depends on Tart.
+After those checks, it prepares the dedicated QEMU-TCG Colima profile and runs the real Docker,
+local DNS/identity persistence, Dock/shortcuts, and fresh portable-browser verification. The original
+preinstalled base stays stopped and unchanged. `brew install` may leave existing Docker packages
+unlinked, so preparation explicitly links the Docker CLI when needed.
+Provisioning and service cleanup suppress routine tool output; failures show bounded diagnostics.
 
-Synthetic cold-start tests cover missing CLI, existing plugins,
-start failure, timeout and target preservation independently:
+For another existing disposable macOS VM, the equivalent stages are:
 
 ```sh
+python3 scripts/check-preinstalled-apps.py
 python3 tests/preinstalled-tools-test.py
+bash scripts/prepare-macos-vm.sh --disposable
+DOCKER_CONTEXT=colima-codyssey-verify bash scripts/verify-macos-vm.sh --disposable
 ```
+
+**Acceptance boundary:** real OrbStack engine execution is not a requirement for these pre-deployment
+checks. Docker workloads use an explicitly selected software-emulated Colima engine; this is a planned
+verification backend, not a fallback after an OrbStack failure. The application identity/CLI checks
+are real, while OrbStack startup commands are simulated. Gureum approval and physical Hangul/Latin
+switching, actual Terminal/Dock clicks, OS-controlled notification permissions, and access to a real
+authenticated tailnet remain manual classroom checks. No input approval is automated.
+
+OrbStack itself needs nested virtualization inside a macOS VM, which current
+[Tart support](https://tart.run/faq/) does not provide for macOS guests. Switching to UTM does not by
+itself address that API constraint: its [macOS backend](https://docs.getutm.app/settings-apple/settings-apple/)
+also uses Apple Virtualization, and its documented [nested support](https://docs.getutm.app/updates/v4.6/)
+is for Linux guests. This does not block the pre-deployment checks described above.
+
+### Fresh portable-browser verification
+
+```sh
+python3 scripts/verify-portable-browser.py --disposable
+```
+
+This real desktop check configures a fresh temporary Chrome profile and its unpacked extension,
+checks that the temporary debugging endpoint is gone before normal launch, and verifies that an
+unchanged second launch reuses the browser without repeating setup. It closes only the browser
+process owned by that unique test profile, then removes the profile. Browser downloads remain cached.
+It never opens the Tailscale login URL, authenticates, or touches an existing user browser profile.
 
 ### An existing disposable VM
 
@@ -552,15 +568,15 @@ step is intentionally mutable and is not a reproducible package snapshot: Homebr
 formula or cask versions on a later run.
 
 Verification first runs `scripts/check.sh --native-python`, then runs the actual `init.sh` twice.
-This mode runs `portable-browser-test.py`, `macos-setup-test.py`, and `vm-orchestration-test.py` natively on the macOS guest
+This mode runs `portable-browser-test.py`, `macos-setup-test.py`, `vm-orchestration-test.py`, and `preinstalled-tools-test.py` natively on the macOS guest
 with synthetic state and fake commands. The pinned Linux container runs the Bash/zsh bootstrap suites
 and always runs `vm-guest-test.py`, whose fake Homebrew, Colima, and Docker guest boundaries must never
-execute natively on macOS. No checks are omitted; native execution of the three safe Python suites avoids
+execute natively on macOS. No checks are omitted; native execution of the four safe Python suites avoids
 expensive process startup under x86 emulation. The default `scripts/check.sh` runs all suites inside
 the isolated container.
 Verification checks the
 unauthenticated state, Bash/client tools, TUN device and home mount, GOST API and UI HTTP readiness,
-and the single shell activation block. It then runs the private local Headscale lab for identity persistence, short-name DNS and terminal tools, and verifies the real Dock launcher twice plus live shortcut registration. Input-method approval and physical Hangul typing remain an interactive check; the unattended VM does not wait for or bypass macOS approval dialogs. Run the full live preference verifier separately in an approved desktop session. GOST API readiness also checks whether this Docker environment makes
+and the single shell activation block. It then runs the private local Headscale lab for identity persistence, short-name DNS and terminal tools, verifies a fresh portable browser profile and relaunch, and verifies the real Dock launcher twice plus live shortcut registration. Input-method approval and physical Hangul typing remain an interactive check; the unattended VM does not wait for or bypass macOS approval dialogs. Run the full live preference verifier separately in an approved desktop session. GOST API readiness also checks whether this Docker environment makes
 the Linux host's loopback listener accessible from the macOS guest; failure is a real incompatibility,
 not a simulated success. UI HTTP readiness does not prove browser rendering or API interaction.
 
