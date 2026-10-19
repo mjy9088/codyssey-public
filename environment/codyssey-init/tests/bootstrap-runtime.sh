@@ -253,3 +253,26 @@ INSTALL_LOG="$tmp/preference-failure.log" HOME="$install_home" PATH="$install_bi
 grep -q 'macOS preferences failed (exit 17)' "$tmp/preference-failure.out"
 grep -q 'Retry preferences separately:' "$tmp/preference-failure.out"
 grep -Fq -- "-i $work/next-script.zsh" "$tmp/preference-failure.log"
+
+# Explicit opt-out on Darwin must skip all preference/input-approval work.
+cat >"$work/macos-setup.sh" <<'EOF'
+#!/bin/sh
+: >"$PREFERENCE_CALLED"
+exit 91
+EOF
+PREFERENCE_CALLED="$tmp/preference-called" INSTALL_LOG="$tmp/install.log" \
+  HOME="$install_home" PATH="$install_bin:/usr/bin:/bin" TS_AUTHKEY='' \
+  CODYSSEY_MACOS_SETUP=0 bash "$work/init.sh"
+[[ ! -e "$tmp/preference-called" ]]
+
+. "$root/lib/preparation.sh"
+TMPDIR="$tmp" run_quiet_step synthetic-success printf 'RAW BUILD OUTPUT\n' >"$tmp/quiet-success"
+[[ ! -s "$tmp/quiet-success" ]]
+set +e
+TMPDIR="$tmp" run_quiet_step synthetic-failure sh -c 'seq 1 20; exit 23' >"$tmp/quiet-failure" 2>&1
+quiet_status=$?
+set -e
+[[ $quiet_status -eq 23 ]]
+[[ $(wc -l <"$tmp/quiet-failure") -eq 13 ]]
+grep -q 'synthetic-failure failed (exit 23)' "$tmp/quiet-failure"
+[[ -z $(find "$tmp" -name 'codyssey-step.*' -print -quit) ]]

@@ -247,7 +247,12 @@ eval "$(mise activate zsh)"
 EOF
 fi
 
-if [[ ${CODYSSEY_MACOS_SETUP:-0} == 1 || $(uname -s) == Darwin ]]; then
+macos_setup=${CODYSSEY_MACOS_SETUP:-}
+if [[ -z $macos_setup ]]; then
+  if [[ $(uname -s) == Darwin ]]; then macos_setup=1; else macos_setup=0; fi
+fi
+[[ $macos_setup == 0 || $macos_setup == 1 ]] || die 'CODYSSEY_MACOS_SETUP must be 0 or 1.'
+if [[ $macos_setup == 1 ]]; then
   if bash "$init_dir/macos-setup.sh"; then
     :
   else

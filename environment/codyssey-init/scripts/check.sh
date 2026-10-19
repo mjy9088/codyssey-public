@@ -44,7 +44,15 @@ tar -C "$root" -cf "$context/payload.tar" \
   tests/tailnet-dns-test.sh
 tar -C "$context" -xf "$context/payload.tar"
 rm "$context/payload.tar"
-docker build --file "$context/tests/check.Dockerfile" --tag "$image" "$context"
+printf 'Preparing isolated checks…\n'
+if docker build --file "$context/tests/check.Dockerfile" --tag "$image" "$context" >"$context/build.log" 2>&1; then
+  :
+else
+  result=$?
+  printf 'Check image build failed (exit %s).\n' "$result" >&2
+  tail -n 12 "$context/build.log" >&2
+  exit "$result"
+fi
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,exec,size=64m,mode=1777 \
   --env CODYSSEY_NATIVE_PYTHON_CHECKS="$native_python" \

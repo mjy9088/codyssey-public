@@ -92,7 +92,7 @@ pipe_home="$tmp/pipe-home"
 pipe_target="$tmp/remote target"
 mkdir -p "$pipe_home"
 printf 'yes\n' | INIT_SOURCE="$work/init.sh" script -q -e -c \
-  "cat \"\$INIT_SOURCE\" | HOME='$pipe_home' PATH='$fakebin:/usr/bin:/bin' REMOTE_SOURCE='$root' CODYSSEY_INIT_DIR='$pipe_target' CODYSSEY_INIT_BASE_URL=https://example.invalid/repository CODYSSEY_INIT_REF=$ref bash" \
+  "cat \"\$INIT_SOURCE\" | HOME='$pipe_home' PATH='$fakebin:/usr/bin:/bin' REMOTE_SOURCE='$root' CODYSSEY_INIT_DIR='$pipe_target' bash" \
   /dev/null >"$tmp/pipe.out" 2>&1
 pipe_j="$pipe_home/.local/bin/j"
 [[ -x $pipe_j ]]
@@ -103,8 +103,8 @@ headless_home="$tmp/headless-home"
 headless_target="$tmp/headless-target"
 mkdir -p "$headless_home"
 cat "$work/init.sh" | HOME="$headless_home" PATH="$fakebin:/usr/bin:/bin" REMOTE_SOURCE="$root" \
-  CODYSSEY_INIT_DIR="$headless_target" CODYSSEY_INIT_BASE_URL=https://example.invalid/repository \
-  CODYSSEY_INIT_REF=$ref bash >"$tmp/headless.out" 2>&1
+  CODYSSEY_INIT_DIR="$headless_target" \
+  bash >"$tmp/headless.out" 2>&1
 [[ ! -e "$headless_home/.local/bin/j" ]]
 
 negative_home="$tmp/negative-home"

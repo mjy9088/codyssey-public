@@ -61,8 +61,8 @@ fi
 [[ ! -e "$tmp/initial-executed" ]] || { printf 'partial installer ran\n' >&2; exit 1; }
 
 run_pipe() {
-  HOME=$1 CODYSSEY_INIT_DIR=$2 CODYSSEY_INIT_BASE_URL=https://example.invalid/repository \
-    CODYSSEY_INIT_REF=$ref PATH="$fakebin:/usr/bin:/bin" REMOTE_SOURCE=$root \
+  HOME=$1 CODYSSEY_INIT_DIR=$2 \
+    PATH="$fakebin:/usr/bin:/bin" REMOTE_SOURCE=$root \
     REMOTE_LOG="$tmp/remote.log" TMPDIR=$3 bash <"$root/init.sh"
 }
 

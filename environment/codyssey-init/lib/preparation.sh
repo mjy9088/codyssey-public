@@ -104,11 +104,15 @@ interrupt_startup() {
 }
 
 # Keep routine tool output out of the terminal; show bounded diagnostics on failure.
-run_quiet_step() {
+run_quiet_step() (
   local label=$1 log result
   shift
   log=$(mktemp "${TMPDIR:-/tmp}/codyssey-step.XXXXXX") || return 1
   chmod 0600 "$log"
+  trap 'rm -f "$log"' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
   if "$@" >"$log" 2>&1; then result=0
   else
     result=$?
@@ -117,4 +121,4 @@ run_quiet_step() {
   fi
   rm -f "$log"
   return "$result"
-}
+)

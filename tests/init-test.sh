@@ -49,23 +49,19 @@ run_remote() {
   HOME=$tmp/home TMPDIR=$tmp/stage PATH=$fakebin:/usr/bin:/bin \
     FAKE_CURL_LOG=$tmp/curl.log FAKE_BASH_LOG=$tmp/bash.log FAKE_PAYLOAD=$payload \
     PAYLOAD_RESULT=$tmp/result PARTIAL_EXECUTED=$tmp/partial \
-    CODYSSEY_INIT_REF=${TEST_REF-} CODYSSEY_INIT_BASE_URL=${TEST_BASE-} \
     PAYLOAD_STATUS=${TEST_STATUS-0} FAKE_CURL_FAIL=${TEST_FETCH_FAIL-0} \
     /bin/sh <"$root/init.sh"
 }
 
-default_ref=main
 default_base=https://raw.githubusercontent.com/mjy9088/codyssey-public
-unset TEST_REF TEST_BASE TEST_STATUS TEST_FETCH_FAIL
+unset TEST_STATUS TEST_FETCH_FAIL
 run_remote >"$tmp/output"
 grep -qx executed "$tmp/result" || fail 'default payload variables differ'
-grep -qx "$default_base/$default_ref/environment/codyssey-init/init.sh" "$tmp/curl.log" || fail 'default fetch URL differs'
+grep -qx "$default_base/main/environment/codyssey-init/init.sh" "$tmp/curl.log" || fail 'default fetch URL differs'
 [ -z "$(ls -A "$tmp/stage")" ] || fail 'successful run left a temporary installer'
 
 : >"$tmp/bash.log"
 : >"$tmp/curl.log"
-TEST_REF=0123456789abcdef0123456789abcdef01234567
-TEST_BASE=https://example.invalid/repository/
 TEST_STATUS=37
 set +e
 run_remote >/dev/null
@@ -87,11 +83,11 @@ set -e
 [ ! -e "$tmp/partial" ] || fail 'partial download executed'
 [ -z "$(ls -A "$tmp/stage")" ] || fail 'failed download left a temporary installer'
 
-unset TEST_FETCH_FAIL TEST_BASE
+unset TEST_FETCH_FAIL
 
 empty_path=$tmp/empty
 mkdir "$empty_path"
-PATH=$empty_path CODYSSEY_INIT_REF=$default_ref /bin/sh "$root/init.sh" --help >"$tmp/help"
+PATH=$empty_path /bin/sh "$root/init.sh" --help >"$tmp/help"
 grep -q 'Usage: sh init.sh' "$tmp/help" || fail 'help output missing usage'
 set +e
 PATH=$empty_path /bin/sh "$root/init.sh" --unknown >/dev/null 2>&1
