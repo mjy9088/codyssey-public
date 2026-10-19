@@ -26,6 +26,8 @@ test("redirects protected visitors and starts a member session", async ({
   // Then: the authenticated home opens with the member shell.
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByText("Demo Reader")).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("Demo Reader")).toBeVisible();
   const catalogNavigation = page.getByRole("link", {
     name: "Catalog",
     exact: true,

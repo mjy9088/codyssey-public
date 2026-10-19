@@ -26,6 +26,10 @@ test("borrows, rejects a duplicate loan, and returns a title", async ({
     .getByRole("article")
     .filter({ hasText: "Browser Loan Fixture" });
   await expect(loan.getByText("borrowed", { exact: true })).toBeVisible();
+  await expect(loan.getByText("Test Reader")).toBeVisible();
+  await expect(
+    loan.getByRole("link", { name: "Browser Loan Fixture" }),
+  ).toHaveAttribute("href", /\/books\/\d+$/);
 
   // When: the member attempts the same borrow action again.
   const csrfToken = await loan.locator('input[name="csrf_token"]').inputValue();
