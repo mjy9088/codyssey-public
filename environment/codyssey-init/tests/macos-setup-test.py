@@ -291,13 +291,35 @@ def test_desktop_verifier_preserves_keyboard_and_text() -> None:
         just.parent.mkdir(parents=True)
         just.write_text("#!/bin/sh\ntest \"$1\" = --list\n")
         just.chmod(0o700)
+        env["CODYSSEY_DOCK_SETUP"] = "0"
         result = run_verifier(env, "--desktop-only")
         assert result.returncode == 0, result.stderr
         assert all(read_domain(state, domain) == value for domain, value in original.items())
         assert len(read_domain(state, "com.apple.dock")["persistent-others"]) == 1
 
 
+def test_keep_dock_adds_launcher_once_and_rolls_back_failure() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        env, state = environment(Path(temporary))
+        baseline(state)
+        env["CODYSSEY_DOCK_SETUP"] = "0"
+        original = read_domain(state, "com.apple.dock")
+        assert apply(env).returncode == 0
+        first = read_domain(state, "com.apple.dock")
+        assert first["persistent-apps"] == original["persistent-apps"]
+        assert first["show-recents"] == original["show-recents"]
+        assert first["persistent-others"][0] == original["persistent-others"][0]
+        assert len(first["persistent-others"]) == 2
+        assert apply(env).returncode == 0
+        assert read_domain(state, "com.apple.dock") == first
+        write_domain(state, "com.apple.dock", original)
+        env["FAKE_WRITE"] = "com.apple.dock:persistent-others"
+        assert apply(env).returncode == 1
+        assert read_domain(state, "com.apple.dock") == original
+
+
 def main() -> None:
+    test_keep_dock_adds_launcher_once_and_rolls_back_failure()
     test_desktop_verifier_preserves_keyboard_and_text()
     test_launcher_executes_from_another_directory_and_preserves_arguments()
     test_success_and_repeat()
@@ -308,7 +330,7 @@ def main() -> None:
     test_verifier_leaves_applied_state_on_success_and_restores_on_failure()
     test_verifier_retains_snapshot_when_restoration_fails()
     test_verifier_restores_after_keyboard_interrupt()
-    print("macOS setup isolated tests: 10 passed")
+    print("macOS setup isolated tests: 11 passed")
 
 
 if __name__ == "__main__":

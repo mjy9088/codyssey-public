@@ -19,14 +19,15 @@ input_switch=${CODYSSEY_INPUT_SWITCH:-control-space}
 dock_setup=${CODYSSEY_DOCK_SETUP:-}
 case ${1:-} in
   '') ;;
-  --input-only|--no-dock|--desktop-only) dock_setup=0 ;;
+  --input-only|--no-dock) dock_setup=0 ;;
+  --desktop-only) dock_setup=${dock_setup:-1} ;;
   --shortcuts-only) input_switch=control-space; dock_setup=0 ;;
   *) printf 'Usage: bash macos-setup.sh [--input-only | --no-dock | --shortcuts-only | --desktop-only]\n' >&2; exit 2 ;;
 esac
 # Use the controlling terminal so curl | sh does not consume installer text.
 if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then
   if [[ -z $dock_setup ]]; then
-    printf 'Pin Terminal, Chrome and the j terminal launcher in the Dock, and remove stacks/recent apps? [y/N] ' >/dev/tty
+    printf 'Clean up Dock pins and stacks? The j launcher is added either way. [y/N] ' >/dev/tty
     IFS= read -r answer </dev/tty || answer=n
     case $answer in y|Y|yes|YES) dock_setup=1 ;; *) dock_setup=0 ;; esac
   fi
@@ -131,12 +132,12 @@ file_url() {
 }
 
 apply_dock() {
-  local terminal_app chrome_app terminal_url chrome_url launcher launcher_url temporary failed=0
+  local terminal_app chrome_app terminal_url chrome_url launcher launcher_url temporary index=0 existing failed=0
   backup_domain dock com.apple.dock || return
   terminal_app="$system_applications_dir/Utilities/Terminal.app"
   chrome_app="$applications_dir/Google Chrome.app"
   [[ -d $chrome_app ]] || chrome_app="$HOME/Applications/Google Chrome.app"
-  if [[ ! -d $terminal_app || ! -d $chrome_app ]]; then
+  if [[ ! -d $terminal_app || ( $dock_setup == 1 && ! -d $chrome_app ) ]]; then
     return
   fi
   launcher="$HOME/Library/Application Support/codyssey-init/Codyssey j.command"
@@ -158,17 +159,29 @@ apply_dock() {
   launcher_url=$(file_url "$launcher")
   terminal_url=$(file_url "$terminal_app/")
   chrome_url=$(file_url "$chrome_app/")
-  "$defaults_bin" write com.apple.dock persistent-apps -array \
-    "{tile-data={file-data={_CFURLString=\"$terminal_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" \
-    "{tile-data={file-data={_CFURLString=\"$chrome_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" >/dev/null 2>&1 || failed=1
-  "$defaults_bin" write com.apple.dock persistent-others -array \
-    "{tile-data={file-data={_CFURLString=\"$launcher_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" >/dev/null 2>&1 || failed=1
-  "$defaults_bin" write com.apple.dock show-recents -bool false >/dev/null 2>&1 || failed=1
-  "$defaults_bin" write com.apple.dock static-only -bool false >/dev/null 2>&1 || failed=1
+  if [[ $dock_setup == 1 ]]; then
+    "$defaults_bin" write com.apple.dock persistent-apps -array \
+      "{tile-data={file-data={_CFURLString=\"$terminal_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" \
+      "{tile-data={file-data={_CFURLString=\"$chrome_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" >/dev/null 2>&1 || failed=1
+    "$defaults_bin" write com.apple.dock persistent-others -array \
+      "{tile-data={file-data={_CFURLString=\"$launcher_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" >/dev/null 2>&1 || failed=1
+    "$defaults_bin" write com.apple.dock show-recents -bool false >/dev/null 2>&1 || failed=1
+    "$defaults_bin" write com.apple.dock static-only -bool false >/dev/null 2>&1 || failed=1
+  else
+    if [[ $BACKUP_KIND == present ]]; then
+      while "$plistbuddy_bin" -c "Print :persistent-others:$index" "$BACKUP_PATH" >/dev/null 2>&1; do
+        existing=$("$plistbuddy_bin" -c "Print :persistent-others:$index:tile-data:file-data:_CFURLString" "$BACKUP_PATH" 2>/dev/null || true)
+        [[ $existing != "$launcher_url" ]] || return 0
+        index=$((index + 1))
+      done
+    fi
+    "$defaults_bin" write com.apple.dock persistent-others -array-add \
+      "{tile-data={file-data={_CFURLString=\"$launcher_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" >/dev/null 2>&1 || failed=1
+  fi
   if [[ $failed -eq 1 ]]; then
     restore_domain com.apple.dock || warn 'Dock rollback failed; backup retained'
     warn 'Dock write failed'
-    return
+    return 1
   fi
   "$killall_bin" -u "${USER:-$(id -un)}" Dock >/dev/null 2>&1 || true
 }
@@ -282,13 +295,15 @@ run_group() {
 
 if [[ ${1:-} == --desktop-only ]]; then
   run_group dock apply_dock
-  if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then /usr/bin/swift "$(dirname -- "$0")/scripts/quiet-desktop.swift"; fi
+  if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then
+    run_group desktop /usr/bin/swift "$(dirname -- "$0")/scripts/quiet-desktop.swift"
+  fi
   exit "$preference_status"
 fi
 
 if [[ ${1:-} != --input-only && ${1:-} != --shortcuts-only ]]; then
   run_group text apply_text
-  if [[ $dock_setup == 1 ]]; then run_group dock apply_dock; fi
+  if [[ ${1:-} != --no-dock ]]; then run_group dock apply_dock; fi
   if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then
     run_group desktop /usr/bin/swift "$(dirname -- "$0")/scripts/quiet-desktop.swift"
   fi

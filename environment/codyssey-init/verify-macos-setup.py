@@ -219,7 +219,7 @@ def verify_desktop(root: Path) -> None:
     try:
         baseline = (snapshot("com.apple.dock", directory),)
         for _ in range(2):
-            run(("bash", str(root / "macos-setup.sh"), "--desktop-only"))
+            run(("env", "CODYSSEY_DOCK_SETUP=1", "bash", str(root / "macos-setup.sh"), "--desktop-only"))
             verify_dock(export("com.apple.dock", directory, "desktop"))
             run(("zsh", str(Path.home() / "Library/Application Support/codyssey-init/Codyssey j.command"), "--list"))
     except BaseException:

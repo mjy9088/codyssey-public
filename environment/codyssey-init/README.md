@@ -276,10 +276,10 @@ group, it creates a private per-run backup under
 - preserves unrelated input sources while adding Gureum Hangul 2-set once;
 - configures Control-Space and Control-Shift-Space for input switching, Command-Space for Spotlight,
   and Option-Command-Space for the Spotlight window, and disables Caps Lock switching; and
-- restarts only the current user's Dock process when Dock cleanup is accepted.
+- restarts only the current user's Dock process when pins change.
 
 `CODYSSEY_INPUT_SWITCH` accepts `control-space` or `caps-lock`; `CODYSSEY_DOCK_SETUP` accepts `0` or `1`.
-Without a terminal, defaults are Control-Space and no Dock changes. The legacy
+Without a terminal, Control-Space is used and existing Dock pins/stacks are preserved while adding the j launcher once. The legacy
 `CODYSSEY_MACOS_SETUP=1` still opts into Dock cleanup in unattended runs.
 `CODYSSEY_MACOS_SETUP=0` explicitly skips all macOS preferences during bootstrap.
 `macos-setup.sh --input-only` changes input settings only; `--no-dock` also disables text automation.
@@ -341,9 +341,9 @@ input-source and shortcut changes may require logging out and back in.
 
 ### A quieter desktop
 
-Dock cleanup also pins `Codyssey j.command` in the document area of the Dock. Clicking it opens
+Setup pins `Codyssey j.command` in the document area of the Dock. Clicking it opens
 Terminal in this installation and runs `just`, with the user-local mise tools on PATH. It does not
-require the optional global `j` wrapper. An unowned launcher is preserved. Run
+require the optional global `j` wrapper. An unowned launcher is preserved. Declining Dock cleanup keeps existing pins, stacks and recent-app settings, and adds only the j launcher without duplicates. Run
 `bash macos-setup.sh --desktop-only` to apply only Dock and desktop cleanup.
 
 The desktop helper hides OrbStack's GUI without stopping Docker. With existing Accessibility access
