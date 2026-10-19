@@ -27,3 +27,25 @@ def test_service_crud_uses_real_sqlite(tmp_path: Path) -> None:
         service.delete(created.id)
 
     engine.dispose()
+
+
+def test_created_book_survives_engine_and_session_restart(tmp_path: Path) -> None:
+    # Given
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'persistent-catalog.db'}"
+    first_engine = create_engine(database_url)
+    Base.metadata.create_all(first_engine)
+    with Session(first_engine) as first_session:
+        created = BookService(BookRepository(first_session)).create(
+            BookInput(title="Parable of the Sower", author="Octavia Butler", year=1993)
+        )
+    first_engine.dispose()
+
+    # When
+    restarted_engine = create_engine(database_url)
+    with Session(restarted_engine) as restarted_session:
+        persisted = BookService(BookRepository(restarted_session)).get(created.id)
+
+    # Then
+    assert persisted.title == "Parable of the Sower"
+    assert persisted.author == "Octavia Butler"
+    restarted_engine.dispose()

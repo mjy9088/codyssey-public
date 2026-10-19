@@ -8,16 +8,33 @@ test("catalog supports a complete book lifecycle", async ({ page }) => {
 
   await test.step("When a reader adds and edits a book", async () => {
     await page.getByRole("link", { name: "Add a book" }).first().click()
+    await expect(page.getByRole("link", { name: "Cancel" })).toHaveAttribute("href", "/books")
     await page.getByLabel("Title").fill("The Left Hand of Darkness")
     await page.getByLabel("Author").fill("Ursula K. Le Guin")
     await page.getByLabel("Publication year").fill("1969")
+    const createResponsePromise = page.waitForResponse(
+      (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/books",
+    )
     await page.getByRole("button", { name: "Add to catalog" }).click()
+    const createResponse = await createResponsePromise
+    expect(createResponse.status()).toBe(303)
+    expect(createResponse.headers().location).toMatch(/^\/books\/\d+\?notice=created$/)
     await expect(page).toHaveURL(/\/books\/\d+\?notice=created$/)
+    await page.reload()
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("The Left Hand of Darkness")
 
     await page.getByRole("link", { name: "Edit record" }).click()
+    await expect(page.getByRole("link", { name: "Cancel" })).toHaveAttribute("href", "/books")
     await page.getByLabel("Title").fill("The Dispossessed")
     await page.getByLabel("Publication year").fill("1974")
+    const updateResponsePromise = page.waitForResponse(
+      (response) => response.request().method() === "POST" && /\/books\/\d+\/edit$/.test(new URL(response.url()).pathname),
+    )
     await page.getByRole("button", { name: "Save changes" }).click()
+    const updateResponse = await updateResponsePromise
+    expect(updateResponse.status()).toBe(303)
+    expect(updateResponse.headers().location).toMatch(/^\/books\/\d+\?notice=updated$/)
+    await page.reload()
   })
 
   await test.step("Then the updated record can be searched and removed", async () => {
@@ -28,9 +45,38 @@ test("catalog supports a complete book lifecycle", async ({ page }) => {
     await expect(page.locator(".book-card")).toHaveCount(1)
     await page.getByRole("link", { name: "The Dispossessed" }).click()
     await page.getByRole("link", { name: "Remove" }).click()
+    const deleteResponsePromise = page.waitForResponse(
+      (response) => response.request().method() === "POST" && /\/books\/\d+\/delete$/.test(new URL(response.url()).pathname),
+    )
     await page.getByRole("button", { name: "Remove book" }).click()
+    const deleteResponse = await deleteResponsePromise
+    expect(deleteResponse.status()).toBe(303)
+    expect(deleteResponse.headers().location).toBe("/books?notice=deleted")
     await expect(page).toHaveURL(/\/books\?notice=deleted$/)
     await expect(page.locator(".catalog")).toHaveCount(0)
+    await page.reload()
+    await expect(page.locator(".catalog")).toHaveCount(0)
+  })
+})
+
+test("home entry points and form cancellation are explicit", async ({ page }) => {
+  await test.step("Given the rendered home page", async () => {
+    await page.goto("/")
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Every good book")
+    await expect(page.getByText("Keep a concise record of the titles, authors, and years")).toBeVisible()
+    await expect(page.getByRole("link", { name: "Open the catalog" })).toHaveAttribute("href", "/books")
+    await expect(page.getByRole("link", { name: "Add your first book" })).toHaveAttribute("href", "/books/new")
+  })
+
+  await test.step("When a draft is cancelled", async () => {
+    await page.getByRole("link", { name: "Add your first book" }).click()
+    await page.getByLabel("Title").fill("Unsaved browser draft")
+    await page.getByRole("link", { name: "Cancel" }).click()
+  })
+
+  await test.step("Then no record is persisted", async () => {
+    await expect(page).toHaveURL(/\/books$/)
+    await expect(page.getByText("Unsaved browser draft")).toHaveCount(0)
   })
 })
 
