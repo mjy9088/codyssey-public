@@ -20,4 +20,9 @@ The Docker path runs formatting, linting, strict type checks, unit tests, and a 
 5. Confirm that date and author sorting call the handwritten stable merge sort; no `sorted()` or `list.sort()` is present.
 6. Try quoted names/messages, lower-case commands, malformed quotes, missing arguments, unknown branches, and unknown commits.
 
+Automated policy checks enforce immutable commit fields, direct keyword/author index lookup without
+commit-value scans, one-way module dependencies, and the absence of Git, persistence, filesystem,
+network, or subprocess capabilities in runtime modules. These checks inspect structure and behavior;
+they do not snapshot docstrings or other prose.
+
 QEMU and Docker results demonstrate local behavior only. They are not evidence of deployment or external collaboration. Generated logs and run reports should remain untracked because they become stale and duplicate the rerunnable checks.

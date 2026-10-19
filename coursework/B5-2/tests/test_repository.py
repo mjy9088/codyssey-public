@@ -1,10 +1,13 @@
 """Repository state and index tests."""
 
+from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime, timedelta
-from typing import final
+from typing import Never, final
 
 import pytest
+from mini_git.model import Commit, CommitId
 from mini_git.repository import Repository
+from typing_extensions import override
 
 
 class StepClock:
@@ -26,6 +29,12 @@ class SequenceClock:
 
     def __call__(self) -> datetime:
         return next(self._timestamps)
+
+
+class LookupOnlyCommits(dict[CommitId, Commit]):
+    @override
+    def values(self) -> Never:
+        raise AssertionError
 
 
 def repository() -> Repository:
@@ -72,6 +81,32 @@ def test_author_index_returns_authored_commits() -> None:
 
     # When / Then
     assert repo.search_author("Ada Lovelace") == [first, second]
+
+
+def test_commits_are_immutable_value_objects() -> None:
+    # Given
+    commit = repository().commit("original")
+
+    # When / Then
+    mutations = (("message", "changed"), ("parents", (CommitId("other"),)))
+    for name, value in mutations:
+        with pytest.raises(FrozenInstanceError):
+            setattr(commit, name, value)
+
+
+def test_keyword_and_author_search_read_indexes_without_scanning_commits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given
+    repo = repository()
+    first = repo.commit("Fix login")
+    second = repo.commit("Document login")
+    commits = {commit.commit_id: commit for commit in repo.log()}
+    monkeypatch.setattr(repo, "_commits", LookupOnlyCommits(commits))
+
+    # When / Then
+    assert repo.search_keyword("login") == [first, second]
+    assert repo.search_author("ada lovelace") == [first, second]
 
 
 def test_duplicate_branch_is_rejected() -> None:
