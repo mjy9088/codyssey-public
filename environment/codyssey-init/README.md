@@ -25,37 +25,10 @@ curl -fsSL https://raw.githubusercontent.com/mjy9088/codyssey-public/main/init.s
 ```
 
 The root entry point must be published to GitHub before that new URL is available.
-That command streams both the root wrapper and, by default, the Bash bootstrap from
-mutable `main`, so use it only when the latest branch is trusted. The wrapper buffers
-the Bash bootstrap in a temporary file before executing it. `CODYSSEY_INIT_REF` may
-select a reviewed full 40-character lowercase commit when immutable content is
-required, and `CODYSSEY_INIT_BASE_URL` may select another reviewed HTTPS raw source.
-Run `sh init.sh --help` or `sh init.sh --docs` without network access for usage and
-the documentation URL at the selected revision.
-
-To pin and buffer the root wrapper itself before execution, use:
-
-```sh
-(
-  ref=REPLACE_WITH_A_REVIEWED_COMMIT_CONTAINING_ROOT_INIT
-  installer=$(mktemp)
-  trap 'rm -f "$installer"' EXIT HUP INT TERM
-  curl -fsSL "https://raw.githubusercontent.com/mjy9088/codyssey-public/$ref/init.sh" -o "$installer" &&
-    sh "$installer"
-  status=$?
-  rm -f "$installer"
-  exit "$status"
-)
-```
-
-The nested POSIX entry point remains available for backward compatibility:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/mjy9088/codyssey-public/main/environment/codyssey-init/install.sh | sh
-```
-
-It resolves `main` once when `CODYSSEY_INIT_REF` is absent. Prefer an explicit
-reviewed full commit when using that older entry point.
+The remote command downloads the latest public `main` branch. It buffers the bootstrap before
+execution. Revision and mirror overrides are not supported; run `sh init.sh` from a reviewed local
+checkout when a fixed revision is needed. `sh init.sh --help` works without network access.
+The older `environment/codyssey-init/install.sh` URL follows the same branch.
 
 Remote mode stages the complete reusable runtime, including `init.sh`, `verify-macos-setup.py`, and
 runtime libraries, before copying anything into
@@ -299,7 +272,7 @@ group, it creates a private per-run backup under
 
 - disables macOS text automation;
 - when Dock cleanup is accepted and both Terminal and Google Chrome exist, replaces Dock app pins with those two apps,
-  hides recent items, and removes folder stacks; otherwise the entire Dock group is left unchanged;
+  adds a `Codyssey j.command` terminal launcher, hides recent items, and removes folder stacks; otherwise the entire Dock group is left unchanged;
 - preserves unrelated input sources while adding Gureum Hangul 2-set once;
 - configures Control-Space and Control-Shift-Space for input switching, Command-Space for Spotlight,
   and Option-Command-Space for the Spotlight window, and disables Caps Lock switching; and
@@ -365,6 +338,25 @@ classified as absent.
 Restoring a whole domain also reverts later changes in that domain. Restart affected applications;
 input-source and shortcut changes may require logging out and back in.
 
+### A quieter desktop
+
+Dock cleanup also pins `Codyssey j.command` in the document area of the Dock. Clicking it opens
+Terminal in this installation and runs `just`, with the user-local mise tools on PATH. It does not
+require the optional global `j` wrapper. An unowned launcher is preserved. Run
+`bash macos-setup.sh --desktop-only` to apply only Dock and desktop cleanup.
+
+The desktop helper hides OrbStack's GUI without stopping Docker. With existing Accessibility access
+for the terminal, it closes Notification Center close controls; it never requests that permission,
+changes privacy databases, or dismisses another app's dialogs. Without that access it prints a
+single hint. `just quiet-desktop` repeats the cleanup. To suppress future banners, enable Do Not
+Disturb in Control Center or disable unwanted apps in System Settings > Notifications. Those are
+per-user settings and require no administrator password. Automatic cleanup does not suppress future
+notifications, and a hidden OrbStack window may be reopened from its menu bar icon.
+
+Startup prints a single preparation message and the environment URL. Docker builds run privately;
+service startup and terminal image upgrades are quiet on success. Failures include the last twelve
+log lines and preserve the command's exit status. Temporary logs are removed after use.
+
 ### Destructive live preference verifier
 
 `verify-macos-setup.py` is a deliberately destructive live test requiring Python 3.10 or newer. It
@@ -406,7 +398,7 @@ download and Bash commands; it does not bootstrap the host.
 
 The bounded test build context excludes private `.env`, user-edited GOST runtime configuration,
 caches, and unrelated artifacts; it injects a synthetic GOST fixture instead. Bootstrap tests cover
-successful, failed, repeated, and conflicting immutable remote installs; preflight atomicity and
+successful, failed, repeated, and conflicting remote installs; preflight atomicity and
 staging cleanup; verified missing-`mise` installation; exported-key and existing-`.env` precedence;
 real-zsh execution; exact terminal-state restoration; browser-login URL handling; argument and exit
 status preservation; Bash-only rebuild scope; preparation overlap across unanswered PTY prompts;

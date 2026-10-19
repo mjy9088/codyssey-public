@@ -102,7 +102,9 @@ def assert_success_contract(state: Path) -> None:
     assert text["TISRomanSwitchState"] == 0
     dock = read_domain(state, "com.apple.dock")
     assert dock["show-recents"] is False and dock["static-only"] is False
-    assert dock["persistent-others"] == []
+    others = dock["persistent-others"]
+    assert len(others) == 1
+    assert others[0]["tile-data"]["file-data"]["_CFURLString"].endswith("/Codyssey%20j.command")
     apps = dock["persistent-apps"]
     assert isinstance(apps, list)
     urls: list[PlistValue] = []
@@ -122,8 +124,8 @@ def assert_success_contract(state: Path) -> None:
     assert sources.count({"InputSourceKind": "Input Mode", "Bundle ID": "org.youknowone.inputmethod.Gureum", "Input Mode": "org.youknowone.inputmethod.Gureum.han2"}) == 1
     hotkeys = read_domain(state, "com.apple.symbolichotkeys")["AppleSymbolicHotKeys"]
     assert isinstance(hotkeys, dict) and hotkeys["99"] == {"enabled": True}
-    assert hotkeys["60"] == {"enabled": True, "value": {"type": "standard", "parameters": [32, 49, 262144]}}
-    assert hotkeys["61"] == {"enabled": True, "value": {"type": "standard", "parameters": [32, 49, 393216]}}
+    assert hotkeys["60"] == {"enabled": True, "value": {"type": "standard", "parameters": [65535, 49, 262144]}}
+    assert hotkeys["61"] == {"enabled": True, "value": {"type": "standard", "parameters": [65535, 49, 393216]}}
 
 
 def test_success_and_repeat() -> None:
@@ -174,7 +176,7 @@ def test_export_and_write_failures_are_isolated_and_rolled_back() -> None:
         assert state_path(state, "com.apple.HIToolbox").read_bytes() == original_input
         assert read_domain(state, "com.apple.dock")["show-recents"] is False
         hotkeys = read_domain(state, "com.apple.symbolichotkeys")["AppleSymbolicHotKeys"]
-        assert hotkeys["60"]["value"]["parameters"] == [32, 49, 262144]
+        assert hotkeys["60"]["value"]["parameters"] == [65535, 49, 262144]
 
 
 def test_absent_domain_is_created_only_after_confirmed_absent() -> None:
@@ -185,7 +187,7 @@ def test_absent_domain_is_created_only_after_confirmed_absent() -> None:
         result = apply(env)
         assert result.returncode == 0
         hotkeys = read_domain(state, "com.apple.symbolichotkeys")["AppleSymbolicHotKeys"]
-        assert isinstance(hotkeys, dict) and set(hotkeys) == {"60", "61"}
+        assert isinstance(hotkeys, dict) and set(hotkeys) == {"60", "61", "64", "65"}
         backup_root = Path(env["HOME"]) / "Library/Application Support/codyssey-init/macos-backups"
         assert len(list(backup_root.glob("*/hotkeys.missing"))) == 1
 
@@ -258,7 +260,30 @@ def test_verifier_restores_after_keyboard_interrupt() -> None:
         assert original == {path.name: path.read_bytes() for path in state.glob("*.plist")}
 
 
+def test_launcher_executes_from_another_directory_and_preserves_arguments() -> None:
+    with tempfile.TemporaryDirectory(prefix="launcher's ") as temporary:
+        env, state = environment(Path(temporary))
+        baseline(state)
+        assert apply(env).returncode == 0
+        launcher = Path(env["HOME"]) / "Library/Application Support/codyssey-init/Codyssey j.command"
+        assert stat.S_IMODE(launcher.stat().st_mode) == 0o700
+        fake = Path(env["HOME"]) / ".local/bin/just"
+        fake.parent.mkdir(parents=True)
+        fake.write_text('#!/bin/sh\nprintf "cwd=%s\\n" "$PWD"\nprintf "arg=%s\\n" "$@"\nexit 29\n')
+        fake.chmod(0o700)
+        zsh = shutil.which("zsh")
+        assert zsh, "zsh is required to exercise the terminal launcher"
+        result = subprocess.run([zsh, str(launcher), "two words", "*"], cwd="/", env=env, text=True, capture_output=True)
+        assert result.returncode == 29, result.stderr
+        assert result.stdout.splitlines() == [f"cwd={ROOT}", "arg=two words", "arg=*"]
+        launcher.write_text("user owned\n")
+        result = apply(env)
+        assert result.returncode == 1
+        assert launcher.read_text() == "user owned\n"
+
+
 def main() -> None:
+    test_launcher_executes_from_another_directory_and_preserves_arguments()
     test_success_and_repeat()
     test_missing_chrome_preserves_entire_dock()
     test_export_and_write_failures_are_isolated_and_rolled_back()
@@ -267,7 +292,7 @@ def main() -> None:
     test_verifier_leaves_applied_state_on_success_and_restores_on_failure()
     test_verifier_retains_snapshot_when_restoration_fails()
     test_verifier_restores_after_keyboard_interrupt()
-    print("macOS setup isolated tests: 8 passed")
+    print("macOS setup isolated tests: 9 passed")
 
 
 if __name__ == "__main__":

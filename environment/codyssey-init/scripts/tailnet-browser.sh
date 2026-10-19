@@ -64,7 +64,6 @@ done
 # This is a private runtime copy. The ordinary unpacked extension stays opt-in.
 printf '{"enableOnInstall":true}\n' >"$extension/startup.json"
 if (( extension_changed )); then rm -f "$configured"; fi
-printf 'Portable browser: %s\nProfile: %s\n' "$binary" "$profile"
 if (( prepare_only )); then exit 0; fi
 if (( $# == 0 )); then set -- 'http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080'; fi
 

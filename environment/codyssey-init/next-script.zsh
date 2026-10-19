@@ -22,7 +22,7 @@ if (( prepared == 0 )); then
   trap 'interrupt_startup 129' HUP
   trap 'interrupt_startup 130' INT
   trap 'interrupt_startup 143' TERM
-  printf 'codyssey-init: starting background preparation.\n'
+  printf 'Preparing environment…\n'
   start_startup_preparation "$root"
 fi
 
@@ -39,12 +39,10 @@ open_browser() {
 
 if (( prepared == 0 )); then
   configure_tailscale_auth
-  printf 'codyssey-init: waiting for preparation.\n'
   wait_startup_preparation
-  printf 'codyssey-init: preparation complete.\n'
 fi
 eval "$(mise env -s zsh)"
-docker compose up -d --no-build
+run_quiet_step "Starting services" docker compose up -d --no-build
 wait_for_tailnet
 
 if [[ $tailnet_state == needs-login ]]; then
@@ -59,12 +57,11 @@ ui_url='http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080'
 wait_for_gost_ui
 
 printf 'GOST UI: %s\n' "$ui_url"
-printf 'Chrome extension: %s/chrome-extension (Load unpacked at chrome://extensions).\n' "$root"
 if [[ ${CODYSSEY_OPEN_BROWSER:-1} != 0 ]] && command -v open >/dev/null 2>&1; then
   open_browser "$ui_url" || printf 'Could not launch the browser; use the printed GOST URL.\n' >&2
 fi
 
+printf 'Environment ready. Use j or the Dock launcher to open the Tailnet terminal.\n'
 if [[ -t 0 && -t 1 && ${CODYSSEY_INTERACTIVE_SHELL:-1} != 0 ]]; then
-  printf 'Environment ready. Use just to enter the Tailscale container.\n'
   exec zsh -i
 fi

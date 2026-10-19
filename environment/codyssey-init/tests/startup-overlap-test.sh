@@ -181,9 +181,7 @@ if grep -q 'buffered preparation output' "$tmp/interactive.out"; then
   printf 'background preparation output interleaved with terminal prompts\n' >&2
   exit 1
 fi
-grep -q 'codyssey-init: starting background preparation.' "$tmp/interactive.out"
-grep -q 'codyssey-init: waiting for preparation.' "$tmp/interactive.out"
-grep -q 'codyssey-init: preparation complete.' "$tmp/interactive.out"
+grep -q 'Preparing environment…' "$tmp/interactive.out"
 assert_no_preparation_artifacts
 
 # A completed worker remains owned by init while the j and Dock prompts are unanswered.
@@ -231,7 +229,6 @@ EOF
   if [[ $expected_status -eq 0 ]]; then
     [[ -e $case_dir/services-started ]]
     grep -Fq '<--prepared>' "$case_dir/zsh.log"
-    grep -q 'codyssey-init: preparation complete.' "$case_dir/output"
   else
     [[ ! -e $case_dir/services-started && ! -e $case_dir/zsh.log ]]
     grep -q 'startup preparation failed (exit 19)' "$case_dir/output"

@@ -50,7 +50,7 @@ wait_startup_preparation() {
   fi
   if [ "$preparation_result" -ne 0 ]; then
     printf 'codyssey-init: startup preparation failed (exit %s).\n' "$preparation_result" >&2
-    [ ! -f "$startup_preparation_log" ] || cat "$startup_preparation_log" >&2
+    [ ! -f "$startup_preparation_log" ] || tail -n 12 "$startup_preparation_log" >&2
   fi
   clear_startup_preparation
   return "$preparation_result"
@@ -101,4 +101,20 @@ interrupt_startup() {
   restore_startup_terminal
   cancel_startup_preparation
   exit "$startup_result"
+}
+
+# Keep routine tool output out of the terminal; show bounded diagnostics on failure.
+run_quiet_step() {
+  local label=$1 log result
+  shift
+  log=$(mktemp "${TMPDIR:-/tmp}/codyssey-step.XXXXXX") || return 1
+  chmod 0600 "$log"
+  if "$@" >"$log" 2>&1; then result=0
+  else
+    result=$?
+    printf '%s failed (exit %s).\n' "$label" "$result" >&2
+    tail -n 12 "$log" >&2
+  fi
+  rm -f "$log"
+  return "$result"
 }

@@ -10,7 +10,7 @@ killall_bin=${KILLALL_BIN:-killall}
 applications_dir=${CODYSSEY_APPLICATIONS_DIR:-/Applications}
 system_applications_dir=${CODYSSEY_SYSTEM_APPLICATIONS_DIR:-/System/Applications}
 
-[[ $($uname_bin -s) == Darwin ]] || {
+[[ $("$uname_bin" -s) == Darwin ]] || {
   printf 'macos-setup.sh only supports macOS.\n' >&2
   exit 1
 }
@@ -19,14 +19,14 @@ input_switch=${CODYSSEY_INPUT_SWITCH:-control-space}
 dock_setup=${CODYSSEY_DOCK_SETUP:-}
 case ${1:-} in
   '') ;;
-  --input-only|--no-dock) dock_setup=0 ;;
+  --input-only|--no-dock|--desktop-only) dock_setup=0 ;;
   --shortcuts-only) input_switch=control-space; dock_setup=0 ;;
-  *) printf 'Usage: bash macos-setup.sh [--input-only | --no-dock | --shortcuts-only]\n' >&2; exit 2 ;;
+  *) printf 'Usage: bash macos-setup.sh [--input-only | --no-dock | --shortcuts-only | --desktop-only]\n' >&2; exit 2 ;;
 esac
 # Use the controlling terminal so curl | sh does not consume installer text.
 if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then
   if [[ -z $dock_setup ]]; then
-    printf 'Keep only Terminal and Chrome pinned in the Dock, and remove stacks/recent apps? [y/N] ' >/dev/tty
+    printf 'Pin Terminal, Chrome and the j terminal launcher in the Dock, and remove stacks/recent apps? [y/N] ' >/dev/tty
     IFS= read -r answer </dev/tty || answer=n
     case $answer in y|Y|yes|YES) dock_setup=1 ;; *) dock_setup=0 ;; esac
   fi
@@ -56,7 +56,7 @@ warn() {
 
 domain_exists() {
   local wanted=$1 listed domain
-  listed=$($defaults_bin domains 2>/dev/null) || return 2
+  listed=$("$defaults_bin" domains 2>/dev/null) || return 2
   while IFS= read -r domain; do
     domain=${domain#"${domain%%[![:space:]]*}"}
     domain=${domain%"${domain##*[![:space:]]}"}
@@ -119,7 +119,7 @@ apply_text() {
 }
 
 apply_dock() {
-  local terminal_app chrome_app terminal_url chrome_url failed=0
+  local terminal_app chrome_app terminal_url chrome_url launcher launcher_url temporary failed=0
   backup_domain dock com.apple.dock || return
   terminal_app="$system_applications_dir/Utilities/Terminal.app"
   chrome_app="$applications_dir/Google Chrome.app"
@@ -127,12 +127,30 @@ apply_dock() {
   if [[ ! -d $terminal_app || ! -d $chrome_app ]]; then
     return
   fi
+  launcher="$HOME/Library/Application Support/codyssey-init/Codyssey j.command"
+  mkdir -p "$(dirname -- "$launcher")" || return 1
+  if [[ -e $launcher || -L $launcher ]]; then
+    if [[ -L $launcher ]] || ! grep -qx '# codyssey-init: terminal-launcher-v1' "$launcher"; then
+      warn 'existing unowned terminal launcher preserved'
+      return 1
+    fi
+  fi
+  temporary=$(mktemp "$(dirname -- "$launcher")/.terminal.XXXXXX") || return 1
+  {
+    printf '%s\n' '#!/bin/zsh' '# codyssey-init: terminal-launcher-v1' 'set -eu' \
+      'export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"'
+    printf 'cd -- %q\n' "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+    printf '%s\n' 'exec just "$@"'
+  } >"$temporary"
+  chmod 0700 "$temporary" && mv -f "$temporary" "$launcher" || { rm -f "$temporary"; return 1; }
+  launcher_url="file://${launcher// /%20}"
   terminal_url="file://${terminal_app// /%20}/"
   chrome_url="file://${chrome_app// /%20}/"
   "$defaults_bin" write com.apple.dock persistent-apps -array \
     "{tile-data={file-data={_CFURLString=\"$terminal_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" \
     "{tile-data={file-data={_CFURLString=\"$chrome_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" >/dev/null 2>&1 || failed=1
-  "$defaults_bin" write com.apple.dock persistent-others -array >/dev/null 2>&1 || failed=1
+  "$defaults_bin" write com.apple.dock persistent-others -array \
+    "{tile-data={file-data={_CFURLString=\"$launcher_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" >/dev/null 2>&1 || failed=1
   "$defaults_bin" write com.apple.dock show-recents -bool false >/dev/null 2>&1 || failed=1
   "$defaults_bin" write com.apple.dock static-only -bool false >/dev/null 2>&1 || failed=1
   if [[ $failed -eq 1 ]]; then
@@ -155,9 +173,9 @@ apply_input_sources() {
     return
   }
   while "$plistbuddy_bin" -c "Print :AppleEnabledInputSources:$index" "$work" >/dev/null 2>&1; do
-    kind=$($plistbuddy_bin -c "Print :AppleEnabledInputSources:$index:InputSourceKind" "$work" 2>/dev/null || true)
-    bundle=$($plistbuddy_bin -c "Print :AppleEnabledInputSources:$index:'Bundle ID'" "$work" 2>/dev/null || true)
-    mode=$($plistbuddy_bin -c "Print :AppleEnabledInputSources:$index:'Input Mode'" "$work" 2>/dev/null || true)
+    kind=$("$plistbuddy_bin" -c "Print :AppleEnabledInputSources:$index:InputSourceKind" "$work" 2>/dev/null || true)
+    bundle=$("$plistbuddy_bin" -c "Print :AppleEnabledInputSources:$index:'Bundle ID'" "$work" 2>/dev/null || true)
+    mode=$("$plistbuddy_bin" -c "Print :AppleEnabledInputSources:$index:'Input Mode'" "$work" 2>/dev/null || true)
     if [[ $kind == 'Input Mode' && $bundle == 'org.youknowone.inputmethod.Gureum' && $mode == 'org.youknowone.inputmethod.Gureum.han2' ]]; then
       return
     fi
@@ -182,50 +200,29 @@ add_hotkey() {
     "$plistbuddy_bin" -c "Add :AppleSymbolicHotKeys:$identifier:value dict" "$work" &&
     "$plistbuddy_bin" -c "Add :AppleSymbolicHotKeys:$identifier:value:type string standard" "$work" &&
     "$plistbuddy_bin" -c "Add :AppleSymbolicHotKeys:$identifier:value:parameters array" "$work" &&
-    "$plistbuddy_bin" -c "Add :AppleSymbolicHotKeys:$identifier:value:parameters:0 integer 32" "$work" &&
+    "$plistbuddy_bin" -c "Add :AppleSymbolicHotKeys:$identifier:value:parameters:0 integer 65535" "$work" &&
     "$plistbuddy_bin" -c "Add :AppleSymbolicHotKeys:$identifier:value:parameters:1 integer 49" "$work" &&
     "$plistbuddy_bin" -c "Add :AppleSymbolicHotKeys:$identifier:value:parameters:2 integer $modifiers" "$work"
 }
 
 apply_hotkeys() {
-  local work identifier keycode modifiers conflicts=0
-  backup_domain hotkeys com.apple.symbolichotkeys || return
+  local work identifier modifiers
+  backup_domain hotkeys com.apple.symbolichotkeys || return 1
   if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then
     /usr/bin/swift "$(dirname -- "$0")/enable-korean.swift" --shortcuts
     return $?
   fi
-  work=$(mktemp "$backup_root/hotkeys.work.XXXXXX") || return
-  if [[ $BACKUP_KIND == present ]]; then
-    cp "$BACKUP_PATH" "$work"
-  else
-    "$plutil_bin" -create xml1 "$work" || return
-  fi
+  work=$(mktemp "$backup_root/hotkeys.work.XXXXXX") || return 1
+  if [[ $BACKUP_KIND == present ]]; then cp "$BACKUP_PATH" "$work"
+  else "$plutil_bin" -create xml1 "$work" || return 1; fi
   "$plistbuddy_bin" -c 'Print :AppleSymbolicHotKeys' "$work" >/dev/null 2>&1 ||
-    "$plistbuddy_bin" -c 'Add :AppleSymbolicHotKeys dict' "$work" || { warn 'hotkey map is unreadable'; return; }
-  # Spotlight can also own Control-Space on localized macOS installations.
-  # Preserve its other bindings; disable only conflicts with input switching.
-  for identifier in 64 65; do
-    keycode=$($plistbuddy_bin -c "Print :AppleSymbolicHotKeys:$identifier:value:parameters:1" "$work" 2>/dev/null || true)
-    modifiers=$($plistbuddy_bin -c "Print :AppleSymbolicHotKeys:$identifier:value:parameters:2" "$work" 2>/dev/null || true)
-    if [[ $keycode == 49 && ( $modifiers == 262144 || $modifiers == 393216 ) ]]; then
-      "$plistbuddy_bin" -c "Delete :AppleSymbolicHotKeys:$identifier:enabled" "$work" >/dev/null 2>&1 || true
-      "$plistbuddy_bin" -c "Add :AppleSymbolicHotKeys:$identifier:enabled bool false" "$work" || { warn 'Spotlight conflict could not be disabled'; return; }
-      conflicts=1
-    fi
+    "$plistbuddy_bin" -c 'Add :AppleSymbolicHotKeys dict' "$work" || return 1
+  for identifier in 60 61 64 65; do
+    case $identifier in 60) modifiers=262144 ;; 61) modifiers=393216 ;; 64) modifiers=1048576 ;; 65) modifiers=1572864 ;; esac
+    add_hotkey "$work" "$identifier" "$modifiers" || return 1
   done
-  # Unregister Spotlight's claim before registering the same key for input
-  # switching; a single reload can otherwise retain the old live binding.
-  if [[ $conflicts == 1 ]]; then
-    if ! "$defaults_bin" import com.apple.symbolichotkeys "$work" >/dev/null 2>&1; then
-      restore_domain com.apple.symbolichotkeys || warn 'hotkey rollback failed; backup retained'
-      return 1
-    fi
-    reload_hotkeys || return 1
-  fi
-  add_hotkey "$work" 60 262144 && add_hotkey "$work" 61 393216 || { warn 'hotkey update could not be prepared'; return 1; }
   if ! "$defaults_bin" import com.apple.symbolichotkeys "$work" >/dev/null 2>&1; then
     restore_domain com.apple.symbolichotkeys || warn 'hotkey rollback failed; backup retained'
-    warn 'hotkey write failed'
     return 1
   fi
 }
@@ -271,9 +268,18 @@ run_group() {
   fi
 }
 
+if [[ ${1:-} == --desktop-only ]]; then
+  run_group dock apply_dock
+  if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then /usr/bin/swift "$(dirname -- "$0")/scripts/quiet-desktop.swift"; fi
+  exit "$preference_status"
+fi
+
 if [[ ${1:-} != --input-only && ${1:-} != --shortcuts-only ]]; then
   run_group text apply_text
   if [[ $dock_setup == 1 ]]; then run_group dock apply_dock; fi
+  if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then
+    run_group desktop /usr/bin/swift "$(dirname -- "$0")/scripts/quiet-desktop.swift"
+  fi
 fi
 if [[ ${1:-} != --shortcuts-only ]]; then
   run_group input-sources apply_input_sources

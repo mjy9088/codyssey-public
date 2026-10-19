@@ -12,3 +12,6 @@ chrome-extension:
 
 browser:
     bash ./scripts/tailnet-browser.sh
+
+quiet-desktop:
+    swift ./scripts/quiet-desktop.swift

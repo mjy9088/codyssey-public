@@ -51,7 +51,7 @@ remote_files=(
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh
   scripts/configure-tailnet-browser.py
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh
-  scripts/prepare-startup.sh
+  scripts/prepare-startup.sh scripts/quiet-desktop.swift
 )
 remote_staging=
 mise_download=
@@ -109,17 +109,14 @@ install_managed_j() {
 }
 
 install_remote_files() {
-  local target=$1 base_url=$2 ref=$3 staging file destination
-  [[ $base_url == https://* ]] || die 'CODYSSEY_INIT_BASE_URL must use HTTPS.'
-  [[ $ref == main || $ref =~ ^[0-9a-f]{40}$ ]] || \
-    die 'CODYSSEY_INIT_REF must be main or a full 40-character reviewed commit.'
+  local target=$1 staging file destination
   staging=$(mktemp -d) || die 'could not create a staging directory.'
   remote_staging=$staging
   trap cleanup_remote_staging EXIT
   for file in "${remote_files[@]}"; do
     mkdir -p "$staging/$(dirname -- "$file")"
     curl --fail --location --silent --show-error \
-      "$base_url/$ref/environment/codyssey-init/$file" -o "$staging/$file"
+      "https://raw.githubusercontent.com/mjy9088/codyssey-public/main/environment/codyssey-init/$file" -o "$staging/$file"
   done
   for file in init.sh tailnet.sh lib/auth.sh lib/preparation.sh macos-setup.sh \
     scripts/prepare-startup.sh; do
@@ -197,11 +194,8 @@ if [[ -n $source_dir && -f $source_dir/next-script.zsh ]]; then
   [[ $init_dir == "$source_dir" ]] || die 'a local checkout must run in place; unset CODYSSEY_INIT_DIR.'
 else
   init_dir=${CODYSSEY_INIT_DIR:-"$HOME/.local/share/codyssey-init"}
-  base_url=${CODYSSEY_INIT_BASE_URL:-}
-  ref=${CODYSSEY_INIT_REF:-}
-  [[ -n $base_url ]] || die 'remote mode requires CODYSSEY_INIT_BASE_URL for a reviewed source.'
   command -v curl >/dev/null 2>&1 || die 'remote mode requires curl.'
-  install_remote_files "$init_dir" "${base_url%/}" "$ref"
+  install_remote_files "$init_dir"
 fi
 init_dir=$(CDPATH= cd -- "$init_dir" && pwd -P)
 
@@ -215,7 +209,7 @@ trap finish_startup EXIT
 trap 'interrupt_startup 129' HUP
 trap 'interrupt_startup 130' INT
 trap 'interrupt_startup 143' TERM
-printf 'codyssey-init: starting background preparation.\n'
+printf 'Preparing environment…\n'
 start_startup_preparation "$init_dir"
 
 if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then
@@ -265,9 +259,7 @@ fi
 
 cd "$init_dir"
 configure_tailscale_auth
-printf 'codyssey-init: waiting for preparation.\n'
 wait_startup_preparation
-printf 'codyssey-init: preparation complete.\n'
 if [[ -t 0 ]]; then
   exec zsh -i "$init_dir/next-script.zsh" --prepared
 fi

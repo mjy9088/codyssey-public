@@ -131,7 +131,7 @@ def prepare_fixture(baseline: tuple[DomainSnapshot, ...], directory: Path) -> tu
     raw_hotkeys = hotkey_values.get("AppleSymbolicHotKeys", {})
     if not isinstance(raw_hotkeys, dict):
         raise VerificationError("AppleSymbolicHotKeys is not a dictionary")
-    unrelated_hotkeys = {key: value for key, value in raw_hotkeys.items() if key not in {"60", "61"}}
+    unrelated_hotkeys = {key: value for key, value in raw_hotkeys.items() if key not in {"60", "61", "64", "65"}}
     hotkey_values["AppleSymbolicHotKeys"] = unrelated_hotkeys
 
     fixtures = {
@@ -164,18 +164,26 @@ def verify_preferences(directory: Path, unrelated_sources: list[dict[str, PlistV
         if not isinstance(tile_data, dict) or not isinstance(tile_data.get("file-data"), dict):
             raise VerificationError("Dock entry has an invalid plist shape")
         urls.append(tile_data["file-data"].get("_CFURLString"))
-    if urls != expected_urls or dock_values.get("persistent-others") != [] or dock_values.get("show-recents") is not False or dock_values.get("static-only") is not False:
+    others = dictionaries(dock_values.get("persistent-others", []), "persistent-others")
+    launcher = Path.home() / "Library/Application Support/codyssey-init/Codyssey j.command"
+    launcher_urls = [item.get("tile-data", {}).get("file-data", {}).get("_CFURLString") for item in others]
+    if urls != expected_urls or launcher_urls != [launcher.as_uri()] or dock_values.get("show-recents") is not False or dock_values.get("static-only") is not False:
         raise VerificationError("Dock preferences do not exactly match the requested state")
+    if not launcher.is_file() or not os.access(launcher, os.X_OK):
+        raise VerificationError("Dock terminal launcher is missing or not executable")
 
     sources = dictionaries(input_values.get("AppleEnabledInputSources", []), "AppleEnabledInputSources")
-    if sources != [*unrelated_sources, KOREAN]:
+    if any(source not in sources for source in unrelated_sources) or sources.count(KOREAN) != 1:
         raise VerificationError("input sources were not preserved with one exact Korean mode")
     hotkeys = hotkey_values.get("AppleSymbolicHotKeys")
     if not isinstance(hotkeys, dict):
         raise VerificationError("AppleSymbolicHotKeys is not a dictionary")
-    expected_60 = {"enabled": True, "value": {"type": "standard", "parameters": [32, 49, 262144]}}
-    expected_61 = {"enabled": True, "value": {"type": "standard", "parameters": [32, 49, 393216]}}
-    if {key: value for key, value in hotkeys.items() if key not in {"60", "61"}} != unrelated_hotkeys or hotkeys.get("60") != expected_60 or hotkeys.get("61") != expected_61:
+    expected_60 = {"enabled": True, "value": {"type": "standard", "parameters": [65535, 49, 262144]}}
+    expected_61 = {"enabled": True, "value": {"type": "standard", "parameters": [65535, 49, 393216]}}
+    for identifier, modifiers in (("64", 1048576), ("65", 1572864)):
+        if hotkeys.get(identifier) != {"enabled": True, "value": {"type": "standard", "parameters": [65535, 49, modifiers]}}:
+            raise VerificationError("Spotlight shortcuts were not configured")
+    if {key: value for key, value in hotkeys.items() if key not in {"60", "61", "64", "65"}} != unrelated_hotkeys or hotkeys.get("60") != expected_60 or hotkeys.get("61") != expected_61:
         raise VerificationError("symbolic hotkeys do not preserve unrelated typed entries")
     return values
 
@@ -217,9 +225,9 @@ def main() -> None:
         baseline = tuple(snapshot(domain, snapshot_root) for domain in DOMAINS)
         preferences_mutated = True
         unrelated_sources, unrelated_hotkeys = prepare_fixture(baseline, snapshot_root)
-        run(("bash", str(root / "macos-setup.sh")))
+        run(("env", "CODYSSEY_DOCK_SETUP=1", "bash", str(root / "macos-setup.sh")))
         first = verify_preferences(snapshot_root, unrelated_sources, unrelated_hotkeys)
-        run(("bash", str(root / "macos-setup.sh")))
+        run(("env", "CODYSSEY_DOCK_SETUP=1", "bash", str(root / "macos-setup.sh")))
         second = verify_preferences(snapshot_root, unrelated_sources, unrelated_hotkeys)
         if first != second:
             raise VerificationError("second application changed preferences")
