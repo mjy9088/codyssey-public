@@ -19,9 +19,7 @@ GitHub. Before then, run `sh init.sh` from this local repository root.
 
 The short URL streams a mutable `main` wrapper and, by default, buffers the Bash
 environment bootstrap from the same mutable branch before running it. Both must
-therefore be trusted at execution time. Use a reviewed local checkout or set
-`CODYSSEY_INIT_REF` to a reviewed full commit when immutable bootstrap content is
-required.
+therefore be trusted at execution time. Use a reviewed local checkout when a fixed bootstrap revision is needed.
 
 ## Repository map
 
