@@ -46,6 +46,7 @@ class PortableBrowserTests(unittest.TestCase):
         self.root = self.base / "source"
         (self.root / "scripts").mkdir(parents=True)
         shutil.copy(ROOT / "scripts/tailnet-browser.sh", self.root / "scripts")
+        shutil.copy(ROOT / "scripts/configure-tailnet-browser.py", self.root / "scripts")
         digest = hashlib.sha256(ARCHIVE).hexdigest()
         (self.root / "scripts/browser-version.sh").write_text(
             f"BROWSER_VERSION=155.0.8059.39\nBROWSER_MAC_X64_SHA256={digest}\nBROWSER_MAC_ARM64_SHA256={digest}\n"
@@ -65,6 +66,14 @@ class PortableBrowserTests(unittest.TestCase):
             self.env.pop(name, None)
         self.cache = self.home / "Library/Caches/codyssey-init"
         self.support = self.home / "Library/Application Support/codyssey-init"
+        # These launcher tests exercise an already configured synthetic profile;
+        # live DevTools profile setup requires Chrome on macOS.
+        extension = self.support / "tailnet-chrome-extension"
+        shutil.copytree(self.root / "chrome-extension", extension)
+        (extension / "startup.json").write_text('{"enableOnInstall":true}\n')
+        (self.support / "tailnet-browser-setup-v1").write_text(
+            "codyssey-init: Chrome profile setup v1\n"
+        )
 
     def tearDown(self):
         self.temporary.cleanup()
@@ -115,7 +124,7 @@ class PortableBrowserTests(unittest.TestCase):
         alias = self.base / "extension-alias"
         alias.symlink_to(first, target_is_directory=True)
         registry = self.support / "unpacked-extension-paths"
-        registry.parent.mkdir(parents=True)
+        registry.parent.mkdir(parents=True, exist_ok=True)
         registry.write_text(
             "\n".join([
                 str(first), str(self.support / "tailnet-chrome-extension"),
@@ -151,7 +160,7 @@ class PortableBrowserTests(unittest.TestCase):
 
     def test_fifo_registry_is_ignored_without_opening_it(self):
         registry = self.support / "unpacked-extension-paths"
-        registry.parent.mkdir(parents=True)
+        registry.parent.mkdir(parents=True, exist_ok=True)
         os.mkfifo(registry)
 
         result = self.run_launcher("about:blank")
@@ -165,7 +174,7 @@ class PortableBrowserTests(unittest.TestCase):
         extension.mkdir()
         (extension / "manifest.json").write_text("{}")
         registry = self.support / "unpacked-extension-paths"
-        registry.parent.mkdir(parents=True)
+        registry.parent.mkdir(parents=True, exist_ok=True)
         registry.write_text(f"{extension}\n")
         bash_environment = self.base / "bash-environment"
         bash_environment.write_text(

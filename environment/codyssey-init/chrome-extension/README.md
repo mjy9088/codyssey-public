@@ -3,13 +3,13 @@
 This Manifest V3 extension routes Chrome web requests through the bootstrap's SOCKS5 listener at
 `127.0.0.1:1055`. It uses only the `proxy` permission, with no content scripts, host permissions,
 credentials, remote code, telemetry, or dependencies. Ordinary unpacked installation starts with routing off. The portable launcher uses a private copy
-whose first installation enables Tailnet routing automatically.
+whose first installation enables All websites routing automatically.
 
 ## Portable browser
 
 Run `just browser` in the bootstrap directory. It downloads a pinned Chrome for Testing archive,
 verifies it, and automatically loads a private extension copy in a separate profile. No manual
-extension installation is needed. Tailnet routing enables on the first launch; subsequent launches
+extension installation is needed. All websites routing enables on the first launch; subsequent launches
 preserve the user's choice. See [the bootstrap README](../README.md#portable-tailnet-browser).
 
 ## Install in ordinary Chrome
@@ -24,13 +24,31 @@ keep the directory in place. After updating the files, use **Reload** on the Ext
 Chrome's supported local installation procedure is documented in its
 [extension tutorial](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world).
 
+Chrome may retain an unpacked extension's cached service worker across browser restarts.
+The portable launcher automatically enables Developer mode in its dedicated profile and reloads
+this extension on first setup or file changes. It uses Chrome's own extension-management APIs,
+without administrator, Accessibility, or Screen Recording permissions. A temporary loopback DevTools
+port is closed before the browser returns to normal use. Existing tabs are restored. Ordinary
+Chrome installations still use the manual Reload button after updating their unpacked files.
+
 ## Routing
+
+**All websites** is the default. Browser web connections and destination DNS resolution use
+SOCKS5 in the Tailscale container. This supports custom domains whose addresses belong to the
+Tailnet or an advertised subnet without maintaining domain or IP allowlists in the extension.
+Reachability still depends on the container's routes and Tailnet permissions. The SOCKS listener
+is local; requests then leave through the container's normal routes, not a Tailscale exit node
+unless one is configured. Localhost, loopback, and `.local` names stay direct.
+
+Version 1.1.0 migrates this extension's enabled 1.0.0 Tailnet-only proxy to All websites once.
+Disabled routing and externally controlled proxies are preserved. After that migration, selecting
+Tailnet-only mode remains available and subsequent launches preserve it.
 
 **Tailnet sites and private addresses** sends `.ts.net` names, single-label MagicDNS names,
 `100.64.0.0/10`, Tailscale IPv6 (`fd7a:115c:a1e0::/48`), and private IPv4 destinations through SOCKS5.
 Private IPv4 ranges are `10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`; their actual reachability
 depends on the container's routes and Tailnet permissions. Public websites stay direct.
-Use **All websites** for services at other domain names. Localhost, IPv4 loopback, IPv6 loopback,
+Use the default **All websites** for services at other domain names. Localhost, IPv4 loopback, IPv6 loopback,
 and `.local` names stay direct in both modes, including the local GOST dashboard.
 
 The extension does not authenticate Tailscale, install routes on macOS, select an exit node, or

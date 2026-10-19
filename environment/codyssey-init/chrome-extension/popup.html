@@ -13,13 +13,13 @@
     <p id="status" role="status">Checking routing…</p>
     <label for="mode">Route through Tailnet</label>
     <select id="mode">
-      <option value="tailnet">Tailnet sites and private addresses</option>
       <option value="all">All websites</option>
+      <option value="tailnet">Tailnet sites and private addresses</option>
     </select>
     <button id="toggle" disabled>Enable routing</button>
     <p id="error" role="alert" hidden></p>
     <p class="hint">Start the container and complete Tailscale login first. Enabling routing does not sign you in.</p>
-    <p class="hint">Localhost and .local sites stay direct. Tailnet mode includes MagicDNS names, .ts.net sites and private IPv4 addresses.</p>
+    <p class="hint">All websites uses the container's DNS and routes, including custom domains and subnet routes. Localhost and .local sites stay direct.</p>
     <a href="http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080" target="_blank" rel="noreferrer">Open local GOST dashboard ↗</a>
   </main>
   <script type="module" src="popup.mjs"></script>

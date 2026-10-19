@@ -1,4 +1,4 @@
-import {readStatus, changeRouting} from "./proxy.mjs";
+import {readStatus, changeRouting, migrateLegacyRouting} from "./proxy.mjs";
 
 async function updateBadge() {
   const status = await readStatus(chrome);
@@ -22,7 +22,12 @@ chrome.runtime.onInstalled.addListener((details) => {
   (async () => {
     if (details.reason === "install") {
       const startup = await fetch(chrome.runtime.getURL("startup.json")).then((response) => response.json());
-      if (startup.enableOnInstall === true) await changeRouting(chrome, true, "tailnet");
+      if (startup.enableOnInstall === true) await changeRouting(chrome, true, "all");
+    } else if (details.reason === "update") {
+      // The old PAC matched names/literal IPs, not custom domains resolving to
+      // Tailnet or subnet addresses. SOCKS5 resolves all names in the container.
+      // Migrate only our enabled proxy; preserve disabled and managed settings.
+      await migrateLegacyRouting(chrome);
     }
     await updateBadge();
   })().catch(() => {
@@ -30,7 +35,11 @@ chrome.runtime.onInstalled.addListener((details) => {
     chrome.action.setTitle({title: "Tailnet setup failed: open the extension to check routing"});
   });
 });
-chrome.runtime.onStartup.addListener(refresh);
+chrome.runtime.onStartup.addListener(() => {
+  migrateLegacyRouting(chrome).then(updateBadge, () => {
+    chrome.action.setBadgeText({text: "!"});
+  });
+});
 chrome.proxy.settings.onChange.addListener(refresh);
 chrome.proxy.onProxyError.addListener(() => {
   chrome.action.setBadgeText({text: "!"});

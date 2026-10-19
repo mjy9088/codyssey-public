@@ -15,6 +15,44 @@ system_applications_dir=${CODYSSEY_SYSTEM_APPLICATIONS_DIR:-/System/Applications
   exit 1
 }
 
+input_switch=${CODYSSEY_INPUT_SWITCH:-}
+dock_setup=${CODYSSEY_DOCK_SETUP:-}
+case ${1:-} in
+  '') ;;
+  --input-only|--no-dock) dock_setup=0 ;;
+  --shortcuts-only) input_switch=control-space; dock_setup=0 ;;
+  *) printf 'Usage: bash macos-setup.sh [--input-only | --no-dock | --shortcuts-only]\n' >&2; exit 2 ;;
+esac
+# Use the controlling terminal so curl | sh does not consume installer text.
+if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then
+  while [[ -z $input_switch ]]; do
+    printf 'Korean/English switching: [1] Control-Space (Gureum) [2] Caps Lock (requires compatible input source) (default 1): ' >/dev/tty
+    IFS= read -r answer </dev/tty || answer=1
+    case $answer in
+      ''|1) input_switch=control-space ;;
+      2) input_switch=caps-lock ;;
+      *) printf 'Choose 1 or 2.\n' >/dev/tty ;;
+    esac
+  done
+  if [[ -z $dock_setup ]]; then
+    printf 'Keep only Terminal and Chrome pinned in the Dock, and remove stacks/recent apps? [y/N] ' >/dev/tty
+    IFS= read -r answer </dev/tty || answer=n
+    case $answer in y|Y|yes|YES) dock_setup=1 ;; *) dock_setup=0 ;; esac
+  fi
+fi
+input_switch=${input_switch:-control-space}
+dock_setup=${dock_setup:-${CODYSSEY_MACOS_SETUP:-0}}
+case $input_switch in control-space|caps-lock) ;; *) printf 'CODYSSEY_INPUT_SWITCH must be control-space or caps-lock.\n' >&2; exit 2 ;; esac
+case $dock_setup in 0|1) ;; *) printf 'CODYSSEY_DOCK_SETUP must be 0 or 1.\n' >&2; exit 2 ;; esac
+if [[ $input_switch == caps-lock ]]; then
+  # Gureum 1.13.2 lacks TICapsLockLanguageSwitchCapable metadata (upstream #918).
+  # The native Apple source also failed to produce Hangul in this classroom
+  # session. A saved Caps Lock preference therefore cannot establish usability.
+  # Keep the confirmed Control-Space path; never swap input methods as a fallback.
+  printf 'Caps Lock switching is not working reliably in the reference environment. Choose Control-Space. No automatic input-method replacement will be performed.\n' >&2
+  exit 1
+fi
+
 backup_parent="$HOME/Library/Application Support/codyssey-init/macos-backups"
 mkdir -p "$backup_parent" || exit 0
 chmod 0700 "$backup_parent" || exit 0
@@ -115,6 +153,7 @@ apply_dock() {
 }
 
 apply_input_sources() {
+  [[ $input_switch != caps-lock ]] || return 0
   local work index=0 kind bundle mode failed=0
   backup_domain input-sources com.apple.HIToolbox || return
   [[ $BACKUP_KIND == present ]] || { warn 'input source list is unreadable'; return; }
@@ -158,8 +197,12 @@ add_hotkey() {
 }
 
 apply_hotkeys() {
-  local work
+  local work identifier keycode modifiers conflicts=0
   backup_domain hotkeys com.apple.symbolichotkeys || return
+  if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then
+    /usr/bin/swift "$(dirname -- "$0")/enable-korean.swift" --shortcuts
+    return $?
+  fi
   work=$(mktemp "$backup_root/hotkeys.work.XXXXXX") || return
   if [[ $BACKUP_KIND == present ]]; then
     cp "$BACKUP_PATH" "$work"
@@ -168,10 +211,42 @@ apply_hotkeys() {
   fi
   "$plistbuddy_bin" -c 'Print :AppleSymbolicHotKeys' "$work" >/dev/null 2>&1 ||
     "$plistbuddy_bin" -c 'Add :AppleSymbolicHotKeys dict' "$work" || { warn 'hotkey map is unreadable'; return; }
-  add_hotkey "$work" 60 262144 && add_hotkey "$work" 61 393216 || { warn 'hotkey update could not be prepared'; return; }
+  # Spotlight can also own Control-Space on localized macOS installations.
+  # Preserve its other bindings; disable only conflicts with input switching.
+  for identifier in 64 65; do
+    keycode=$($plistbuddy_bin -c "Print :AppleSymbolicHotKeys:$identifier:value:parameters:1" "$work" 2>/dev/null || true)
+    modifiers=$($plistbuddy_bin -c "Print :AppleSymbolicHotKeys:$identifier:value:parameters:2" "$work" 2>/dev/null || true)
+    if [[ $keycode == 49 && ( $modifiers == 262144 || $modifiers == 393216 ) ]]; then
+      "$plistbuddy_bin" -c "Delete :AppleSymbolicHotKeys:$identifier:enabled" "$work" >/dev/null 2>&1 || true
+      "$plistbuddy_bin" -c "Add :AppleSymbolicHotKeys:$identifier:enabled bool false" "$work" || { warn 'Spotlight conflict could not be disabled'; return; }
+      conflicts=1
+    fi
+  done
+  # Unregister Spotlight's claim before registering the same key for input
+  # switching; a single reload can otherwise retain the old live binding.
+  if [[ $conflicts == 1 ]]; then
+    if ! "$defaults_bin" import com.apple.symbolichotkeys "$work" >/dev/null 2>&1; then
+      restore_domain com.apple.symbolichotkeys || warn 'hotkey rollback failed; backup retained'
+      return 1
+    fi
+    reload_hotkeys || return 1
+  fi
+  add_hotkey "$work" 60 262144 && add_hotkey "$work" 61 393216 || { warn 'hotkey update could not be prepared'; return 1; }
   if ! "$defaults_bin" import com.apple.symbolichotkeys "$work" >/dev/null 2>&1; then
     restore_domain com.apple.symbolichotkeys || warn 'hotkey rollback failed; backup retained'
     warn 'hotkey write failed'
+    return 1
+  fi
+}
+
+apply_switch_mode() {
+  local state=0
+  [[ $input_switch != caps-lock ]] || state=1
+  backup_domain input-switch NSGlobalDomain || return 1
+  # Keep native Caps Lock switching off when using the confirmed shortcut path.
+  if ! "$defaults_bin" write NSGlobalDomain TISRomanSwitchState -int "$state"; then
+    restore_domain NSGlobalDomain || warn 'input-switch rollback failed; backup retained'
+    return 1
   fi
 }
 
@@ -184,41 +259,38 @@ enable_korean() {
 }
 
 reload_hotkeys() {
-  # This bootstrap targets the reference macOS environment, where this Apple
-  # helper is present. Refresh its current user's live shortcuts after import.
+  # The Swift writer already reloads bindings. Confirm again in a fresh process.
   if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then
-    # Synchronize the imported values before the helper reads its preference cache.
-    "$defaults_bin" read com.apple.symbolichotkeys AppleSymbolicHotKeys >/dev/null || return 1
-    /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u || {
-      warn 'live shortcut reload failed; log out and back in'
-      return 1
-    }
+    /usr/bin/swift "$(dirname -- "$0")/enable-korean.swift" --verify-shortcuts
   fi
 }
+
+if [[ ${1:-} == --shortcuts-only ]]; then
+  apply_switch_mode && apply_hotkeys && reload_hotkeys || exit 1
+  printf 'Shortcut settings applied; input sources unchanged. Backups: %s\n' "$backup_root"
+  exit 0
+fi
 
 if [[ ${1:-} == --input-only ]]; then
   apply_input_sources
   keyboard_status=0
   enable_korean || keyboard_status=$?
-  [[ $keyboard_status == 0 || $keyboard_status == 2 ]] || exit "$keyboard_status"
-  apply_hotkeys
+  [[ $keyboard_status == 0 ]] || exit "$keyboard_status"
+  apply_switch_mode || exit 1
+  if [[ $input_switch == control-space ]]; then apply_hotkeys || exit 1; fi
   reload_hotkeys || exit 1
-  if [[ $keyboard_status == 2 ]]; then
-    printf 'Gureum installed and shortcuts configured; logout/relogin is required before keyboard testing. Backups: %s\n' "$backup_root"
-  else
-    printf 'Gureum and Control-Space configured. Physical keyboard testing is still required. Backups: %s\n' "$backup_root"
-  fi
+  printf 'Korean input configured with %s switching. Test Korean and English in a text field. Backups: %s\n' "$input_switch" "$backup_root"
   exit 0
 fi
 
 apply_text
-apply_dock
+[[ $dock_setup != 1 ]] || apply_dock
 apply_input_sources
 keyboard_status=0
 enable_korean || keyboard_status=$?
-[[ $keyboard_status == 0 || $keyboard_status == 2 ]] || exit "$keyboard_status"
-apply_hotkeys
+[[ $keyboard_status == 0 ]] || exit "$keyboard_status"
+apply_switch_mode || exit 1
+if [[ $input_switch == control-space ]]; then apply_hotkeys || exit 1; fi
 reload_hotkeys || exit 1
-[[ $keyboard_status == 0 ]] || warn 'Gureum needs logout/relogin before keyboard testing'
 printf 'macOS preferences applied with group isolation. Backups: %s\n' "$backup_root"
 exit 0

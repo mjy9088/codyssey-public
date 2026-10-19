@@ -28,6 +28,7 @@ app="$directory/chrome-$platform/Google Chrome for Testing.app"
 binary="$app/Contents/MacOS/Google Chrome for Testing"
 profile="$support/tailnet-chrome-profile"
 extension="$support/tailnet-chrome-extension"
+configured="$support/tailnet-browser-setup-v1"
 staging=
 cleanup() { [[ -z $staging ]] || rm -rf "$staging"; }
 trap cleanup EXIT
@@ -55,11 +56,14 @@ if [[ ! -x $binary ]]; then
 fi
 
 mkdir -p "$profile" "$extension"
+extension_changed=0
 for file in manifest.json background.mjs proxy.mjs popup.html popup.css popup.mjs README.md; do
+  cmp -s "$root/chrome-extension/$file" "$extension/$file" || extension_changed=1
   install -m 0644 "$root/chrome-extension/$file" "$extension/$file"
 done
 # This is a private runtime copy. The ordinary unpacked extension stays opt-in.
 printf '{"enableOnInstall":true}\n' >"$extension/startup.json"
+if (( extension_changed )); then rm -f "$configured"; fi
 printf 'Portable browser: %s\nProfile: %s\n' "$binary" "$profile"
 if (( prepare_only )); then exit 0; fi
 if (( $# == 0 )); then set -- 'http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080'; fi
@@ -114,6 +118,13 @@ elif [[ -e $registry || -L $registry ]]; then
   printf 'tailnet-browser: ignoring unreadable extension registry: %s\n' "$registry" >&2
 fi
 
+if [[ ! -f $configured ]]; then
+  command -v python3 >/dev/null 2>&1 || die 'automatic Chrome profile setup requires Python 3 from Xcode Command Line Tools.'
+  printf 'Configuring the dedicated Chrome profile; existing tabs will be restored.\n'
+  python3 "$root/scripts/configure-tailnet-browser.py" "$binary" "$profile" "$extension" "$extensions"
+  printf 'codyssey-init: Chrome profile setup v1\n' >"$configured"
+fi
+
 open -na "$app" --args \
   "--user-data-dir=$profile" "--load-extension=$extensions" \
-  --no-first-run --no-default-browser-check "$@"
+  --restore-last-session --no-first-run --no-default-browser-check "$@"

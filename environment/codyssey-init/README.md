@@ -1,7 +1,7 @@
 # Codyssey macOS tailnet bootstrap
 
 This directory prepares a repeatable Tailscale and GOST environment for a macOS workstation that
-already has a working Docker Engine and Compose v2. It builds a pinned Tailscale image with Bash and
+has OrbStack installed or a working Docker Engine and Compose. It builds a pinned Tailscale image with Bash and
 other terminal tools, starts the tailnet and local GOST management services, and optionally applies a
 small set of macOS preferences.
 
@@ -66,7 +66,7 @@ place and rejects a different `CODYSSEY_INIT_DIR`, avoiding a partial or ambiguo
 
 ## Prerequisites
 
-- macOS with OrbStack or another Docker Engine exposing Compose v2
+- macOS with OrbStack installed in `/Applications` or `~/Applications`, or another running Docker Engine exposing Compose
 - `zsh`, `curl`, and ordinary terminal access
 - access to `/dev/net/tun` and permission for Docker to grant `NET_ADMIN` and `NET_RAW`
 - optionally, a Tailscale auth key or permission to complete browser login
@@ -79,7 +79,16 @@ No mutable shell installer is executed. Automatic installation requires `curl`, 
 explicitly installs `just@1.43.0`, and refreshes the shell environment with `mise env -s zsh` before
 Compose starts.
 
-`init.sh` checks that Docker is running, adds the user-local `mise` path and zsh activation block once,
+`init.sh` reuses a working Docker engine. Otherwise, on macOS with no explicit `DOCKER_HOST` or
+`DOCKER_CONTEXT`, it starts the installed OrbStack through its bundled `orb start` command, bypassing
+the first-run Next button. It adds the bundled Docker tools as a fallback on PATH, registers missing
+Compose and Buildx plugins under `${DOCKER_CONFIG:-$HOME/.docker}/cli-plugins`, and waits up to 60
+seconds for Docker readiness. Existing plugin files and explicit Docker targets are preserved.
+The fallback tools path is also added to `.zshrc` for later terminals. OrbStack itself must already
+be installed; the bootstrap does not download it. The CLI is documented in
+[OrbStack commands](https://docs.orbstack.dev/machines/commands).
+
+`init.sh` then adds the user-local `mise` path and zsh activation block once,
 and launches `next-script.zsh` as an interactive zsh script with terminal input restored when a controlling terminal is available. Secret input is read directly and silently from `/dev/tty`.
 
 When standard output is a terminal and a controlling terminal is available, `init.sh` offers to
@@ -191,7 +200,7 @@ Tailnet DNS forwarding remains enabled, and host-network mode does not change th
 ## Portable Tailnet browser
 
 On macOS the bootstrap now opens a portable **Chrome for Testing 155.0.8059.39** with the Tailnet
-extension loaded automatically. No browser installation, Web Store visit, or Load unpacked step is
+extension loaded automatically. No browser installation, Web Store visit, Developer mode toggle, or Load unpacked step is
 needed. The launcher chooses `mac-x64` on x86_64 and `mac-arm64` on Apple Silicon, downloads from
 Google's versioned archive, verifies its pinned SHA-256, and extracts into
 `~/Library/Caches/codyssey-init/`. It reuses the browser on later runs. Failed downloads, checksums,
@@ -205,11 +214,21 @@ bash scripts/tailnet-browser.sh https://server.example.ts.net
 bash scripts/tailnet-browser.sh --prepare
 ```
 
+On the first launch and whenever the bundled extension changes, the launcher configures the dedicated
+profile automatically: it enables Chrome Developer mode, reloads the unpacked extension, and verifies
+that its worker responds. It uses Python 3 from Xcode Command Line Tools and a temporary DevTools
+endpoint bound to loopback. Only the dedicated profile is restarted, with tabs restored. The setup
+browser and debugging endpoint close before normal Chrome starts. Managed policy or another
+extension controlling the proxy produces an error; no macOS permissions or administrator rights
+are granted. An unchanged, configured profile opens without this extra restart.
+
 The browser uses its own profile and extension copy under
-`~/Library/Application Support/codyssey-init/`. Tailnet routing enables automatically on the first
-launch; later launches preserve the user's routing choice. The extension routes MagicDNS names,
-`.ts.net` names, Tailscale IPs, and private IPv4 destinations. Public websites stay direct. Its popup
-can switch to All websites or disable routing. It needs only the `proxy` permission, and does not
+`~/Library/Application Support/codyssey-init/`. All websites routing enables automatically on the first
+launch; later launches preserve the user's routing choice. Browser web connections use the local
+SOCKS5 listener, with DNS resolution and routing in the container. Custom domain names and advertised
+subnet destinations work without a browser allowlist. Localhost, loopback, and `.local` stay direct.
+Its popup can select the narrower Tailnet-only mode or disable routing. The 1.1.0 upgrade migrates
+an enabled 1.0.0 Tailnet-only configuration to All websites once; disabled routing stays disabled. It needs only the `proxy` permission, and does not
 authenticate Tailscale or provide a system-wide VPN. Keep the Tailscale container running and logged in.
 
 The version and archive integrity pins live in `scripts/browser-version.sh`. The browser does not
@@ -239,12 +258,18 @@ See [the extension documentation](chrome-extension/README.md) for routing detail
 The SOCKS proxy must be reachable from macOS at `127.0.0.1:1055`; this has been verified on the current
 OrbStack installation. Other Docker engines may need port forwarding from their Linux VM.
 
-## Optional macOS preferences
+## macOS preferences
 
-This environment uses **Gureum 1.13.2 Hangul 2-set** by default. Other preferences are opt-in and nonfatal:
+This environment disables text automation and configures **Gureum 1.13.2 Hangul 2-set**
+with **Control-Space for input switching and Command-Space for Spotlight**.
+Interactive setup asks which Korean/English switching key to use (Control-Space or Caps Lock),
+then asks whether to keep only Terminal and Chrome pinned in the Dock. Caps Lock is currently unsupported
+in the reference environment: selecting it stops setup before changes, without replacing the input method.
+Pressing Enter selects Control-Space and preserves the Dock. Both prompts use `/dev/tty`, including under `curl | sh`.
+To provide choices without prompting:
 
 ```sh
-CODYSSEY_MACOS_SETUP=1 bash init.sh
+CODYSSEY_INPUT_SWITCH=control-space CODYSSEY_DOCK_SETUP=1 sh init.sh
 ```
 
 `macos-setup.sh` refuses non-Darwin systems and never uses `sudo`. Before each independent preference
@@ -252,39 +277,52 @@ group, it creates a private per-run backup under
 `~/Library/Application Support/codyssey-init/macos-backups/`. It then:
 
 - disables macOS text automation;
-- only when both Terminal and Google Chrome exist, replaces Dock app pins with those two apps,
+- when Dock cleanup is accepted and both Terminal and Google Chrome exist, replaces Dock app pins with those two apps,
   hides recent items, and removes folder stacks; otherwise the entire Dock group is left unchanged;
 - preserves unrelated input sources while adding Gureum Hangul 2-set once;
-- merges typed symbolic-hotkey entries 60 and 61 for Control-Space and Control-Shift-Space while
-  preserving unrelated shortcuts; and
-- restarts only the current user's Dock process.
+- configures Control-Space and Control-Shift-Space for input switching, Command-Space for Spotlight,
+  and Option-Command-Space for the Spotlight window, and disables Caps Lock switching; and
+- restarts only the current user's Dock process when Dock cleanup is accepted.
+
+`CODYSSEY_INPUT_SWITCH` accepts `control-space` or `caps-lock`; `CODYSSEY_DOCK_SETUP` accepts `0` or `1`.
+Without a terminal, defaults are Control-Space and no Dock changes. The legacy
+`CODYSSEY_MACOS_SETUP=1` still opts into Dock cleanup in unattended runs.
+`macos-setup.sh --input-only` changes input settings only; `--no-dock` also disables text automation.
+`macos-setup.sh --shortcuts-only` applies and verifies the shortcut bindings without changing input sources.
+Close System Settings before applying shortcuts: its Keyboard panel can overwrite new bindings with stale
+cached values. The helper checks the active WindowServer bindings after reloading, not only saved values.
+No Screen Recording, Accessibility, administrator privileges, or logout are needed for shortcut setup.
 
 The reference environment is macOS 15.7.5 on x86_64 with Gureum 1.13.2 installed at
 `/Library/Input Methods/Gureum.app`. This is an environment bootstrap, not a general-purpose macOS
 configuration tool. On a fresh machine, `scripts/install-gureum.sh` downloads the exact 1.13.2 package,
 verifies its pinned SHA-256, and extracts it into `~/Library/Input Methods/Gureum.app` without sudo.
 An existing matching installation is reused. Swift and the Xcode Command Line Tools are required for
-Carbon registration and selection; the script does not silently substitute Apple's input method.
+Carbon registration and selection. The prompt explicitly identifies the input method for each choice.
 
 `enable-korean.swift` registers the installed app, enables its parent source
 `org.youknowone.inputmethod.Korean` and Hangul mode `org.youknowone.inputmethod.Gureum.han2`, and attempts
 to select Hangul. The legacy parent ID differs from the app's bundle ID,
 `org.youknowone.inputmethod.Gureum`. After successful Gureum selection, it disables the Apple Korean
-sources added by the earlier bootstrap. A freshly registered input method may require logout/relogin:
-selection error `-50` was observed on this machine. The bootstrap reports the pending session step
-rather than claiming the physical shortcut works. After logging back in, rerun:
+sources added by the earlier bootstrap. Activation requests can return success before the user approves
+the macOS dialog. The helper stays alive for up to 120 seconds per source, services its run loop,
+and waits for actual activation before enabling the next source. Choose Allow when prompted.
+Already-enabled sources are not prompted again. Selection is verified against the current input source;
+timeout or selection failure stops setup with an actionable error. No logout is performed or required
+by the setup flow. To retry input setup in the current session:
 
 ```sh
 bash macos-setup.sh --input-only
 ```
 
-Control-Space uses symbolic hotkey 60 with parameters `[32, 49, 262144]`; Control-Shift-Space uses 61
-with `[32, 49, 393216]`. The old value `786432` was Control-Option-Space. After importing preferences,
-the setup reads them back to synchronize the preference cache, then calls this reference environment's
+Control-Space uses symbolic hotkey 60 with parameters `[65535, 49, 262144]`; Control-Shift-Space uses 61
+with `[65535, 49, 393216]`. The old value `786432` was Control-Option-Space. After synchronizing preferences through CFPreferences,
+the setup calls this reference environment's
 Apple helper, `/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u`.
 This is an environment-specific private helper, and its availability is a prerequisite for live reload.
-Loaded shortcut registration does not prove physical key handling; test in a focused text field after
-logout/relogin. See [HANDOFF.md](HANDOFF.md) for installed input-source details and fresh-VM steps.
+Loaded shortcut registration does not prove physical key handling; test both Korean and English in a
+focused text field. The setup does not automatically replace Gureum with Apple Korean when Caps Lock fails.
+See [HANDOFF.md](HANDOFF.md) for installed input-source details and fresh-VM steps.
 
 Every successful domain export is retained as `text.plist`, `dock.plist`,
 `input-sources.plist`, or `hotkeys.plist` in the backup directory printed by the script. To restore a

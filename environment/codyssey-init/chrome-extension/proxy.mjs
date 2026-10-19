@@ -24,7 +24,9 @@ export function FindProxyForURL(url, host) {
 export function proxyConfig(mode) {
   if (mode === "tailnet") {
     return {mode: "pac_script", pacScript: {
-      data: FindProxyForURL.toString(), mandatory: true
+      // Distinguish an explicit Tailnet-only choice from the old default during
+      // the one-time upgrade to All websites, without extra storage permission.
+      data: "// codyssey-proxy-explicit-tailnet-v1\n" + FindProxyForURL.toString(), mandatory: true
     }};
   }
   if (mode === "all") {
@@ -34,6 +36,15 @@ export function proxyConfig(mode) {
     }};
   }
   throw new Error("Choose Tailnet sites or All websites.");
+}
+
+export async function migrateLegacyRouting(api) {
+  const current = await setting(api, "get", {incognito: false});
+  if (current.levelOfControl === "controlled_by_this_extension" &&
+      current.value.mode === "pac_script" &&
+      !current.value.pacScript?.data?.startsWith("// codyssey-proxy-explicit-tailnet-v1\n")) {
+    await changeRouting(api, true, "all");
+  }
 }
 
 function setting(api, method, details) {
@@ -51,7 +62,7 @@ export async function readStatus(api) {
   const owned = result.levelOfControl === "controlled_by_this_extension";
   return {
     enabled: owned,
-    mode: owned && result.value.mode === "fixed_servers" ? "all" : "tailnet",
+    mode: !owned || result.value.mode === "fixed_servers" ? "all" : "tailnet",
     blocked: !["controllable_by_this_extension", "controlled_by_this_extension"].includes(result.levelOfControl)
   };
 }

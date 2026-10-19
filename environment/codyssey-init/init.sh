@@ -10,6 +10,37 @@ die() {
   exit 1
 }
 
+prepare_docker() {
+  local app tools plugin_dir plugin attempt
+  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    return
+  fi
+  if [[ $(uname -s) == Darwin && -z ${DOCKER_HOST:-} && -z ${DOCKER_CONTEXT:-} ]]; then
+    for app in /Applications/OrbStack.app "$HOME/Applications/OrbStack.app"; do
+      tools="$app/Contents/MacOS/xbin"
+      [[ -x $app/Contents/MacOS/bin/orb && -x $tools/docker ]] || continue
+      # Keep an existing Docker CLI ahead of the bundled fallback.
+      export PATH="$PATH:$tools"
+      plugin_dir="${DOCKER_CONFIG:-$HOME/.docker}/cli-plugins"
+      mkdir -p "$plugin_dir"
+      for plugin in docker-compose docker-buildx; do
+        if [[ ! -e $plugin_dir/$plugin && ! -L $plugin_dir/$plugin && -x $tools/$plugin ]]; then
+          ln -s "$tools/$plugin" "$plugin_dir/$plugin"
+        fi
+      done
+      printf 'Starting OrbStack through its bundled CLI.\n'
+      "$app/Contents/MacOS/bin/orb" start || die 'OrbStack could not start.'
+      for ((attempt = 0; attempt < 60; attempt++)); do
+        docker info >/dev/null 2>&1 && return
+        sleep 1
+      done
+      die 'OrbStack started but Docker did not become ready within 60 seconds.'
+    done
+  fi
+  command -v docker >/dev/null 2>&1 || die 'Docker is required; install OrbStack in /Applications first.'
+  die 'Docker is installed but its selected engine is not running.'
+}
+
 remote_files=(
   .dockerignore .env.example Dockerfile README.md HANDOFF.md docker-compose.yml init.sh justfile
   macos-setup.sh mise.toml next-script.zsh tailnet.sh verify-macos-setup.py
@@ -18,6 +49,7 @@ remote_files=(
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh
+  scripts/configure-tailnet-browser.py
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh
 )
 remote_staging=
@@ -166,8 +198,7 @@ else
 fi
 init_dir=$(CDPATH= cd -- "$init_dir" && pwd -P)
 
-command -v docker >/dev/null 2>&1 || die 'Docker is required.'
-docker info >/dev/null 2>&1 || die 'Docker is installed but its engine is not running.'
+prepare_docker
 command -v zsh >/dev/null 2>&1 || die 'zsh is required.'
 export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
 command -v mise >/dev/null 2>&1 || install_mise
@@ -185,6 +216,19 @@ zsh_dir=${ZDOTDIR:-$HOME}
 zshrc="$zsh_dir/.zshrc"
 mkdir -p "$zsh_dir"
 touch "$zshrc"
+if ! grep -q '^# codyssey-init: OrbStack tools$' "$zshrc"; then
+  cat >>"$zshrc" <<'EOF'
+
+# codyssey-init: OrbStack tools
+for codyssey_orb_app in /Applications/OrbStack.app "$HOME/Applications/OrbStack.app"; do
+  if [ -x "$codyssey_orb_app/Contents/MacOS/xbin/docker" ]; then
+    export PATH="$PATH:$codyssey_orb_app/Contents/MacOS/xbin"
+    break
+  fi
+done
+unset codyssey_orb_app
+EOF
+fi
 if ! grep -q '^# codyssey-init: mise$' "$zshrc"; then
   cat >>"$zshrc" <<'EOF'
 
@@ -194,10 +238,8 @@ eval "$(mise activate zsh)"
 EOF
 fi
 
-if [[ ${CODYSSEY_MACOS_SETUP:-0} == 1 ]]; then
-  bash "$init_dir/macos-setup.sh" || printf 'Optional macOS preferences failed; continuing.\n' >&2
-elif [[ $(uname -s) == Darwin ]]; then
-  bash "$init_dir/macos-setup.sh" --input-only
+if [[ ${CODYSSEY_MACOS_SETUP:-0} == 1 || $(uname -s) == Darwin ]]; then
+  bash "$init_dir/macos-setup.sh"
 fi
 
 if [[ -t 0 ]]; then

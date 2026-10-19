@@ -13,6 +13,7 @@ vm_files=(
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh tests/chrome-extension-test.mjs
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh tests/portable-browser-test.py
+  scripts/configure-tailnet-browser.py
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh
   scripts/verify-tailnet-runtime.py
   tests/tailnet-dns-test.sh

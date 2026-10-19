@@ -1,25 +1,24 @@
 # Codyssey environment handoff
 
-This change reproduces the reference classroom environment. It is not a general-purpose macOS
-installer. The delivery patch is relative to the **whole repository root**, `codyssey-public`, at
-base commit `464c4d15c1d148402345067cca3dd56888397aea`. All changed paths are in
-`environment/codyssey-init/`. The patch includes tracked edits and new source files; it excludes
-credentials, `.env`, local GOST configuration, browser profiles, downloaded applications, and logs.
+This directory provides the classroom macOS environment bootstrap. Runtime downloads, browser
+profiles, local credentials, preference backups, and generated patches remain outside tracked
+source. When transferring a change, export its reviewed commit as a patch from the repository root.
 
-## Current keyboard limitation
+## Input method activation
 
-**Physical Control-Space switching is not confirmed working on this machine.** Gureum's input modes
-were initially absent from the registration database despite the app being installed. Registering
-the app exposed its modes. Enabling Hangul succeeds, but selecting it currently returns macOS error
-`-50`; the input method's parent still reports disabled and the selected source remains ABC.
-The script reports that session limitation rather than reporting a working keyboard.
+The helper waits for macOS approval of the Gureum parent before enabling its Hangul mode.
+A successful activation-request return value does not mean approval has completed. The helper
+keeps its run loop alive, checks fresh input-source state, and verifies the selected source.
+Already-enabled sources are reused. If approval times out, rerun input setup and choose Allow.
+Do not log out or reboot the classroom session to complete this flow.
 
-The latest setup reads back imported shortcut preferences before calling Apple's live-reload helper.
-Both Control-Space and Control-Shift-Space were then visible as enabled in Carbon's live symbolic
-hotkey list. That verifies shortcut registration, not physical key handling or Hangul composition.
-Log out and back in, rerun `bash macos-setup.sh --input-only`, and test a focused text field.
-If selection still fails, keep that as an unresolved input-method activation issue; do not substitute
-Apple Korean and declare this reference environment reproduced.
+Interactive setup defaults to Control-Space for input switching and Command-Space for Spotlight,
+and asks separately whether to clean up Dock pins. Caps Lock is not reliable in the reference
+environment; that choice stops before changes rather than silently replacing the input method.
+Close System Settings before applying shortcuts to prevent stale Keyboard-panel preferences from
+restoring old bindings. The shortcut helper reloads and verifies the live WindowServer mappings.
+`bash macos-setup.sh --shortcuts-only` changes only shortcuts and leaves input sources alone.
+Verify both Korean composition and English typing in a focused text field.
 
 ## Input method installed on this machine
 
@@ -103,19 +102,19 @@ additional forwarding; that is a fresh-VM compatibility check, not a proven port
 4. Run `bash init.sh`. Leave the auth-key prompt blank for browser login. The script installs/reuses
    the pinned Gureum package and portable browser, starts the services, and opens authentication.
    For an initial unattended pass use `CODYSSEY_OPEN_BROWSER=0 bash init.sh`, then `just browser`.
-5. If the keyboard step reports pending activation, log out of macOS and back in. Rerun
-   `bash macos-setup.sh --input-only`. Do not reboot or log out through automation without coordinating
-   the interactive VM session.
-6. In a text field, confirm the menu shows Gureum Hangul 2-set and ABC. Press Control-Space in each
-   direction and verify actual Hangul composition. Check Control-Shift-Space separately. If the UI
-   intercepts the keys, distinguish VM-client forwarding from guest shortcut registration.
+5. Choose the switching key and Dock behavior at the prompts. Choose Allow in macOS input-source
+   activation dialogs while the helper waits. If approval times out, rerun
+   `bash macos-setup.sh --input-only` in the same session.
+6. In a text field, use the selected switching key in both directions and verify Hangul composition
+   and English typing. If the UI intercepts the keys, distinguish VM-client forwarding from guest
+   shortcut registration.
 7. Confirm `mise` and `just` are available in the setup's final zsh. Run `just bash`, type a command,
    then exit. Run `just browser` and test an authorized Tailnet website. Toggle routing off and on.
 8. Run `bash init.sh` again to check reuse and idempotence. Verify a container restart reconnects
    with the same node identity and that short MagicDNS names resolve in `just`. Check `mise --version`
    and `zellij --version` in that shell. Keep private VM evidence outside the public repository.
 
-Shortcut 60 must be enabled with `[32, 49, 262144]`. Shortcut 61 must use `[32, 49, 393216]`.
+Shortcut 60 must be enabled with `[65535, 49, 262144]`. Shortcut 61 must use `[65535, 49, 393216]`.
 The previous `786432` value meant Control-Option-Space, not Control-Shift-Space.
 
 The existing `scripts/verify-macos-vm.sh --disposable` workflow remains available for destructive
