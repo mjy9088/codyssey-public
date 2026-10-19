@@ -25,13 +25,13 @@ curl -fsSL https://raw.githubusercontent.com/mjy9088/codyssey-public/main/init.s
 ```
 
 The root entry point must be published to GitHub before that new URL is available.
-That command streams the root wrapper from mutable `main`, so use it only when that
-latest wrapper is trusted. By default, the wrapper downloads the Bash bootstrap from
-the reviewed commit `95de4b0b882b7f3e15cab05e4d847a01de36c1b9` into a temporary file before
-executing it. `CODYSSEY_INIT_REF` may select another reviewed full 40-character
-lowercase commit, and `CODYSSEY_INIT_BASE_URL` may select another reviewed HTTPS raw
-source. Run `sh init.sh --help` or `sh init.sh --docs` without network access for
-usage and the documentation URL at the selected revision.
+That command streams both the root wrapper and, by default, the Bash bootstrap from
+mutable `main`, so use it only when the latest branch is trusted. The wrapper buffers
+the Bash bootstrap in a temporary file before executing it. `CODYSSEY_INIT_REF` may
+select a reviewed full 40-character lowercase commit when immutable content is
+required, and `CODYSSEY_INIT_BASE_URL` may select another reviewed HTTPS raw source.
+Run `sh init.sh --help` or `sh init.sh --docs` without network access for usage and
+the documentation URL at the selected revision.
 
 To pin and buffer the root wrapper itself before execution, use:
 

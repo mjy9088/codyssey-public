@@ -17,11 +17,11 @@ curl -fsSL https://raw.githubusercontent.com/mjy9088/codyssey-public/main/init.s
 The new short URL becomes available after the root entry point is published to
 GitHub. Before then, run `sh init.sh` from this local repository root.
 
-The short URL streams a mutable `main` wrapper and must therefore be trusted at
-execution time. The wrapper validates and buffers an exact revision of the Bash
-environment bootstrap before running it; its default payload is pinned. Use a
-reviewed local checkout or the revision-pinned buffered command in the environment
-documentation when the wrapper itself must also be immutable.
+The short URL streams a mutable `main` wrapper and, by default, buffers the Bash
+environment bootstrap from the same mutable branch before running it. Both must
+therefore be trusted at execution time. Use a reviewed local checkout or set
+`CODYSSEY_INIT_REF` to a reviewed full commit when immutable bootstrap content is
+required.
 
 ## Repository map
 

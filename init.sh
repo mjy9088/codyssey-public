@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-DEFAULT_REF=95de4b0b882b7f3e15cab05e4d847a01de36c1b9
+DEFAULT_REF=main
 DEFAULT_HTTPS_BASE=https://raw.githubusercontent.com/mjy9088/codyssey-public
 REF=${CODYSSEY_INIT_REF:-$DEFAULT_REF}
 HTTPS_BASE=${CODYSSEY_INIT_BASE_URL:-$DEFAULT_HTTPS_BASE}
@@ -15,7 +15,7 @@ show_docs() {
 show_help() {
   printf '%s\n' 'Usage: sh init.sh [--help | --docs]' \
     'Run without arguments to start the Codyssey environment bootstrap.' \
-    'CODYSSEY_INIT_REF may select a reviewed full 40-character lowercase commit.' \
+    'CODYSSEY_INIT_REF may select main or a reviewed full 40-character lowercase commit.' \
     'CODYSSEY_INIT_BASE_URL may select a reviewed HTTPS raw-content source.'
   show_docs
 }
@@ -38,8 +38,19 @@ if [ -f "$0" ]; then
   fi
 fi
 
-case $REF in ''|*[!0-9a-f]*) printf '%s\n' 'CODYSSEY_INIT_REF must be 40 lowercase hexadecimal characters.' >&2; exit 2 ;; esac
-[ "${#REF}" -eq 40 ] || { printf '%s\n' 'CODYSSEY_INIT_REF must be 40 lowercase hexadecimal characters.' >&2; exit 2; }
+case $REF in
+  main) ;;
+  ''|*[!0-9a-f]*)
+    printf '%s\n' 'CODYSSEY_INIT_REF must be main or 40 lowercase hexadecimal characters.' >&2
+    exit 2
+    ;;
+  *)
+    [ "${#REF}" -eq 40 ] || {
+      printf '%s\n' 'CODYSSEY_INIT_REF must be main or 40 lowercase hexadecimal characters.' >&2
+      exit 2
+    }
+    ;;
+esac
 case $HTTPS_BASE in https://*) ;; *) printf '%s\n' 'CODYSSEY_INIT_BASE_URL must use HTTPS.' >&2; exit 2 ;; esac
 for dependency in curl mktemp bash; do
   command -v "$dependency" >/dev/null 2>&1 || { printf 'Required command not found: %s\n' "$dependency" >&2; exit 1; }

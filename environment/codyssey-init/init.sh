@@ -110,7 +110,8 @@ install_managed_j() {
 install_remote_files() {
   local target=$1 base_url=$2 ref=$3 staging file destination
   [[ $base_url == https://* ]] || die 'CODYSSEY_INIT_BASE_URL must use HTTPS.'
-  [[ $ref =~ ^[0-9a-f]{40}$ ]] || die 'CODYSSEY_INIT_REF must be a full 40-character reviewed commit.'
+  [[ $ref == main || $ref =~ ^[0-9a-f]{40}$ ]] || \
+    die 'CODYSSEY_INIT_REF must be main or a full 40-character reviewed commit.'
   staging=$(mktemp -d) || die 'could not create a staging directory.'
   remote_staging=$staging
   trap cleanup_remote_staging EXIT
