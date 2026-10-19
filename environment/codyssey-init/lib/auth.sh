@@ -23,8 +23,8 @@ configure_tailscale_auth() {
   tty_state=
   if { true <"$tty_path"; } 2>/dev/null; then
     tty_state=$(stty -g <"$tty_path")
-    printf 'Tailscale auth key or install/up command (blank for browser login): ' >"$tty_path"
     stty -echo <"$tty_path"
+    printf 'Tailscale auth key or install/up command (blank for browser login): ' >"$tty_path"
     IFS= read -r auth_input <"$tty_path" || auth_input=
     restore_tty
     printf '\n' >"$tty_path"
