@@ -3,6 +3,7 @@ services:
   data-init:
     image: alpine@sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412
     command: ["chmod", "0773", "/data"]
+    user: "65532:65532"
     network_mode: none
     read_only: true
     volumes:
