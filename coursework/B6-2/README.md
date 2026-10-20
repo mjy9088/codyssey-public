@@ -20,7 +20,7 @@ The default database is `data/catalog.db`. Override it with `CATALOG_DATABASE_UR
 # Strict lint, format, types, and unit/integration tests in a pinned container
 sh scripts/check.sh
 
-# Real app + SQLite + Chromium CRUD flow
+# Policy, type, and unit checks followed by the real app + SQLite + Chromium CRUD flow
 sh scripts/verify.sh docker
 
 # The same real app running inside an x86_64 QEMU TCG guest
