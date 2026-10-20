@@ -24,6 +24,19 @@ python -m unittest discover -s quiz_game/tests -v
 
 가상환경을 활성화하지 않은 경우 `.venv/bin/python`을 직접 사용할 수 있습니다.
 
+## Portable verification
+
+Run the complete 35-test suite with Docker when Python is unavailable on the host:
+
+```sh
+sh scripts/verify.sh docker
+```
+
+The verifier builds only this project from a digest-pinned Python 3.13 image. It copies the local
+application, tests, and test support modules into the image, then runs with networking disabled, a
+read-only root filesystem, and an unprivileged user. The temporary container and verifier image are
+removed when the command exits.
+
 ## 기능 목록
 
 - 기본 문제와 사용자가 추가한 문제 풀기
