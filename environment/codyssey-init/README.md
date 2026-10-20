@@ -345,13 +345,13 @@ Terminal in this installation and runs `just`, with the user-local mise tools on
 require the optional global `j` wrapper. An unowned launcher is preserved. Declining Dock cleanup keeps existing pins, stacks and recent-app settings, and adds only the j launcher without duplicates. Run
 `bash macos-setup.sh --desktop-only` to apply only Dock and desktop cleanup.
 
-The desktop helper hides OrbStack's GUI without stopping Docker. With existing Accessibility access
-for the terminal, it closes Notification Center close controls; it never requests that permission,
-changes privacy databases, or dismisses another app's dialogs. Without that access it prints a
-single hint. `just quiet-desktop` repeats the cleanup. To suppress future banners, enable Do Not
-Disturb in Control Center or disable unwanted apps in System Settings > Notifications. Those are
-per-user settings and require no administrator password. Automatic cleanup does not suppress future
-notifications, and a hidden OrbStack window may be reopened from its menu bar icon.
+The desktop helper hides OrbStack's GUI without stopping Docker or requiring Accessibility access.
+`just quiet-desktop` hides it again; the window may be reopened from its menu bar icon.
+Notification dismissal is not automated: controlling Notification Center requires separate
+Accessibility permission, which may already be granted to a VM's Guest Agent but is not assumed
+for a classroom terminal. Clear existing notifications manually. To suppress future banners,
+enable Do Not Disturb in Control Center or disable unwanted apps in System Settings > Notifications.
+Those are per-user settings and require no administrator password.
 
 Startup prints a single preparation message and the environment URL. Docker builds run privately;
 service startup and terminal image upgrades are quiet on success. Failures include the last twelve
@@ -374,6 +374,7 @@ CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 verify-macos-setup.py
 `--desktop-only` snapshots only Dock, applies the desktop setup twice, verifies the real launcher
 with `--list`, and preserves keyboard/text preferences. The unattended VM uses this mode plus
 independent live shortcut verification, so input-source approval cannot block its service tests.
+This mode does not verify notification dismissal or suppression.
 
 On success, the requested setup remains applied and the temporary verifier snapshot is removed. On
 any failure or interruption, restoration is attempted for every captured domain before the original
