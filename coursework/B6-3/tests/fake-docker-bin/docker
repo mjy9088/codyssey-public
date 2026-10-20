@@ -1,0 +1,12 @@
+#!/bin/sh
+printf '%s\n' "$*" >>"$ORCHESTRATION_CALLS"
+if [ "${CHECK_FAIL:-0}" = 1 ] && [ "$1" = run ]; then
+  exit 41
+fi
+if [ "${BROWSER_FAIL:-0}" = 1 ] && [ "$1" = compose ]; then
+  for argument do
+    if [ "$argument" = run ]; then
+      exit 42
+    fi
+  done
+fi

@@ -112,10 +112,11 @@ sh scripts/verify.sh docker
 sh scripts/verify.sh vm
 ```
 
-`scripts/check.sh` runs formatting, static analysis, and the Python test suite. Both full
-verification paths drive the rendered application through pinned Chromium with Playwright. The
-scenarios cover the authentication boundary, invalid credentials, missing records, catalog
-validation and CRUD, search, borrowing conflicts, loan filters, and return completion.
+`scripts/check.sh` runs formatting, static analysis, and the Python test suite. The Docker command
+runs that check suite first, then drives the rendered application through pinned Chromium with
+Playwright. The browser scenarios cover the authentication boundary, invalid credentials, missing
+records, catalog validation and CRUD, search, borrowing conflicts, loan filters, and return
+completion. The VM command runs the same browser scenarios against the application in the guest.
 
 For an already running development server, run the browser suite directly:
 

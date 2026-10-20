@@ -5,5 +5,6 @@ COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --locked --no-install-project
 COPY src/ src/
 COPY tests/ tests/
-RUN uv sync --locked
-CMD ["sh", "-c", ".venv/bin/ruff format --check . && .venv/bin/ruff check . && .venv/bin/basedpyright && .venv/bin/pytest -p no:cacheprovider"]
+COPY scripts/ scripts/
+RUN chmod +x tests/fake-docker-bin/docker && uv sync --locked
+CMD ["sh", "-c", ".venv/bin/ruff format --check . && .venv/bin/ruff check . && .venv/bin/basedpyright && .venv/bin/pytest -p no:cacheprovider && sh tests/test_verify_orchestration.sh"]
