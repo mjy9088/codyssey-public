@@ -1,0 +1,15 @@
+FROM python:3.13.7-alpine3.22@sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844
+
+WORKDIR /work
+ENV HOME=/tmp \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/work/quiz_game/src
+
+COPY main.py ./
+COPY quiz_game/src/ quiz_game/src/
+COPY quiz_game/tests/ quiz_game/tests/
+COPY scripts/capture_terminal_evidence.py scripts/render_terminal_svgs.py scripts/
+RUN chmod -R a+rX /work
+
+USER 65532:65532
+CMD ["python", "-m", "unittest", "discover", "-s", "quiz_game/tests", "-v"]
