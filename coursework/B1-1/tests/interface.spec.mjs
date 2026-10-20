@@ -2,23 +2,33 @@ import { mkdir } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { test, expect } from "./fixtures.mjs";
 
-test("identity copy is truthful and learner-oriented", async ({ page }) => {
+test("identity copy is neutral and aspiration-oriented", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page).toHaveTitle("Juyeong Maing — Software engineering learner");
-  await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /Juyeong Maing.*learning software engineering/i);
+  await expect(page).toHaveTitle("Juyeong Maing — Becoming a better developer");
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", "Portfolio and public GitHub repository index for Juyeong Maing, centered on the goal of becoming a better developer.");
   await expect(page.locator(".wordmark")).toHaveText("Juyeong Maing");
-  await expect(page.locator("#hero-title")).toHaveText(/Learning software,\s*one step at a time\./);
-  await expect(page.locator(".hero-lead")).toContainText("interested in software engineering");
-  await expect(page.locator("#about .about-copy")).toContainText("continue exploring software engineering");
-  await expect(page.locator("#skills-title")).toContainText("learning and practicing");
-  await expect(page.locator("#projects .section-heading")).toContainText("linked GitHub profile");
+  await expect(page.locator("#home .eyebrow")).toHaveText("Developer portfolio");
+  await expect(page.locator("#hero-title")).toHaveText(/Becoming a better developer,\s*one step at a time\./);
+  await expect(page.locator(".hero-lead")).toHaveText("I’m Juyeong Maing. My goal is to become a better developer, one step at a time.");
+  await expect(page.locator(".portrait img")).toHaveAttribute("alt", "Abstract line portrait of Juyeong Maing on a ruled portfolio page");
+  await expect(page.locator(".portrait figcaption")).toContainText("Portfolio margin note, one step at a time.");
+  await expect(page.locator("#about-title")).toHaveText("There is always room to grow.");
+  await expect(page.locator("#about .about-copy")).toContainText("This page is a simple index of the public repositories available through the linked GitHub profile.");
+  await expect(page.locator("#about .margin-note li")).toHaveText(["Aim for clarity.", "Keep improving.", "Stay curious."]);
+  await expect(page.locator('#primary-nav a[href="#skills"]')).toHaveText("Focus");
+  await expect(page.locator("#skills .section-heading .eyebrow")).toHaveText("02 / Focus");
+  await expect(page.locator("#skills-title")).toHaveText("Areas for continued growth.");
+  await expect(page.locator("#skills h3")).toHaveText(["Problem solving", "Web development", "Development tools"]);
+  await expect(page.locator("#projects .section-heading")).toContainText("This section loads repositories from the linked public GitHub profile.");
+  await expect(page.locator(".site-footer")).toContainText("A portfolio focused on becoming a better developer.");
+  await expect(page.locator(".footer-note")).toContainText("Continuing to grow, one step at a time.");
   await expect(page.locator("#contact-title")).toHaveText("Want to share a note?");
   await expect(page.locator('a[href="https://github.com/mjy9088"]')).not.toHaveCount(0);
 
   const visibleCopy = await page.locator("body").innerText();
   expect(visibleCopy).not.toContain("mjy9088");
-  expect(visibleCopy).not.toMatch(/Developer \/ curious builder|Useful software|My practice is|practical toolkit|latest work|problem worth making smaller|Designed and built/i);
+  expect(visibleCopy).not.toMatch(/learner|learning|practicing|foundations|small exercises|web basics|beginner|expert|experienced|professional|proficient|skilled|mastered|Developer \/ curious builder|Useful software|My practice is|practical toolkit|latest work|problem worth making smaller|Designed and built|my projects|my repositories/i);
 });
 
 test("semantic page, local assets, responsive layout and screenshot", async ({ page }, info) => {
