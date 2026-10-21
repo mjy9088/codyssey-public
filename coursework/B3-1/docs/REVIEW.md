@@ -13,8 +13,9 @@
 - Confirm password login is disabled, the public key is an input, the Ubuntu 22.04 Gen2 image version
   is explicit rather than `latest`, and the OS disk requests 30 GiB Standard LRS with ReadWrite
   caching. Do not treat the requested size as an observation of the image minimum or created disk.
-- Inspect `cloud-init.yaml` and its mock assertions for Nginx installation, the `OK` health artifact,
-  and service enablement.
+- Confirm Terraform custom data decodes to the exact `cloud-init.yaml` bytes. Inspect the pinned
+  `cloud-init` schema/rendering check and its isolated command effects: exact `OK` health bytes, index
+  content, Nginx package request, and service enablement request.
 - Confirm the deployment uses a resource-group data lookup and contains no resource group, role
   definition, or role assignment resource.
 - Confirm the bootstrap custom role is assignable only at the dedicated resource group, permits only
@@ -25,15 +26,18 @@
 ## Local evidence boundary
 
 `terraform test` uses a named AzureRM mock backed by the real provider schema. It can detect graph,
-configured-value, validation, cloud-init, output, and RBAC-scope regressions without credentials. It
-does not contact Azure and cannot establish image or VM-size availability, resource-provider
+configured-value, validation, exact custom-data, output, and RBAC-scope regressions without
+credentials. The verifier build additionally uses pinned Alpine cloud-init to validate the schema,
+render `runcmd`, execute its shell file writes, and record the requested package/service operations.
+It does not contact Azure and cannot establish image or VM-size availability, resource-provider
 registration, effective route selection, effective NSG rules, cloud-init completion, Microsoft Entra
 principal resolution, role propagation, RBAC enforcement, quota, policy, price, or billing cleanup.
 
-Docker mode proves the static site under Nginx. VM mode additionally proves a separate QEMU TCG Linux
-guest and guest HTTP forwarding. Neither mode boots the Azure Ubuntu image or exercises its managed
-disk, public IP, NIC, NSG, or bootstrap process. The public URL and external capture are intentionally
-not fabricated.
+Docker mode proves the exact static files are served under Nginx. VM mode additionally proves a
+separate QEMU TCG Alpine guest and guest HTTP forwarding; that guest does not contain or run
+cloud-init. Neither mode boots the Azure Ubuntu image or exercises its managed disk, public IP, NIC,
+NSG, APT repositories, systemd, or full bootstrap process. The public URL and external capture are
+intentionally not fabricated.
 
 ## Authorized live review
 

@@ -60,7 +60,10 @@ to the pinned Alpine artifact URLs, while runtime needs no external network.
 ## Caveats
 
 This validates the static site, Linux guest boot, and HTTP forwarding locally;
-it is not evidence of a cloud deployment. QEMU `restrict=on` blocks guest-initiated
-connections except the explicit inbound host forward. Alpine package repository
-retention can eventually require updating the exact package pins and their
-documented checksums together.
+it is not evidence of a cloud deployment. This minimal Alpine guest does not
+contain or run cloud-init, so it is separate from the verifier image's bounded
+cloud-config schema/rendering/command check and does not validate Ubuntu boot or
+bootstrap completion. QEMU `restrict=on` blocks guest-initiated connections except
+the explicit inbound host forward. Alpine package repository retention can
+eventually require updating the exact package pins and their documented checksums
+together.

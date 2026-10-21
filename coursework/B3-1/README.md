@@ -18,15 +18,25 @@ sh scripts/verify.sh all
 ```
 
 `docker` checks the site in an unprivileged Nginx container. `vm` boots an x86_64 Alpine guest under
-QEMU TCG and checks the same site through guest networking. Both verify `/health` returns HTTP 200
-with `OK` and `/not-present` returns 404; VM mode also checks its generated kernel proof endpoint.
-Runtime networking is an internal Compose network with no external egress.
+QEMU TCG and checks the same site through guest networking. Both compare the complete `/` and
+`/health` response bodies with the repository files and require `/not-present` to return 404; VM mode
+also checks its generated kernel proof endpoint. Runtime networking is an internal Compose network
+with no external egress.
 
 The verifier uses Terraform's explicitly named `mock_provider "azurerm"`, not an Azure emulator.
-It runs positive topology, cloud-init, output, and resource-group-scoped RBAC tests plus negative
-tests for open/malformed SSH sources, malformed public keys, moving image aliases, and invalid
-principal IDs. Mocks exercise the real provider schema without credentials or API calls. They do
-not implement the Azure control plane or dataplane.
+It runs positive topology, exact cloud-init payload, output, and resource-group-scoped RBAC tests
+plus negative tests for open/malformed SSH sources, malformed public keys, moving image aliases, and
+invalid principal IDs. Mocks exercise the real provider schema without credentials or API calls.
+They do not implement the Azure control plane or dataplane.
+
+During the verifier image build, pinned Alpine `cloud-init` `24.3.1-r2` validates the cloud-config
+schema and renders its `runcmd` through the real `cc_runcmd` module. The rendered commands then run
+inside that disposable build stage. The shell writes are real and their complete health output and
+key index content are checked; package installation and service management use recording stubs whose
+exact arguments are checked, so the build has no package or service side effects. This proves local
+schema, rendering, command syntax, ordering, and file effects. It does not reproduce Ubuntu boot,
+APT installation, systemd, or Azure provisioning. Image construction downloads pinned tools and
+packages; the Compose verification runtime remains offline.
 
 The verifier image pins Terraform `1.16.5` and selects its Linux archive from the build host
 architecture: `amd64` SHA-256
@@ -79,9 +89,12 @@ disk requirement or the created disk. VM size, image availability, regional quot
 subscription policy require live review; no free-tier eligibility is claimed.
 
 `cloud-init.yaml` performs the actual intended Ubuntu bootstrap: package metadata update, Nginx
-installation, an `OK` health file, an index page, and service enablement. Mock tests inspect that
-payload. The QEMU verifier serves the repository's static site from Alpine; it does **not** prove
-Ubuntu cloud-init, package installation, managed-disk behavior, or Azure networking.
+installation, an `OK` health file, an index page, and service enablement. Terraform checks that the
+VM receives those exact file bytes, while the disposable build-stage check validates and executes
+the rendered command payload under the bounded stubs described above. The QEMU verifier serves the
+repository's static site from Alpine and does **not** install or run cloud-init; it therefore does
+**not** prove Ubuntu cloud-init boot, package installation, systemd behavior, managed-disk behavior,
+or Azure networking.
 
 ## Deliberate live-cloud follow-up
 
