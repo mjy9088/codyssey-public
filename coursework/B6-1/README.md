@@ -74,6 +74,9 @@ SQLite requires `PRAGMA foreign_keys = ON` per connection, so each executable SQ
 
 `julianday()` in Q11 and `sqlite_master` in Q17 are explicitly SQLite-specific. All other queries stay close to portable SQL. The rental member index supports member-history lookups and joins; the `(book_id, status)` index supports open-loan checks by book.
 
+Use `EXPLAIN QUERY PLAN` interactively to inspect index selection. Query plans are excluded from
+the golden output because their formatting can vary between SQLite versions.
+
 ## Required result evidence
 
 [`results/expected.txt`](results/expected.txt) is deliberately versioned because query-result text is an explicit submission requirement. This is the sole execution-evidence exception. Ordinarily generated databases, logs, reports, and test output should not be tracked: they become stale, duplicate rerunnable automation, grow repositories, and may disclose local details. The verifier always regenerates results and performs a byte-for-byte comparison rather than trusting the checked-in text.
@@ -88,5 +91,4 @@ results/expected.txt       required golden query-result text
 scripts/check.sh           integrity, coverage, mutation, and result checks
 scripts/verify.sh          Docker/QEMU orchestration
 verify/vm/                 actual guest construction and execution
-docs/REVIEW.md             manual review guide
 ```
