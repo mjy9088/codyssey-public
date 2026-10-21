@@ -74,5 +74,3 @@ loopback protocol scenarios inside the guest. Each local server binds an ephemer
 is stopped after its scenario. Neither mode requires KVM, privileged mode, a host Docker socket,
 parent paths, cloud credentials, or external network access at runtime. Local verification does not
 prove API availability, model quality, a GitHub push, a published repository, or a human-reviewed PR.
-
-See [the review guide](docs/REVIEW.md) for expected boundaries and limitations.

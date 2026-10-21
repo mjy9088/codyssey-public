@@ -3,7 +3,6 @@ set -eu
 
 root=${1:?candidate root is required}
 readme="$root/README.md"
-review="$root/docs/REVIEW.md"
 cli="$root/src/ai_git_review/cli.py"
 
 require_fixed() {
@@ -32,7 +31,7 @@ require_pattern 'heuristics cannot identify every secret.*inspect the diff first
 require_pattern 'require credentials, incur cost.*confirm current model availability and pricing' "$readme"
 require_pattern 'output is a draft only.*never commits, pushes, opens a PR, or changes repository files' "$readme"
 require_fixed '--- END DRAFT: review before applying ---' "$cli"
-require_pattern 'human inspection remains mandatory' "$review"
-require_pattern 'not AI quality or live service behavior' "$review"
+require_pattern 'reminder to review before applying' "$readme"
+require_pattern 'does not prove model quality.*live service behavior' "$readme"
 
 printf 'PASS: documented run, API opt-in, safety, cost, and draft-review contracts\n'
