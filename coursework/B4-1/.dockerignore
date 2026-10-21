@@ -1,4 +1,5 @@
 .git
+.local
 artifacts
 __pycache__
 private
