@@ -16,7 +16,13 @@ for configuration in deployment access-bootstrap; do
   terraform -chdir="$directory" test
 done
 
-test "$(wget -qO- "$WEB_URL/health")" = OK
+wget -qO /tmp/health-response "$WEB_URL/health"
+cmp /work/web/health /tmp/health-response
+wget -qO /tmp/index-response "$WEB_URL/"
+cmp /work/web/index.html /tmp/index-response
+printf 'OK\n' | cmp - /work/cloud-init-output/health
+test "$(cat /work/cloud-init-output/apt-get.calls)" = 'install -y nginx'
+test "$(cat /work/cloud-init-output/systemctl.calls)" = 'enable --now nginx'
 if wget -qO /dev/null "$WEB_URL/not-present" 2>/tmp/not-present-error; then
   printf 'Missing path unexpectedly returned success\n' >&2
   exit 1
@@ -25,5 +31,5 @@ grep -q '404' /tmp/not-present-error
 if test "${VERIFY_MODE:-docker}" = vm; then
   wget -qO- "$WEB_URL/__vm-proof.txt" | grep -q '^kernel=Linux '
 fi
-printf 'PASS: pinned Terraform/AzureRM schema, mock topology, bootstrap scope, invalid-input, and HTTP checks\n'
-printf 'LIMIT: named Terraform mocks do not call Azure or prove image availability, cloud-init boot, NSG dataplane, or RBAC enforcement\n'
+printf 'PASS: pinned Terraform/AzureRM schema, exact payload, rendered cloud-init commands, bootstrap scope, invalid-input, and exact HTTP content\n'
+printf 'LIMIT: local cloud-init rendering uses package/service stubs and does not prove an Ubuntu boot, Azure image availability, NSG dataplane, or RBAC enforcement\n'
