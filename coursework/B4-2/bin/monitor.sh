@@ -7,9 +7,12 @@ test "$#" -ge 2 && test "$#" -le 4 || {
 pid=$1
 log=$2
 count=${3:-10}
-interval=${4:-0.25}
+interval=${4-0.25}
 case "$pid:$count" in *[!0-9:]*|:*|*:) echo 'PID and COUNT must be positive integers' >&2; exit 2 ;; esac
 test "$pid" -gt 0 && test "$count" -gt 0 || exit 2
+case "$interval" in
+  ''|*[!0-9.]*|*.*.*|.) echo 'INTERVAL must be a non-negative decimal number of seconds' >&2; exit 2 ;;
+esac
 mkdir -p "$(dirname "$log")"
 read_starttime() {
   stat_line=$(cat "/proc/$1/stat" 2>/dev/null || true)

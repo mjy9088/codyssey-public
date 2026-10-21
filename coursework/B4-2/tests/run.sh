@@ -15,6 +15,17 @@ cleanup() {
 trap cleanup EXIT INT TERM
 echo "LAB-OUTPUT-DIR=$out"
 
+for interval in nope -1 1e2 0.1s .. ''; do
+  set +e
+  "$root/bin/monitor.sh" "$$" "$out/invalid-interval/monitor.log" 1 "$interval" >"$out/interval-error" 2>&1
+  interval_status=$?
+  set -e
+  test "$interval_status" -eq 2
+  test ! -d "$out/invalid-interval"
+  grep -q 'INTERVAL' "$out/interval-error"
+done
+echo 'MONITOR-INTERVAL-CHECK malformed-input-rejected-before-output=yes'
+
 metric_value() {
   key=$1
   awk -v key="$key" 'NR == 1 { for (i=1; i<=NF; i++) if ($i ~ ("^" key "=")) { sub("^[^=]*=", "", $i); print $i; exit } }'
