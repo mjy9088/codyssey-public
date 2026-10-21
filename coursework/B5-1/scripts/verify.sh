@@ -17,7 +17,9 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 project="mini-redis-$mode-$$"
 compose() { docker compose -p "$project" -f "$root/compose.yaml" --profile verify --profile vm "$@"; }
 cleanup() { compose down --volumes --remove-orphans >/dev/null 2>&1 || true; }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 docker version >/dev/null
 docker compose version
 compose config --quiet
