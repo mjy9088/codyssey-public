@@ -61,7 +61,7 @@ sh scripts/verify.sh all
 
 The first run downloads digest-pinned base images and exact Python tool versions. Docker mode runs Ruff, BasedPyright, pytest, algorithm edges, and REPL happy/error paths. VM mode packages the same source and Python runtime into an initramfs, boots an x86_64 Alpine kernel under QEMU TCG, then executes deterministic graph checks and `main.py` inside the guest. It does not require KVM, privileged containers, a host Docker socket, bind mounts, private files, or parent-directory context.
 
-See [`docs/REVIEW.md`](docs/REVIEW.md) for reviewer checks. Verification output is intentionally not tracked; rerunnable automation is less stale and less likely to disclose local details than committed run logs.
+Verification output is intentionally not tracked; rerunnable automation is less stale and less likely to disclose local details than committed run logs.
 
 ## Layout
 
