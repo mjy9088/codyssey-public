@@ -74,3 +74,33 @@ Keep changes scoped to one project when practical, run the checks documented in
 that project's README, and never copy restricted assignment content into an
 issue, commit, test fixture, screenshot, or generated artifact. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the normal workflow.
+
+## Verification entry points
+
+Run coursework checks from the selected project directory, not the monorepo root:
+
+```sh
+cd coursework/B2-1
+sh scripts/verify.sh docker
+```
+
+All current projects under `coursework/` provide `scripts/verify.sh docker` and
+`scripts/verify.sh vm`. The latter boots a separate Linux guest under QEMU TCG;
+it is slower and is not a cloud deployment check. Read each project's README for
+download, memory, network, and simulation boundaries. Docker Engine, Compose, and
+a POSIX shell are the common host prerequisites. Do not run checks against real
+credentials or replace the synthetic fixtures with restricted inputs.
+
+Other entry points have different scopes:
+
+| Location | Command from that location | Scope |
+| --- | --- | --- |
+| Repository root | `sh scripts/check-init.sh` | Isolated tests of the root bootstrap wrapper, not a host installation |
+| `archive/E1-2/` | `sh scripts/verify.sh docker` | Containerized quiz application tests |
+| `archive/E1-3/` | `just check` | Local Python checks using the archive's declared tools |
+| `archive/E1-1/` | `bash lab.bash up`, `bash lab.bash run`, `bash lab.bash down` | Legacy privileged Docker-in-Docker lab; review its Compose mounts before use |
+
+There is deliberately no command that installs or runs every environment at once.
+Workflows inside archived or coursework `.github/` directories are not discovered
+by GitHub Actions while nested in this monorepo. Historical workflow links do not
+establish that the current checkout passes; rerun the relevant entry point.
