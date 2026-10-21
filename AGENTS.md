@@ -1,81 +1,19 @@
-# AGENTS.md
+# Repository guidance
 
-## Scope
+This public monorepo contains reference-quality implementations for the Codyssey
+AI All-in-One course. Prefer idiomatic, maintainable best practices over solutions
+that merely satisfy assessment checks.
 
-These instructions apply to the entire repository. A more specific `AGENTS.md`
-inside a project may add or override instructions for that subtree.
-
-## Repository intent
-
-This is the public working monorepo for the Codyssey AI All-in-One course. Make
-changes here only when every committed input and output is safe to publish.
-Treat the repository as permanently public, including its full Git history.
-
-## Content boundaries
-
-- Keep original assignment statements, answer keys, restricted course assets,
-  credentials, tokens, personal information, and material with uncertain
-  publication rights in the private workspace.
-- Do not reproduce restricted prompts in comments, tests, fixtures, commit
-  messages, screenshots, logs, or generated files.
-- Store source, tests, public documentation, reproducible tooling, and explicitly
-  required sanitized deliverables here.
-- Keep provided analysis archives and task data in the private repository. Public
-  tests must use publishable synthetic fixtures rather than restricted inputs.
-- Do not track execution logs, run reports, progress journals, traces, or generated
-  test results. Prefer rerunnable verification scripts and ignored/CI artifacts.
-  Only track an output explicitly required for submission; explain the exception
-  and why committing run artifacts is normally poor practice (staleness, repository
-  growth, and disclosure risks). Do not retroactively rewrite imported history.
-- Git tracks repository-owned inputs and outputs. Do not duplicate that with
-  source/output checksum manifests. Dependency locks and external download integrity
-  checks remain appropriate.
-- Stop and flag the file instead of committing it when publication safety is
-  uncertain.
-
-## Layout
-
-- `environment/`: development and classroom environment tooling.
-- `coursework/`: current work, one self-contained project per course identifier.
-- `archive/`: imported historical course repositories.
-- `docs/`: repository-wide policy and procedures.
-- New work: prefer a self-contained directory grouped by course stage or
-  project. Preserve the course's canonical capitalization (for example,
-  `E1-1`) and use kebab-case for names that have no canonical form.
-
-Do not move an imported subtree or rewrite imported history merely for cosmetic
-consistency. Explain any necessary cross-project change in the commit message.
-
-## Working conventions
-
-The repository-root `init.sh` is the sole public environment bootstrap entry point.
-Keep its implementation and macOS helpers under `environment/codyssey-init/`; do not
-add root-level copies or alternate public bootstrap wrappers. Coursework entry points
-remain scoped to their own project directories.
-
-1. Read the nearest README and any nested `AGENTS.md` before editing.
-2. Keep a change within one subtree unless shared policy or tooling requires a
-   repository-wide edit.
-3. Preserve the existing language, toolchain, formatter, and test conventions
-   of the affected project.
-4. Run the narrowest relevant checks first, then the project's full documented
-   verification when feasible.
-5. Do not commit dependency caches, virtual environments, editor state, secrets,
-   or generated evidence unless the project explicitly treats that evidence as
-   a deliverable.
-6. Use English for all authored documentation. Preserve original assignment wording,
-   canonical names, and imported historical content when their original form matters.
-
-## Git and submission safety
-
-- Never rewrite or squash the imported archive history without explicit owner
-  approval.
-- Never add a private repository as a public submodule or remote configuration
-  committed to this repository.
-- Before publishing, inspect staged paths and diffs and run a secret scan when
-  available.
-- Keep each coursework subtree independently buildable and limit its build
-  contexts to that subtree.
-- Prefer submitting the canonical subtree unchanged. If a destination requires a
-  standalone root, use the disposable-worktree or history-free archive procedure
-  in `docs/SUBMISSION_WORKFLOW.md`; do not merge submission-only changes back.
+- Write authored documentation in English.
+- Keep restricted assignment text and supplied assets/data in the private workspace;
+  use publishable synthetic fixtures for public tests.
+- Keep each coursework project independently runnable with Docker Engine and Compose,
+  without DIM, private materials, a host Docker socket, or real cloud credentials.
+  Limit build contexts to the project directory.
+- Keep `init.sh` as the sole root environment bootstrap entry point; its implementation
+  and platform helpers belong under `environment/codyssey-init/`, not in root copies.
+- Make fixtures and generation of logs, images, and other artifacts deterministic
+  wherever practical. Retain the scripts needed to reproduce them.
+- Prefer rerunnable verification over checked-in execution results. Keep run logs,
+  reports, traces, and verification screenshots in ignored artifacts or CI storage
+  unless an assignment explicitly requires them; document any such exception.
