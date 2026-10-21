@@ -46,6 +46,12 @@ Open `http://127.0.0.1:8000/login` after the server starts.
 
 The seed data is deterministic and intended only for local testing.
 
+This coursework has no production database or live-schema migration workflow. When the schema
+changes, discard the disposable local database and recreate it. For Compose, stop this project's
+services with `docker compose down --volumes`, then start them again; this deletes its local
+catalog data. For a direct local run, stop the server and remove only the selected SQLite database
+before restarting. Normal restarts still preserve data unless you explicitly reset it.
+
 | Fact | Value | Purpose |
 | --- | --- | --- |
 | Username | `reader` | Seeded local test account |

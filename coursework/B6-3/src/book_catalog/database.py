@@ -10,7 +10,6 @@ from sqlalchemy.pool import ConnectionPoolEntry
 
 from book_catalog.auth.passwords import hash_password
 from book_catalog.models import Base, Book, User
-from book_catalog.models.loan import ACTIVE_LOAN_INDEX
 
 DEFAULT_DATABASE_URL: Final = "sqlite+pysqlite:///data/catalog.db"
 DATABASE_URL: Final = environ.get("CATALOG_DATABASE_URL", DEFAULT_DATABASE_URL)
@@ -36,7 +35,6 @@ def _foreign_keys(connection: DBAPIConnection, _record: ConnectionPoolEntry) -> 
 def initialize_database() -> None:
     _prepare_path(DATABASE_URL)
     Base.metadata.create_all(engine)
-    ACTIVE_LOAN_INDEX.create(engine, checkfirst=True)
     with session_factory() as session:
         if session.scalar(select(User.id).limit(1)) is None:
             session.add(
