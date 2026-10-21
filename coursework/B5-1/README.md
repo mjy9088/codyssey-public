@@ -39,5 +39,3 @@ The verifier enforces that exact command allowlist and rejects runtime modules t
 persistence, networking, subprocesses, concurrency, or locks. Local Docker/QEMU execution
 demonstrates only this implementation in those environments. It is not evidence of a production
 Redis deployment or compatibility beyond the documented commands.
-
-See [the review guide](docs/REVIEW.md) for boundary scenarios and implementation inspection points.
