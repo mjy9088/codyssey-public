@@ -75,4 +75,4 @@ tmpfs, and wall-clock duration. Each invocation creates a mode-0700 evidence run
 mode-0600 raw and CR-normalized serial logs. The default is `.local/evidence/B4-1`; set
 `B4_PRIVATE_ARCHIVE` and `B4_PRIVATE_EVIDENCE_DIR` to absolute external paths for standalone use.
 
-See [the required operations report](docs/REPORT.md) and [review guide](docs/REVIEW.md).
+See [the required operations report](docs/REPORT.md).
