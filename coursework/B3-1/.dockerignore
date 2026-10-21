@@ -43,3 +43,9 @@
 **/*.tfplan
 **/*.tfvars
 **/*.tfvars.json
+**/.git
+**/.local
+**/.env
+**/.env.*
+**/*.key
+**/*.pem

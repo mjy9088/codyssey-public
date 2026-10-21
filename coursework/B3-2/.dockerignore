@@ -3,3 +3,9 @@
 artifacts
 __pycache__
 *.pyc
+**/.git
+**/.local
+**/.env
+**/.env.*
+**/*.key
+**/*.pem

@@ -5,3 +5,9 @@
 !tests/**
 !verify/
 !verify/**
+**/.git
+**/.local
+**/.env
+**/.env.*
+**/*.key
+**/*.pem
