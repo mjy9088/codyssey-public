@@ -14,7 +14,6 @@ if [[ -f $root/scripts/verify-private.sh ]]; then
   bash "$root/tests/verify-routing.sh"
   bash "$root/tests/private-wrapper-guards.sh"
 fi
-sh "$root/tests/verify-lifecycle.sh"
 
 AGENT_PORT=15034 "$root/tests/synthetic-app.sh" >"$tmp/app.log" 2>&1 &
 app_pid=$!

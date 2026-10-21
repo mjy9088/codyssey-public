@@ -21,6 +21,10 @@ is absent, the commands remain portable and run the clearly labeled synthetic Do
 Use `synthetic-docker`, `synthetic-vm`, or `synthetic-all` to select those public regressions
 explicitly even when a local archive is staged. `provided` requires the local archive.
 
+Run `sh tests/verify-lifecycle.sh` separately on the host to test the Docker wrapper's
+argument handling, signal status, and cleanup with fake commands. Repository CI runs
+this contract test; it is not an in-container application or guest test.
+
 Docker mode checks healthy and unhealthy process/port paths, logging, firewall warnings, and summary
 statistics. Its listener is a synthetic target and **is not evidence about any supplied application**.
 
