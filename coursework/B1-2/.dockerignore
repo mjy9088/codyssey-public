@@ -7,3 +7,9 @@ test-results
 .env*
 README.md
 DESIGN.md
+**/.git
+**/.local
+**/.env
+**/.env.*
+**/*.key
+**/*.pem

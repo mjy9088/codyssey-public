@@ -18,3 +18,9 @@
 !docs/screenshots/desktop.png
 !docs/screenshots/mobile.png
 !docs/screenshots/dark.png
+**/.git
+**/.local
+**/.env
+**/.env.*
+**/*.key
+**/*.pem
