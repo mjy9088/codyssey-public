@@ -1,10 +1,18 @@
 name: Publish B1-1 to Pages
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/b1-1-pages.yml
+      - coursework/B1-1/**
+      - scripts/package-pages.sh
+      - tests/pages-package-test.sh
   workflow_dispatch:
 
 permissions:
   contents: read
+  pages: read
 
 concurrency:
   group: pages
@@ -15,12 +23,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
+      - name: Check publication boundary
+        run: sh tests/pages-package-test.sh
       - name: Stage only B1-1 website assets
-        run: |
-          mkdir _site
-          cp coursework/B1-1/index.html _site/
-          cp -R coursework/B1-1/css coursework/B1-1/js coursework/B1-1/images _site/
-          touch _site/.nojekyll
+        run: sh scripts/package-pages.sh
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         with:
           path: _site
