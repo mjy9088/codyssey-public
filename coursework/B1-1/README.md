@@ -131,20 +131,22 @@ for kernel and artifact details.
 
 ## GitHub Pages
 
-No public deployment URL is currently available. Local verification is not deployment evidence.
+The monorepo deployment target is <https://mjy9088.github.io/codyssey-public/>. A configured target
+URL is not evidence that a deployment has completed; confirm a successful Actions deployment before
+claiming that it is live.
 
-The included Pages workflow is a template for a repository in which this subtree's contents,
-including `.github/`, have become the repository root. GitHub does not discover this nested workflow
-from its current monorepo location. Deployment and any push to a submission repository require
-separate approval.
+The root workflow, [Publish B1-1 to Pages](../../.github/workflows/b1-1-pages.yml), automatically runs
+when relevant files are pushed to `main`, and also supports **Run workflow** on `main`. With
+**Settings → Pages → Build and deployment → Source** set to **GitHub Actions**, no separate source
+branch or `/docs` directory is needed. Changing the Pages source alone does not run a workflow.
 
-For an approved deployment:
+The root workflow checks and packages only `index.html`, `css/`, `js/`, `images/`, and `.nojekyll`.
+Their relative URLs work under the repository's `/codyssey-public/` prefix. Run the packaging
+regression from the monorepo root with `sh tests/pages-package-test.sh`.
 
-1. Prepare a submission repository with this subtree at its root.
-2. Review the projected files and history before pushing.
-3. Set **Settings → Pages → Source** to **GitHub Actions**.
-4. Run **Publish portfolio to Pages** manually.
-5. Record the URL only after GitHub returns it, then evaluate the API, menu, theme, and form at that URL.
+The nested `.github/workflows/pages.yml` remains a standalone-subtree template; GitHub does not
+discover it while nested here. Publishing commits still requires separate approval. After the root
+workflow reports a successful deployment, evaluate the API, menu, theme, and form at its reported URL.
 
 The workflow deploys only site files; tests, QEMU assets, documentation, and development dependencies
 are excluded. The unauthenticated GitHub API is rate-limited, so automated tests use fixtures instead
