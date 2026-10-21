@@ -8,6 +8,9 @@
 !verify/Dockerfile
 !verify/Dockerfile.context-test
 !verify/Dockerfile.diagram
+!verify/cloud-init-bin/
+!verify/cloud-init-bin/apt-get
+!verify/cloud-init-bin/systemctl
 !verify/check.sh
 !verify/nginx.conf
 !verify/terraform.rc

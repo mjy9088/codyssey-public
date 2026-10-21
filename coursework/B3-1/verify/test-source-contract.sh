@@ -26,6 +26,7 @@ done
 
 test "$(grep -Fc 'ARG TERRAFORM_LINUX_AMD64_SHA256=2bc2fcfff033265c9e02ca0351f01794eb122f62a9b2a49a3294b9e49eaab5e4' "$root/verify/Dockerfile")" -eq 1
 test "$(grep -Fc 'ARG TERRAFORM_LINUX_ARM64_SHA256=61a50b00485ee4810cf20581ef080fc54d34d666e175c58d9a10501c65c1ccde' "$root/verify/Dockerfile")" -eq 1
+test "$(grep -Fxc 'RUN apk add --no-cache cloud-init=24.3.1-r2' "$root/verify/Dockerfile")" -eq 1
 test "$(grep -Fxc '**/*.tfvars' "$root/.dockerignore")" -eq 1
 test "$(grep -Fxc '**/*.tfvars.json' "$root/.dockerignore")" -eq 1
 
@@ -55,4 +56,4 @@ require_pattern 'not treat.*requested size.*observation.*created disk' "$review"
 require_pattern 'selected region.*quota.*policy.*expected cost before an apply' "$review"
 require_pattern 'never run live apply or destroy from local verification' "$review"
 
-printf 'PASS: restricted provider, architecture checksum, cleanup, and public limitation contracts\n'
+printf 'PASS: restricted provider, verifier pins, cleanup, and public limitation contracts\n'

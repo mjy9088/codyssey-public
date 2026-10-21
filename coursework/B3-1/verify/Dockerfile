@@ -25,10 +25,29 @@ RUN terraform -chdir=infrastructure/deployment init -backend=false -lockfile=rea
     && terraform_arch="$(cat /tmp/terraform-arch)" \
     && terraform -chdir=infrastructure/deployment providers mirror -platform="linux_${terraform_arch}" /opt/terraform/providers
 
+FROM alpine@sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412 AS cloud-init-payload
+
+RUN apk add --no-cache cloud-init=24.3.1-r2
+COPY infrastructure/deployment/cloud-init.yaml /tmp/cloud-init.yaml
+COPY verify/cloud-init-bin/ /usr/local/lib/cloud-init-test-bin/
+RUN chmod 0755 /usr/local/lib/cloud-init-test-bin/* \
+    && cloud-init schema --config-file /tmp/cloud-init.yaml \
+    && cloud-init single --name cc_runcmd --frequency always --file /tmp/cloud-init.yaml \
+    && mkdir -p /var/www/html \
+    && PATH="/usr/local/lib/cloud-init-test-bin:$PATH" sh /var/lib/cloud/instances/iid-datasource-none/scripts/runcmd \
+    && printf 'OK\n' | cmp - /var/www/html/health \
+    && test "$(cat /tmp/apt-get.calls)" = 'install -y nginx' \
+    && test "$(cat /tmp/systemctl.calls)" = 'enable --now nginx' \
+    && grep -Fq '<p>Azure bootstrap is healthy.</p>' /var/www/html/index.html \
+    && grep -Fq '<a href="health">Health endpoint</a>' /var/www/html/index.html
+
 FROM alpine@sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412
 COPY --from=terraform-provider /usr/local/bin/terraform /usr/local/bin/terraform
 COPY --from=terraform-provider /opt/terraform/providers /opt/terraform/providers
 COPY --from=terraform-provider /work/infrastructure /work/infrastructure
+COPY --from=cloud-init-payload /var/www/html /work/cloud-init-output
+COPY --from=cloud-init-payload /tmp/apt-get.calls /tmp/systemctl.calls /work/cloud-init-output/
+COPY web/ /work/web/
 COPY verify/check.sh /work/verify/check.sh
 COPY verify/terraform.rc /etc/terraform.rc
 ENV TF_CLI_CONFIG_FILE=/etc/terraform.rc
