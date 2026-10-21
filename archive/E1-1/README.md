@@ -71,10 +71,13 @@ bash lab.bash run
 bash lab.bash down
 ```
 
-전체 검증은 실패한 assertion에서 즉시 non-zero로 종료됩니다. 단계 하나만
-살펴보려면 `bash lab.bash shell`로 들어가 원하는
-[`scripts/`](scripts/) 파일을 실행합니다. `reset`은 실습 컨테이너, 이미지,
-볼륨 데이터를 삭제하므로 확인 문자열을 입력해야만 동작합니다.
+The full verification exits non-zero at the first failed assertion. To inspect
+one step, enter the workstation with `bash lab.bash shell` and run the selected
+file under [`scripts/`](scripts/). The `up` and `run` commands make 30 readiness
+attempts by default and fail instead of waiting indefinitely; set
+`LAB_READY_ATTEMPTS` to change that limit. The confirmed `reset` command removes
+the lab containers and the volume holding the nested Docker daemon data. It does
+not remove host-side build images or caches.
 
 ## 수행 로그
 

@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 
 readonly SERVICE="workstation"
+readonly SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly READY_ATTEMPTS="${LAB_READY_ATTEMPTS:-30}"
 readonly -a STEPS=(
   scripts/10-cli-and-permissions.bash
   scripts/20-environment-and-docker.bash
@@ -20,24 +22,44 @@ Usage: bash lab.bash <command>
   shell   Open an interactive shell in the workstation
   status  Show the outer container status
   down    Stop the workstation while preserving Docker data
-  reset   Remove the workstation and its Docker data (destructive)
+  reset   Remove workstation containers and nested Docker data (destructive)
 EOF
 }
 
 wait_until_ready() {
+  local attempt
+
   printf 'Waiting for the Docker daemon'
-  until docker compose exec -T "$SERVICE" docker info >/dev/null 2>&1; do
+  for ((attempt = 1; attempt <= READY_ATTEMPTS; attempt++)); do
+    if docker compose exec -T "$SERVICE" docker info >/dev/null 2>&1; then
+      printf ' ready\n'
+      return 0
+    fi
     printf '.'
-    sleep 1
+    ((attempt < READY_ATTEMPTS)) && sleep 1
   done
-  printf ' ready\n'
+
+  printf '\nDocker daemon did not become ready after %d attempts.\n' "$READY_ATTEMPTS" >&2
+  docker compose ps >&2 || true
+  return 1
 }
 
 prepare_runtime() {
   mkdir -p volumes/bind-mount .local/evidence
 }
 
-command="${1:-}"
+if ! [[ "$READY_ATTEMPTS" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'LAB_READY_ATTEMPTS must be a positive integer.\n' >&2
+  exit 2
+fi
+
+if (($# != 1)); then
+  usage >&2
+  exit 2
+fi
+
+cd "$SCRIPT_DIR"
+command="$1"
 case "$command" in
   up)
     prepare_runtime
@@ -64,7 +86,7 @@ case "$command" in
     docker compose down
     ;;
   reset)
-    printf 'This removes all lab containers, images, and volume data. Type RESET: '
+    printf 'This removes lab containers and nested Docker daemon data; host images and caches remain. Type RESET: '
     read -r confirmation
     [[ "$confirmation" == "RESET" ]] || { echo "Cancelled"; exit 1; }
     docker compose down --volumes --remove-orphans
