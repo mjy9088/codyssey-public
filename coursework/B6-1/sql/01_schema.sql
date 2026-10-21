@@ -16,7 +16,7 @@ CREATE TABLE members (
     member_id INTEGER PRIMARY KEY,
     full_name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
-    joined_on TEXT NOT NULL CHECK (joined_on = date(joined_on)),
+    joined_on TEXT NOT NULL CHECK (joined_on IS date(joined_on)),
     membership_status TEXT NOT NULL CHECK (membership_status IN ('active', 'suspended'))
 );
 
@@ -35,9 +35,11 @@ CREATE TABLE rentals (
     rental_id INTEGER PRIMARY KEY,
     member_id INTEGER NOT NULL,
     book_id INTEGER NOT NULL,
-    borrowed_on TEXT NOT NULL CHECK (borrowed_on = date(borrowed_on)),
-    due_on TEXT NOT NULL CHECK (due_on = date(due_on) AND due_on >= borrowed_on),
-    returned_on TEXT CHECK (returned_on IS NULL OR returned_on = date(returned_on)),
+    borrowed_on TEXT NOT NULL CHECK (borrowed_on IS date(borrowed_on)),
+    due_on TEXT NOT NULL CHECK (due_on IS date(due_on) AND due_on >= borrowed_on),
+    returned_on TEXT CHECK (
+        returned_on IS NULL OR (returned_on IS date(returned_on) AND returned_on >= borrowed_on)
+    ),
     status TEXT NOT NULL CHECK (status IN ('borrowed', 'returned', 'overdue')),
     CHECK (
         (status = 'returned' AND returned_on IS NOT NULL)

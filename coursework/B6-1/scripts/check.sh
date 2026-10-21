@@ -153,6 +153,16 @@ expect_rejected 'categories name UNIQUE' "INSERT INTO categories VALUES (93, 'Co
 expect_rejected 'categories shelf-code UNIQUE' "INSERT INTO categories VALUES (94, 'New category', 'A-01');"
 expect_rejected 'members email UNIQUE' "INSERT INTO members VALUES (93, 'Duplicate', 'ada@example.test', '2026-01-01', 'active');"
 expect_rejected 'books ISBN UNIQUE' "INSERT INTO books VALUES (93, 1, '9780000000001', 'New title', 'New author', 2020, 1);"
+for invalid_date in 'not-a-date' '2026-02-30' '2026-1-01'; do
+  expect_rejected 'member join date' "INSERT INTO members VALUES (95, 'Date probe', 'date-probe@example.test', '$invalid_date', 'active');"
+  expect_rejected 'rental borrow date' "INSERT INTO rentals VALUES (95, 1, 1, '$invalid_date', '2026-02-01', NULL, 'borrowed');"
+  expect_rejected 'rental due date' "INSERT INTO rentals VALUES (95, 1, 1, '2026-01-01', '$invalid_date', NULL, 'borrowed');"
+  expect_rejected 'rental return date' "INSERT INTO rentals VALUES (95, 1, 1, '2026-01-01', '2026-02-01', '$invalid_date', 'returned');"
+done
+expect_rejected 'return before borrowing' "INSERT INTO rentals VALUES (95, 1, 1, '2026-01-02', '2026-02-01', '2026-01-01', 'returned');"
+sqlite3 -batch "$database" "PRAGMA foreign_keys=ON; BEGIN;
+  INSERT INTO rentals VALUES (95, 1, 1, '2026-01-02', '2026-02-01', '2026-01-02', 'returned');
+  ROLLBACK;"
 
 counts=$(sqlite3 -batch -separator '|' "$database" \
   'SELECT (SELECT COUNT(*) FROM categories), (SELECT COUNT(*) FROM members), (SELECT COUNT(*) FROM books), (SELECT COUNT(*) FROM rentals);')
