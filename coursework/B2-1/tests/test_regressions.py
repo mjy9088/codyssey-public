@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from budget_app.cli import run
 from budget_app.errors import DataError, InputError
-from budget_app.models import ExportSelection, SearchCriteria, TransactionChanges, TransactionDraft
+from budget_app.models import ExportSelection, SearchCriteria, Transaction, TransactionChanges, TransactionDraft, TransactionId
 from budget_app.service import LedgerService
 from budget_app.storage import LedgerStore
 
@@ -24,6 +24,19 @@ class PersistenceRegressionTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
+
+    def test_add_when_id_space_is_exhausted_preserves_readable_ledger(self) -> None:
+        # Given the final representable id, without a million-record fixture
+        draft = TransactionDraft("2026-05-01", "expense", "food", "100", "", "")
+        last = Transaction.create(TransactionId("TX-999999"), draft)
+        self.store.replace_transactions(iter((last,)))
+        original = self.store.transactions_path.read_bytes()
+
+        # When another transaction is requested, then no unreadable id is stored.
+        with self.assertRaises(InputError):
+            self.service.add(draft)
+        self.assertEqual(self.store.transactions_path.read_bytes(), original)
+        self.assertEqual(list(self.store.iter_transactions()), [last])
 
     def test_list_when_dates_arrive_out_of_order_is_newest_date_then_id(self) -> None:
         # Given transactions added in an order that differs from their dates

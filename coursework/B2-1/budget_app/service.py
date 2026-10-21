@@ -38,6 +38,8 @@ class LedgerService:
     ) -> Transaction:
         self._require_category(draft.category)
         largest = max((int(item.id.removeprefix("TX-")) for item in self.store.iter_transactions()), default=0)
+        if largest >= 999999:
+            raise InputError("transaction id space is exhausted", "Use a new data directory; keep this ledger for history")
         transaction = Transaction.create(
             TransactionId(f"TX-{largest + 1:06d}"),
             draft,
