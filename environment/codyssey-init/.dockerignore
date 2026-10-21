@@ -5,3 +5,9 @@
 scripts/*
 !scripts/install-tailnet-tools.sh
 !scripts/tailnet-dns.sh
+**/.git
+**/.local
+**/.env
+**/.env.*
+**/*.key
+**/*.pem

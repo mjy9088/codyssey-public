@@ -10,3 +10,9 @@ node_modules
 test-results
 playwright-report
 blob-report
+**/.git
+**/.local
+**/.env
+**/.env.*
+**/*.key
+**/*.pem
