@@ -19,8 +19,8 @@ export const AboutPage = () => (
         <Database aria-hidden="true" />
         <h2>The backend is real</h2>
         <p>
-          The Firebase SDK talks to local Auth and Firestore emulators. There is no in-memory
-          repository hiding behind the UI.
+          The Firebase SDK talks to Auth and Firestore, using local emulators for verification or an
+          approved Firebase project for deployment. There is no in-memory repository behind the UI.
         </p>
       </article>
       <article>

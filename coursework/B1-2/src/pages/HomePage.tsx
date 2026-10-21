@@ -8,8 +8,7 @@ export const HomePage = () => (
         <p className="eyebrow">A small studio ledger</p>
         <h1>Make room for useful work.</h1>
         <p className="hero__lead">
-          Plan hands-on workshops, keep every state visible, and let a real local Firebase emulator
-          hold the schedule.
+          Plan hands-on workshops, keep every state visible, and let Firebase hold the schedule.
         </p>
         <div className="hero__actions">
           <ButtonLink to="/workshops">

@@ -22,7 +22,7 @@ export const EditWorkshopPage = () => {
   return (
     <div className="route-page">
       <PageHeader title={`Edit ${state.item.title}`}>
-        <p>Changes are written directly to the Firestore emulator.</p>
+        <p>Changes are written directly to Firestore.</p>
       </PageHeader>
       <WorkshopForm initial={state.item} submitLabel="Save changes" onSubmit={save} />
     </div>
