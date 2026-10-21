@@ -170,8 +170,8 @@ run "azure_topology_and_bootstrap" {
   }
 
   assert {
-    condition     = strcontains(base64decode(azurerm_linux_virtual_machine.web.custom_data), "package_update: true") && strcontains(base64decode(azurerm_linux_virtual_machine.web.custom_data), "apt-get install -y nginx") && strcontains(base64decode(azurerm_linux_virtual_machine.web.custom_data), "printf 'OK") && strcontains(base64decode(azurerm_linux_virtual_machine.web.custom_data), "/var/www/html/health")
-    error_message = "Cloud-init must install Nginx and create the live health artifact."
+    condition     = base64decode(azurerm_linux_virtual_machine.web.custom_data) == file("${path.module}/cloud-init.yaml")
+    error_message = "The VM custom_data must contain the exact cloud-init file bytes."
   }
 
   assert {
