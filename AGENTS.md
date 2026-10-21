@@ -48,6 +48,11 @@ consistency. Explain any necessary cross-project change in the commit message.
 
 ## Working conventions
 
+The repository-root `init.sh` is the sole public environment bootstrap entry point.
+Keep its implementation and macOS helpers under `environment/codyssey-init/`; do not
+add root-level copies or alternate public bootstrap wrappers. Coursework entry points
+remain scoped to their own project directories.
+
 1. Read the nearest README and any nested `AGENTS.md` before editing.
 2. Keep a change within one subtree unless shared policy or tooling requires a
    repository-wide edit.

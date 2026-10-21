@@ -1,0 +1,45 @@
+name: Repository checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check tracked repository boundaries
+        run: sh scripts/check-repository.sh
+      - name: Check the public bootstrap entry point
+        run: sh scripts/check-init.sh
+      - name: Check the internal bootstrap in isolation
+        run: sh environment/codyssey-init/scripts/check.sh
+      - name: Check publication and Pages packaging boundaries
+        run: |
+          sh tests/publish-coursework-test.sh
+          sh tests/pages-package-test.sh
+      - name: Check verifier lifecycle contracts
+        run: |
+          for project in B1-2 B4-1 B4-2 B5-1; do
+            sh "coursework/$project/tests/verify-lifecycle.sh"
+          done
+          sh coursework/B6-2/tests/test_verify_orchestration.sh
+          sh coursework/B6-3/tests/test_verify_orchestration.sh
+      - name: Check Docker context privacy boundaries
+        run: |
+          sh tests/docker-context-policy-test.sh
+          sh coursework/B6-2/tests/test_build_context.sh
+      - name: Check archived command boundaries without starting a lab
+        run: |
+          sh archive/E1-1/tests/lab-cli-test.sh
+          sh archive/E1-2/scripts/tests/verify_public_origin_test.sh

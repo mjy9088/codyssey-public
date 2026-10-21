@@ -14,8 +14,10 @@ start the bootstrap from a trusted network with:
 curl -fsSL https://raw.githubusercontent.com/mjy9088/codyssey-public/main/init.sh | sh
 ```
 
-The new short URL becomes available after the root entry point is published to
-GitHub. Before then, run `sh init.sh` from this local repository root.
+From a reviewed local checkout, run `sh init.sh` from this repository root. This is
+the only supported root bootstrap entry point. Its implementation and macOS helpers
+live under `environment/codyssey-init/`; do not copy those helpers to the root or
+invoke obsolete root-level setup scripts.
 
 The short URL streams a mutable `main` wrapper and, by default, buffers the Bash
 environment bootstrap from the same mutable branch before running it. Both must
@@ -93,6 +95,29 @@ issue, commit, test fixture, screenshot, or generated artifact. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the normal workflow.
 
 ## Verification entry points
+
+Start with the repository-level structural check:
+
+```sh
+sh scripts/check-repository.sh
+```
+
+It requires Git, Bash, tar, and Docker, but no host Python or Node.js. It runs synthetic
+checker regressions, then scans a snapshot of current Git-tracked public files for
+unexpected root source entrypoints, broken local Markdown targets, and missing
+`.dockerignore` policies in active coursework/environment projects. Stage new source
+files before scanning them. Ignored runtime state, supplied local inputs, dependency
+caches, and `.git` are not sent into the scanner. The scanner runs without networking,
+capabilities, a host-home mount, or a writable image filesystem.
+
+The [repository checks workflow](.github/workflows/repository-checks.yml) runs this
+guard, isolated bootstrap tests, safe publication/packaging tests, verifier lifecycle
+tests, synthetic Docker context privacy probes for every active project, and archive
+CLI fixtures. Run the context probes separately with `sh tests/docker-context-policy-test.sh`;
+they copy only each policy into a temporary synthetic context, not local application data.
+It does not install the environment on the runner,
+start the privileged archive lab, execute supplied B4 archives, or contact a real
+submission destination.
 
 Run coursework checks from the selected project directory, not the monorepo root:
 
