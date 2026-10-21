@@ -3,7 +3,6 @@ set -eu
 
 root=${1:?candidate root is required}
 readme="$root/README.md"
-review="$root/docs/REVIEW.md"
 cleanup="$root/docs/cleanup-checklist.md"
 
 require_pattern() {
@@ -52,8 +51,8 @@ require_pattern 'public endpoint was reached' "$readme"
 require_pattern 'no customer-created Internet gateway is attached' "$readme"
 require_pattern 'NSG.*differs from an AWS security group' "$readme"
 require_pattern 'cannot prove Microsoft Entra principal resolution or Azure authorization' "$readme"
-require_pattern 'not treat.*requested size.*observation.*created disk' "$review"
-require_pattern 'selected region.*quota.*policy.*expected cost before an apply' "$review"
-require_pattern 'never run live apply or destroy from local verification' "$review"
+require_pattern 'local mocks do not observe.*actual minimum.*created disk' "$readme"
+require_pattern 'VM size.*image availability.*quota.*price.*policy require live review' "$readme"
+require_pattern 'no script in this subtree automatically plans, applies, or destroys real Azure resources' "$readme"
 
 printf 'PASS: restricted provider, verifier pins, cleanup, and public limitation contracts\n'

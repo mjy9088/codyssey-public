@@ -120,7 +120,7 @@ state. Review and secure Terraform state storage before a shared or durable depl
    bootstrap root after checking for retained resources and cost records.
 
 No script in this subtree automatically plans, applies, or destroys real Azure resources. See
-[docs/REVIEW.md](docs/REVIEW.md) and [docs/cleanup-checklist.md](docs/cleanup-checklist.md). Required
+[docs/cleanup-checklist.md](docs/cleanup-checklist.md). Required
 cloud screenshots or reports must come from an actual authorized run. They are submission exceptions;
 normally keep generated evidence in ignored artifacts or CI because it becomes stale and can expose
 addresses or identity metadata.
