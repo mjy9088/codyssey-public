@@ -1,6 +1,6 @@
 from typing import final
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from book_catalog.models.book import Book
@@ -47,10 +47,28 @@ class BookRepository:
         self._session.refresh(book)
         return book
 
-    def update(self, book: Book, draft: BookInput) -> Book:
-        book.title, book.author = draft.title, draft.author
-        book.year, book.total_copies = draft.year, draft.total_copies
+    def update_with_capacity(self, book: Book, draft: BookInput) -> Book | None:
+        active_count = (
+            select(func.count())
+            .select_from(Loan)
+            .where(Loan.book_id == book.id, Loan.status == LoanStatus.BORROWED)
+            .scalar_subquery()
+        )
+        statement = (
+            update(Book)
+            .where(Book.id == book.id, active_count <= draft.total_copies)
+            .values(
+                title=draft.title,
+                author=draft.author,
+                year=draft.year,
+                total_copies=draft.total_copies,
+            )
+            .returning(Book.id)
+        )
+        updated_id = self._session.scalar(statement)
         self._session.commit()
+        if updated_id is None:
+            return None
         self._session.refresh(book)
         return book
 

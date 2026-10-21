@@ -1,9 +1,10 @@
 from datetime import datetime
 from typing import final
 
-from sqlalchemy import select
+from sqlalchemy import func, insert, literal, select
 from sqlalchemy.orm import Session, joinedload
 
+from book_catalog.models.book import Book
 from book_catalog.models.loan import Loan, LoanStatus
 
 
@@ -39,12 +40,31 @@ class LoanRepository:
             .where(Loan.id == loan_id)
         )
 
-    def create(self, user_id: int, book_id: int, now: datetime) -> Loan:
-        loan = Loan(user_id=user_id, book_id=book_id, borrowed_at=now)
-        self._session.add(loan)
+    def create_available(self, user_id: int, book_id: int, now: datetime) -> Loan | None:
+        active_count = (
+            select(func.count())
+            .select_from(Loan)
+            .where(Loan.book_id == book_id, Loan.status == LoanStatus.BORROWED)
+            .scalar_subquery()
+        )
+        duplicate = select(Loan.id).where(
+            Loan.user_id == user_id,
+            Loan.book_id == book_id,
+            Loan.status == LoanStatus.BORROWED,
+        )
+        candidate = select(literal(user_id), Book.id, literal(now)).where(
+            Book.id == book_id,
+            ~duplicate.exists(),
+            active_count < Book.total_copies,
+        )
+        statement = (
+            insert(Loan)
+            .from_select((Loan.user_id, Loan.book_id, Loan.borrowed_at), candidate)
+            .returning(Loan.id)
+        )
+        loan_id = self._session.scalar(statement)
         self._session.commit()
-        self._session.refresh(loan)
-        return loan
+        return None if loan_id is None else self._session.get_one(Loan, loan_id)
 
     def mark_returned(self, loan: Loan, now: datetime) -> Loan:
         loan.status = LoanStatus.RETURNED

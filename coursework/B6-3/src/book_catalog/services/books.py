@@ -52,10 +52,11 @@ class BookService:
 
     def update(self, book_id: int, draft: BookInput) -> BookView:
         book = self._require(book_id)
+        updated = self._repository.update_with_capacity(book, draft)
+        if updated is not None:
+            return self._view(updated)
         active_loans = self._repository.active_count(book_id)
-        if draft.total_copies < active_loans:
-            raise BookInventoryConflictError(book_id, active_loans, draft.total_copies)
-        return self._view(self._repository.update(book, draft))
+        raise BookInventoryConflictError(book_id, active_loans, draft.total_copies)
 
     # Lending records are historical data, so catalog deletion stops before repository mutation.
     def delete(self, book_id: int) -> None:

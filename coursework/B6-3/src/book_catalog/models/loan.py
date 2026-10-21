@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import datetime as dt
 from enum import StrEnum
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Final
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from book_catalog.models.base import Base
@@ -12,6 +12,14 @@ from book_catalog.models.base import Base
 if TYPE_CHECKING:
     from book_catalog.models.book import Book
     from book_catalog.models.user import User
+
+ACTIVE_LOAN_INDEX: Final[Index] = Index(
+    "uq_loans_active_user_book",
+    "user_id",
+    "book_id",
+    unique=True,
+    sqlite_where=text("status = 'borrowed'"),
+)
 
 
 class LoanStatus(StrEnum):
@@ -30,6 +38,7 @@ class Loan(Base):
             name="loan_return_state_consistent",
         ),
         Index("ix_loans_book_status", "book_id", "status"),
+        ACTIVE_LOAN_INDEX,
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)

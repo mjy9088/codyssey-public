@@ -58,14 +58,14 @@ class LoanService:
         return tuple(self._view(loan) for loan in self._loans.list_for_user(user_id, normalized))
 
     def borrow(self, user_id: UserId, book_id: int) -> LoanView:
-        book = self._books.get(book_id)
-        if book is None:
+        loan = self._loans.create_available(user_id, book_id, self._clock())
+        if loan is not None:
+            return self._view(loan)
+        if self._books.get(book_id) is None:
             raise LoanRuleError(LoanRule.BOOK_MISSING)
         if self._loans.active_for_book(user_id, book_id) is not None:
             raise LoanRuleError(LoanRule.DUPLICATE)
-        if self._books.active_count(book_id) >= book.total_copies:
-            raise LoanRuleError(LoanRule.UNAVAILABLE)
-        return self._view(self._loans.create(user_id, book_id, self._clock()))
+        raise LoanRuleError(LoanRule.UNAVAILABLE)
 
     def return_loan(self, user_id: UserId, loan_id: int) -> LoanView:
         loan = self._loans.get(loan_id)
