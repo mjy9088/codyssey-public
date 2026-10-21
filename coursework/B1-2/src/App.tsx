@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom"
+import { BrowserRouter, HashRouter, Route, Routes } from "react-router-dom"
 import { AppLayout } from "./components/AppLayout"
 import { AuthProvider } from "./context/AuthContext"
 import { AboutPage } from "./pages/AboutPage"
@@ -9,9 +9,11 @@ import { NotFoundPage } from "./pages/NotFoundPage"
 import { WorkshopDetailPage } from "./pages/WorkshopDetailPage"
 import { WorkshopsPage } from "./pages/WorkshopsPage"
 
+const Router = import.meta.env.VITE_ROUTER_MODE === "hash" ? HashRouter : BrowserRouter
+
 export const App = () => (
   <AuthProvider>
-    <BrowserRouter>
+    <Router>
       <Routes>
         <Route element={<AppLayout />}>
           <Route index element={<HomePage />} />
@@ -23,6 +25,6 @@ export const App = () => (
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </Router>
   </AuthProvider>
 )

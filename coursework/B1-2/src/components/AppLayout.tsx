@@ -8,7 +8,16 @@ export const AppLayout = () => {
   const mainId = useId()
   return (
     <div className="app-shell">
-      <a className="skip-link" href={`#${mainId}`}>
+      <a
+        className="skip-link"
+        href={`#${mainId}`}
+        onClick={(event) => {
+          event.preventDefault()
+          const main = document.getElementById(mainId)
+          main?.focus()
+          main?.scrollIntoView()
+        }}
+      >
         Skip to main content
       </a>
       <header className="site-header">
@@ -37,7 +46,7 @@ export const AppLayout = () => {
           </nav>
           <span className={`auth-mark auth-mark--${auth.kind}`}>
             {auth.kind === "ready"
-              ? "Emulator signed in"
+              ? "Signed in"
               : auth.kind === "error"
                 ? "Auth unavailable"
                 : "Connecting"}
@@ -52,7 +61,7 @@ export const AppLayout = () => {
           <p>
             <BookOpen aria-hidden="true" /> Benchbook
           </p>
-          <p>React state, real emulator data, honest boundaries.</p>
+          <p>React state, Firebase data, honest boundaries.</p>
         </div>
       </footer>
     </div>
