@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 mode=${1:-docker}
+test "$#" -le 1 || { printf 'Too many arguments\n' >&2; exit 2; }
 case "$mode" in
   docker|vm|all|provided|synthetic-docker|synthetic-vm|synthetic-all) ;;
   --help)
@@ -46,7 +47,9 @@ fi
 project="b4-1-$mode-$$"
 compose() { docker compose -p "$project" -f "$root/compose.yaml" --profile vm "$@"; }
 cleanup() { compose down --volumes --remove-orphans >/dev/null 2>&1 || true; }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 docker version >/dev/null
 docker compose version
 compose config --quiet
