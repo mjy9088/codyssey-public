@@ -102,5 +102,4 @@ initramfs. This replaced the earlier 99,943,376-byte compressed initramfs that t
 unpack write error under the 512 MiB guest bound. The corrected image measured 33,911,770 bytes and
 booted under the same bound without that error.
 
-See [`reports/`](reports/) for the issue-style reports and [`docs/REVIEW.md`](docs/REVIEW.md) for the
-evidence boundary and review checklist.
+See [`reports/`](reports/) for the issue-style reports.
