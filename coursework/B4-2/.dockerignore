@@ -4,3 +4,9 @@ artifacts
 private
 *.zip
 *.log
+**/.git
+**/.local
+**/.env
+**/.env.*
+**/*.key
+**/*.pem
