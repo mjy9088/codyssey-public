@@ -161,6 +161,16 @@ class CsvRegressionTests(unittest.TestCase):
         self.assertNotIn("Completed", result.stdout)
         self.assertEqual(self.service.store.transactions_path.read_bytes(), original)
 
+    def test_import_when_row_is_invalid_at_id_limit_still_skips_it(self) -> None:
+        draft = TransactionDraft("2026-05-01", "expense", "food", "100", "", "")
+        self.service.store.replace_transactions(iter((Transaction.create(TransactionId("TX-999999"), draft),)))
+        source = self.data_dir / "invalid.csv"
+        source.write_text("date,type,category,amount,memo,tags\ninvalid,expense,food,100,,\n", encoding="utf-8")
+
+        result = self.service.import_csv(source)
+
+        self.assertEqual((result.imported, result.skipped), (0, 1))
+
     def test_import_when_header_is_duplicate_or_reordered_rejects_fixed_schema(self) -> None:
         # Given headers containing the right names but the wrong fixed schema
         headers = (
