@@ -1,20 +1,25 @@
 #!/bin/sh
 set -eu
 
+[ "$#" -le 1 ] || { printf 'Usage: sh init.sh\n' >&2; exit 2; }
 case ${1:-} in
   '') [ "$#" -eq 0 ] || exit 2 ;;
   --help|-h) printf '%s\n' 'Usage: sh init.sh' 'Start the Codyssey environment from this checkout or the latest public main branch.'; exit 0 ;;
   *) printf 'Usage: sh init.sh\n' >&2; exit 2 ;;
 esac
 
-if [ -f "$0" ]; then
-  case $0 in */*) source_dir=${0%/*} ;; *) source_dir=. ;; esac
-  source_dir=$(CDPATH= cd -- "$source_dir" && pwd -P)
-  local_init=$source_dir/environment/codyssey-init/init.sh
-  if [ -f "$local_init" ]; then
-    exec bash "$local_init"
-  fi
-fi
+case $0 in
+  init.sh|*/init.sh)
+    if [ -f "$0" ]; then
+      case $0 in */*) source_dir=${0%/*} ;; *) source_dir=. ;; esac
+      source_dir=$(CDPATH= cd -- "$source_dir" && pwd -P)
+      local_init=$source_dir/environment/codyssey-init/init.sh
+      if [ -f "$local_init" ]; then
+        exec bash "$local_init"
+      fi
+    fi
+    ;;
+esac
 
 for dependency in curl mktemp bash; do
   command -v "$dependency" >/dev/null 2>&1 || { printf 'Required command not found: %s\n' "$dependency" >&2; exit 1; }

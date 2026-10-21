@@ -94,6 +94,11 @@ PATH=$empty_path /bin/sh "$root/init.sh" --unknown >/dev/null 2>&1
 status=$?
 set -e
 [ "$status" -eq 2 ] || fail 'unsupported argument did not return status 2'
+set +e
+PATH=$empty_path /bin/sh "$root/init.sh" --help unexpected >/dev/null 2>&1
+status=$?
+set -e
+[ "$status" -eq 2 ] || fail 'extra arguments after help were ignored'
 
 fixture=$tmp/local
 mkdir -p "$fixture/environment/codyssey-init"
@@ -115,5 +120,33 @@ set -e
 grep -qx delegated "$tmp/local-marker" || fail 'local environment init did not run'
 grep -qx "$fixture/environment/codyssey-init/init.sh" "$tmp/bash.log" || fail 'local init path argument differs'
 [ ! -s "$tmp/curl.log" ] || fail 'local delegation downloaded content'
+set +e
+(
+  cd "$fixture"
+  HOME=$tmp/home PATH=$fakebin:/usr/bin:/bin FAKE_BASH_LOG=$tmp/bash.log \
+    FAKE_CURL_LOG=$tmp/curl.log LOCAL_MARKER=$tmp/local-marker sh init.sh
+)
+status=$?
+set -e
+[ "$status" -eq 41 ] || fail 'relative init.sh invocation lost local delegation'
+
+collision=$tmp/stdin-collision
+mkdir -p "$collision/environment/codyssey-init"
+: >"$collision/sh"
+cat >"$collision/environment/codyssey-init/init.sh" <<'EOF'
+#!/bin/sh
+printf 'unexpected local execution\n' >"$COLLISION_LOCAL_MARKER"
+EOF
+: >"$tmp/bash.log"
+: >"$tmp/curl.log"
+(
+  cd "$collision"
+  HOME=$tmp/home TMPDIR=$tmp/stage PATH=$fakebin:/usr/bin:/bin \
+    FAKE_CURL_LOG=$tmp/curl.log FAKE_BASH_LOG=$tmp/bash.log FAKE_PAYLOAD=$payload \
+    PAYLOAD_RESULT=$tmp/result COLLISION_LOCAL_MARKER=$tmp/collision-local \
+    sh <"$root/init.sh"
+)
+[ ! -e "$tmp/collision-local" ] || fail 'stdin execution delegated to caller-owned checkout code'
+grep -qx "$default_base/main/environment/codyssey-init/init.sh" "$tmp/curl.log" || fail 'stdin execution did not fetch the remote bootstrap'
 
 printf '%s\n' 'Root init checks passed.'
