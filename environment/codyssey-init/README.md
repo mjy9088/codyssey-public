@@ -28,7 +28,12 @@ The root entry point must be published to GitHub before that new URL is availabl
 The remote command downloads the latest public `main` branch. It buffers the bootstrap before
 execution. Revision and mirror overrides are not supported; run `sh init.sh` from a reviewed local
 checkout when a fixed revision is needed. `sh init.sh --help` works without network access.
-The older `environment/codyssey-init/install.sh` URL follows the same branch.
+The repository-root `init.sh` is the only supported public bootstrap entry point.
+The old `install.sh` download wrapper has been removed. Implementation and maintenance
+helpers such as `macos-setup.sh` and `enable-korean.swift` belong only in this directory,
+not as independent copies at the monorepo root. Unless a command explicitly says to run
+from the repository root, run this document's maintenance commands from
+`environment/codyssey-init/`; all public `sh init.sh` bootstrap examples refer to the root wrapper.
 
 Remote mode stages the complete reusable runtime, including `init.sh`, `verify-macos-setup.py`, and
 runtime libraries, before copying anything into

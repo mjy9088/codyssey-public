@@ -14,6 +14,7 @@ for file in Dockerfile docker-compose.yml init.sh next-script.zsh tailnet.sh jus
   [[ -f "$root/$file" ]] || fail "missing $file"
 done
 
+[[ ! -e "$root/install.sh" ]] || fail 'legacy installer must not be shipped'
 grep -Eq '^FROM tailscale/tailscale:[^ ]+@sha256:[0-9a-f]{64}$' "$root/Dockerfile"
 grep -qx 'WORKDIR /host' "$root/Dockerfile"
 for package in bash curl openssh-client-default git bind-tools; do
@@ -40,7 +41,6 @@ for file in tailscale-entrypoint.sh init.sh lib/auth.sh lib/preparation.sh \
   scripts/prepare-startup.sh tests/startup-overlap-test.sh tests/preparation-safety-test.sh tests/auth-prompt-test.sh; do
   bash -n "$root/$file"
 done
-sh -n "$root/install.sh"
 grep -q -- 'tailscaled.state' "$root/tailscale-entrypoint.sh"
 grep -q 'tailscale-state:/var/lib/tailscale' "$root/docker-compose.yml"
 grep -q '100.100.100.100' "$root/scripts/tailnet-dns.sh"

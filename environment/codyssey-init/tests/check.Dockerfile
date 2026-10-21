@@ -13,7 +13,7 @@ COPY lib/ /src/lib/
 COPY tests/ /src/tests/
 COPY scripts/ /src/scripts/
 COPY macos-setup.sh /src/macos-setup.sh
-COPY enable-korean.swift install.sh tailscale-entrypoint.sh /src/
+COPY enable-korean.swift tailscale-entrypoint.sh /src/
 COPY chrome-extension/ /src/chrome-extension/
 COPY .env.example /src/.env.example
 RUN mkdir -p /src/gost \
