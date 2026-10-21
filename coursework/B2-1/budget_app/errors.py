@@ -16,6 +16,10 @@ class InputError(LedgerError):
         return self.reason
 
 
+class TransactionIdExhaustedError(InputError):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class DataError(LedgerError):
     source: str

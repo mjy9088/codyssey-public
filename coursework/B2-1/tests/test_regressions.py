@@ -144,6 +144,23 @@ class CsvRegressionTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def test_import_when_ids_are_exhausted_reports_command_error_without_writing(self) -> None:
+        draft = TransactionDraft("2026-05-01", "expense", "food", "100", "", "")
+        self.service.store.replace_transactions(iter((Transaction.create(TransactionId("TX-999999"), draft),)))
+        original = self.service.store.transactions_path.read_bytes()
+        source = self.data_dir / "import.csv"
+        source.write_text("date,type,category,amount,memo,tags\n2026-05-02,expense,food,100,,\n", encoding="utf-8")
+
+        result = subprocess.run(
+            [sys.executable, "-m", "budget_app", "--data-dir", str(self.data_dir), "import", "--from", str(source)],
+            cwd=Path(__file__).resolve().parents[1], text=True, capture_output=True, check=False,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("exhausted", result.stderr)
+        self.assertNotIn("Completed", result.stdout)
+        self.assertEqual(self.service.store.transactions_path.read_bytes(), original)
+
     def test_import_when_header_is_duplicate_or_reordered_rejects_fixed_schema(self) -> None:
         # Given headers containing the right names but the wrong fixed schema
         headers = (

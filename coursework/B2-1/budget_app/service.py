@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Iterator
 from pathlib import Path
 
-from .errors import InputError
+from .errors import InputError, TransactionIdExhaustedError
 from .models import (
     ImportResult,
     ExportSelection,
@@ -39,7 +39,7 @@ class LedgerService:
         self._require_category(draft.category)
         largest = max((int(item.id.removeprefix("TX-")) for item in self.store.iter_transactions()), default=0)
         if largest >= 999999:
-            raise InputError("transaction id space is exhausted", "Use a new data directory; keep this ledger for history")
+            raise TransactionIdExhaustedError("transaction id space is exhausted", "Use a new data directory; keep this ledger for history")
         transaction = Transaction.create(
             TransactionId(f"TX-{largest + 1:06d}"),
             draft,
@@ -170,6 +170,8 @@ class LedgerService:
                 try:
                     self.add(TransactionDraft(date_text, type_text, category, amount, memo, tags))
                     imported += 1
+                except TransactionIdExhaustedError:
+                    raise
                 except InputError:
                     skipped += 1
         return ImportResult(imported, skipped)
