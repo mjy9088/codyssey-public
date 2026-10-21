@@ -10,10 +10,14 @@ type WorkshopState =
   | { readonly kind: "ready"; readonly item: Workshop }
 
 export const useWorkshop = (id: string | undefined) => {
-  const auth = useAuth()
+  const { state: auth, retry: retryAuth } = useAuth()
   const [state, setState] = useState<WorkshopState>({ kind: "loading" })
   const reload = useCallback(async () => {
-    if (auth.kind !== "ready" || id === undefined) return
+    if (auth.kind === "error") {
+      retryAuth()
+      return
+    }
+    if (auth.kind === "loading" || id === undefined) return
     setState({ kind: "loading" })
     try {
       const item = await getWorkshop(id)
@@ -24,9 +28,13 @@ export const useWorkshop = (id: string | undefined) => {
         message: error instanceof Error ? error.message : "Workshop could not be loaded.",
       })
     }
-  }, [auth.kind, id])
+  }, [auth.kind, id, retryAuth])
   useEffect(() => {
-    void reload()
-  }, [reload])
+    if (auth.kind === "error") {
+      setState({ kind: "error", message: auth.message })
+    } else if (auth.kind === "ready") {
+      void reload()
+    }
+  }, [auth, reload])
   return { state, reload }
 }

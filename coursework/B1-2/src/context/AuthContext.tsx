@@ -1,5 +1,5 @@
 import { onAuthStateChanged, signInAnonymously, type User } from "firebase/auth"
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react"
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react"
 import { auth } from "../lib/firebase"
 
 type AuthState =
@@ -7,24 +7,47 @@ type AuthState =
   | { readonly kind: "ready"; readonly user: User }
   | { readonly kind: "error"; readonly message: string }
 
-const AuthContext = createContext<AuthState>({ kind: "loading" })
+type AuthValue = {
+  readonly state: AuthState
+  readonly retry: () => void
+}
+
+const AuthContext = createContext<AuthValue | undefined>(undefined)
 
 export const AuthProvider = ({ children }: { readonly children: ReactNode }) => {
   const [state, setState] = useState<AuthState>({ kind: "loading" })
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) setState({ kind: "ready", user })
-      else
-        void signInAnonymously(auth).catch((error: unknown) => {
-          setState({
-            kind: "error",
-            message: error instanceof Error ? error.message : "Authentication failed.",
-          })
-        })
+  const authenticate = useCallback(() => {
+    setState({ kind: "loading" })
+    void signInAnonymously(auth).catch(() => {
+      setState({
+        kind: "error",
+        message: "Authentication is unavailable. Try again to reconnect.",
+      })
     })
-    return unsubscribe
   }, [])
-  return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        if (user) setState({ kind: "ready", user })
+        else authenticate()
+      },
+      () => {
+        setState({
+          kind: "error",
+          message: "Authentication is unavailable. Try again to reconnect.",
+        })
+      },
+    )
+    return unsubscribe
+  }, [authenticate])
+  return (
+    <AuthContext.Provider value={{ state, retry: authenticate }}>{children}</AuthContext.Provider>
+  )
 }
 
-export const useAuth = (): AuthState => useContext(AuthContext)
+export const useAuth = (): AuthValue => {
+  const value = useContext(AuthContext)
+  if (value === undefined) throw new Error("useAuth must be used within AuthProvider.")
+  return value
+}

@@ -4,7 +4,7 @@ import { NavLink, Outlet } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
 
 export const AppLayout = () => {
-  const auth = useAuth()
+  const { state: auth } = useAuth()
   const mainId = useId()
   return (
     <div className="app-shell">

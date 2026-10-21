@@ -131,6 +131,26 @@ test("shows a concise recovery message when stored workshop data is invalid", as
   await expect(page.getByText("The schedule is clear")).toBeVisible()
 })
 
+test("recovers when anonymous authentication initially fails", async ({ page }) => {
+  // Given: the anonymous sign-in request cannot reach the Auth emulator.
+  const signUpRequest = "**/identitytoolkit.googleapis.com/v1/accounts:signUp**"
+  await page.route(signUpRequest, (route) => route.abort("failed"))
+
+  // When: a data-backed route waits for authentication.
+  await page.goto("/workshops")
+
+  // Then: the loading state becomes an actionable authentication error.
+  await expect(page.getByRole("alert")).toContainText("Authentication is unavailable")
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible()
+
+  // When: connectivity returns and the user retries.
+  await page.unroute(signUpRequest)
+  await page.getByRole("button", { name: "Try again" }).click()
+
+  // Then: authentication and the pending workshop load both recover.
+  await expect(page.getByText("The schedule is clear")).toBeVisible()
+})
+
 test("all primary routes and the recovery route render", async ({ page }) => {
   for (const route of ["/", "/workshops", "/workshops/new", "/about", "/missing"]) {
     await page.goto(route)
