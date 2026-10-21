@@ -27,6 +27,10 @@ isolated private QEMU observer and propagates failure without falling back to sy
 it is absent, they remain portable and clearly label fixture-only results. Use `synthetic-docker`,
 `synthetic-vm`, or `synthetic-all` to force those public regressions; `provided` requires the archive.
 
+Run `sh tests/verify-lifecycle.sh` separately on the host for the Docker wrapper's
+argument, signal, and cleanup contract. It uses fake commands and is run by repository
+CI, not by the no-network application container or the QEMU guest workload.
+
 Docker mode is read-only, drops every capability, requests one CPU and 256 MiB through Docker, and
 uses only a bounded tmpfs. Host cgroup support determines whether those outer CPU/memory requests are
 enforced. VM mode builds an ephemeral initramfs and explicitly boots with one emulated CPU and 512 MiB

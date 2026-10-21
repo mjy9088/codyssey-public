@@ -44,7 +44,6 @@ if test -f "$root/scripts/verify.sh" && test -f "$root/scripts/observe-private.s
   sh "$root/tests/verify-routing.sh"
   sh "$root/tests/private-wrapper-guards.sh"
 fi
-sh "$root/tests/verify-lifecycle.sh"
 
 native_marker="$out/native-124.marker"
 set +e
