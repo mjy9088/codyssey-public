@@ -60,12 +60,12 @@ and a live process across the sample window; a live PID alone is never treated a
 
 ## Optional restricted-input observation
 
-Authorized local users may run:
+Authorized local users may run these commands from the public checkout root:
 
 ```sh
 mkdir -m 0700 -p .local/B4-2 .local/evidence/B4-2
 sh coursework/B4-2/scripts/verify.sh provided
-sh scripts/observe-private.sh /absolute/path/to/input.zip /absolute/path/to/private/evidence/B4-2
+sh coursework/B4-2/scripts/observe-private.sh /absolute/path/to/input.zip /absolute/path/to/private/evidence/B4-2
 ```
 
 The image is built only from this public subtree, whose `.dockerignore` excludes `.local`. The stopped container receives the untouched ZIP

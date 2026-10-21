@@ -2,7 +2,8 @@
 
 ## Public checks
 
-Run `sh scripts/verify.sh all`. Require memory, CPU, deadlock, synthetic-lab, Docker, and VM success
+From this project directory, run `sh scripts/verify.sh synthetic-all`. This forces public fixtures
+even when a supplied archive is staged. Require memory, CPU, deadlock, synthetic-lab, Docker, and VM success
 markers. Inspect the numeric `MEMORY-CHECK` and `CPU-CHECK` lines rather than accepting fixture text
 alone. Confirm the deadlock check combines two opposing lock waits, an unchanged log, stable thread
 IDs, bounded RSS variation, persistent sleeping threads, and a successful single-thread control. A
