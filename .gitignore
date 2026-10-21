@@ -32,6 +32,8 @@ coverage/
 .coverage
 
 # Local scratch space
+.local/
+/_site/
 .tmp/
 tmp/
 /core
