@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { Button, ButtonLink } from "../components/Button"
 import { FilterBar, type StatusFilter } from "../components/FilterBar"
+import { Notice } from "../components/Notice"
 import { PageHeader } from "../components/PageHeader"
 import { Pagination } from "../components/Pagination"
 import { EmptyState, ErrorState, LoadingState } from "../components/StateView"
@@ -16,6 +17,7 @@ export const WorkshopsPage = () => {
   const [status, setStatus] = useState<StatusFilter>("all")
   const [page, setPage] = useState(1)
   const [seeding, setSeeding] = useState(false)
+  const [seedError, setSeedError] = useState("")
   const filtered = useMemo(
     () =>
       state.kind === "ready"
@@ -35,9 +37,12 @@ export const WorkshopsPage = () => {
   )
   const loadSamples = async () => {
     setSeeding(true)
+    setSeedError("")
     try {
       await seedWorkshops()
       await reload()
+    } catch {
+      setSeedError("Sample schedule could not be loaded. Try again.")
     } finally {
       setSeeding(false)
     }
@@ -55,20 +60,23 @@ export const WorkshopsPage = () => {
         <ErrorState message={state.message} onRetry={() => void reload()} />
       ) : null}
       {state.kind === "ready" && state.items.length === 0 ? (
-        <EmptyState
-          title="The schedule is clear"
-          message="Load deterministic sample workshops or add the first session."
-          action={
-            <div className="state-actions">
-              <Button onClick={() => void loadSamples()} disabled={seeding}>
-                {seeding ? "Loading…" : "Load sample schedule"}
-              </Button>
-              <ButtonLink to="/workshops/new" variant="secondary">
-                Add one manually
-              </ButtonLink>
-            </div>
-          }
-        />
+        <>
+          {seedError ? <Notice tone="danger">{seedError}</Notice> : null}
+          <EmptyState
+            title="The schedule is clear"
+            message="Load deterministic sample workshops or add the first session."
+            action={
+              <div className="state-actions">
+                <Button onClick={() => void loadSamples()} disabled={seeding}>
+                  {seeding ? "Loading…" : "Load sample schedule"}
+                </Button>
+                <ButtonLink to="/workshops/new" variant="secondary">
+                  Add one manually
+                </ButtonLink>
+              </div>
+            }
+          />
+        </>
       ) : null}
       {state.kind === "ready" && state.items.length > 0 ? (
         <>

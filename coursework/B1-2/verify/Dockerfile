@@ -3,6 +3,7 @@ WORKDIR /work
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund && mkdir -p artifacts && chown -R pwuser:pwuser artifacts
 COPY playwright.config.ts vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json ./
+COPY firestore.rules ./
 COPY tests/ tests/
 COPY src/ src/
 RUN chmod -R a+rX /work && chown -R pwuser:pwuser /work/artifacts && chown pwuser:pwuser /work

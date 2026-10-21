@@ -1,6 +1,20 @@
-import { expect, test } from "@playwright/test"
+import { readFileSync } from "node:fs"
+import { type APIRequestContext, expect, test } from "@playwright/test"
 
 const projectId = "benchbook-local"
+const rulesUrl = `http://firebase:8080/emulator/v1/projects/${projectId}:securityRules`
+const baselineRules = readFileSync("firestore.rules", "utf8")
+const denyWritesRules = readFileSync("tests/fixtures/firestore-deny-writes.rules", "utf8")
+
+const installRules = async (request: APIRequestContext, content: string) => {
+  const response = await request.put(rulesUrl, {
+    data: { rules: { files: [{ name: "firestore.rules", content }] } },
+  })
+  expect(response.ok()).toBeTruthy()
+}
+
+const setWriteFailure = (request: APIRequestContext) => installRules(request, denyWritesRules)
+const clearWriteFailure = (request: APIRequestContext) => installRules(request, baselineRules)
 
 test.beforeEach(async ({ request }) => {
   const response = await request.delete(
@@ -149,6 +163,54 @@ test("recovers when anonymous authentication initially fails", async ({ page }) 
 
   // Then: authentication and the pending workshop load both recover.
   await expect(page.getByText("The schedule is clear")).toBeVisible()
+})
+
+test("recovers when deleting a workshop initially fails", async ({ page, request }) => {
+  // Given: a real emulator workshop is open and Firestore writes are interrupted.
+  await page.goto("/workshops")
+  await expect(page.getByText("The schedule is clear")).toBeVisible()
+  await page.getByRole("button", { name: "Load sample schedule" }).click()
+  await expect(page.getByText("5 results")).toBeVisible()
+  await page.getByRole("searchbox", { name: "Search workshops" }).fill("denim")
+  await page.getByRole("link", { name: "Patch visible denim" }).click()
+  await setWriteFailure(request)
+
+  // When: the user confirms deletion.
+  await page.getByRole("button", { name: "Delete" }).click()
+  await page.getByRole("button", { name: "Delete permanently" }).click()
+
+  // Then: the action resets and explains how to recover.
+  await expect(page.getByRole("alert")).toHaveCount(1)
+  await expect(page.getByText("Workshop could not be deleted. Try again.")).toBeVisible()
+  await expect(page.getByRole("button", { name: "Delete permanently" })).toBeEnabled()
+
+  // When: connectivity returns and the user retries.
+  await clearWriteFailure(request)
+  await page.getByRole("button", { name: "Delete permanently" }).click()
+
+  // Then: deletion completes normally.
+  await expect(page.getByRole("heading", { name: "Workshop schedule" })).toBeVisible()
+})
+
+test("recovers when loading the sample schedule initially fails", async ({ page, request }) => {
+  // Given: the empty schedule is visible and Firestore writes are interrupted.
+  await page.goto("/workshops")
+  await expect(page.getByText("The schedule is clear")).toBeVisible()
+  await setWriteFailure(request)
+
+  // When: the user loads sample workshops.
+  await page.getByRole("button", { name: "Load sample schedule" }).click()
+
+  // Then: the action resets and explains how to recover.
+  await expect(page.getByRole("alert")).toContainText("Sample schedule could not be loaded")
+  await expect(page.getByRole("button", { name: "Load sample schedule" })).toBeEnabled()
+
+  // When: connectivity returns and the user retries.
+  await clearWriteFailure(request)
+  await page.getByRole("button", { name: "Load sample schedule" }).click()
+
+  // Then: sample workshops become available.
+  await expect(page.getByText("5 results")).toBeVisible()
 })
 
 test("all primary routes and the recovery route render", async ({ page }) => {
