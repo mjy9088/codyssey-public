@@ -8,6 +8,7 @@ import {
   orderBy,
   query,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore"
 import { database } from "./firebase"
 import { type Workshop, type WorkshopId, type WorkshopInput, workshopSchema } from "./workshop"
@@ -85,5 +86,7 @@ export const seedWorkshops = async (): Promise<void> => {
       status: "open",
     },
   ] as const satisfies readonly WorkshopInput[]
-  await Promise.all(samples.map((sample) => addDoc(workshops, sample)))
+  const batch = writeBatch(database)
+  for (const sample of samples) batch.set(doc(workshops), sample)
+  await batch.commit()
 }
