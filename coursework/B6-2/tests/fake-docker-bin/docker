@@ -1,5 +1,13 @@
 #!/bin/sh
 printf '%s\n' "$*" >>"$ORCHESTRATION_CALLS"
+if [ -n "${ORCHESTRATION_SIGNAL:-}" ] && [ "$1" = compose ]; then
+  for argument do
+    if [ "$argument" = build ] && [ ! -e "$ORCHESTRATION_SIGNAL_MARKER" ]; then
+      : >"$ORCHESTRATION_SIGNAL_MARKER"
+      kill -s "$ORCHESTRATION_SIGNAL" "$PPID"
+    fi
+  done
+fi
 if [ "${CHECK_FAIL:-0}" = 1 ] && [ "$1" = run ]; then
   exit 41
 fi
