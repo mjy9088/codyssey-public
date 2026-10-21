@@ -1,5 +1,32 @@
 import { expect, test } from "@playwright/test";
 
+test("keeps browser-normalized login redirects on the application origin", async ({
+  page,
+}) => {
+  // Given: an external-looking backslash path reaches the login form.
+  await page.goto("/login?next=%2F%5Cattacker.invalid");
+  await page.getByLabel("Username").fill("reader");
+  await page.getByLabel("Password").fill("correct-horse-battery-staple");
+
+  // When: valid credentials submit the untrusted next path.
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  // Then: the browser remains on the application root instead of normalizing externally.
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByText("Demo Reader")).toBeVisible();
+});
+
+test("returns a signed-in visitor to the requested protected page", async ({
+  page,
+}) => {
+  await page.goto("/books");
+  await page.getByLabel("Username").fill("reader");
+  await page.getByLabel("Password").fill("correct-horse-battery-staple");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/books$/);
+  await expect(page.getByText("Demo Reader")).toBeVisible();
+});
+
 test("redirects protected visitors and starts a member session", async ({
   page,
 }) => {
@@ -23,8 +50,8 @@ test("redirects protected visitors and starts a member session", async ({
   await page.getByLabel("Password").fill("correct-horse-battery-staple");
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  // Then: the authenticated home opens with the member shell.
-  await expect(page).toHaveURL(/\/$/);
+  // Then: the requested catalog opens with the member shell.
+  await expect(page).toHaveURL(/\/books$/);
   await expect(page.getByText("Demo Reader")).toBeVisible();
   await page.reload();
   await expect(page.getByText("Demo Reader")).toBeVisible();

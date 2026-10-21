@@ -1,7 +1,18 @@
-from fastapi.routing import APIRoute
+from datetime import datetime
 
+import pytest
+from fastapi import Request
+from fastapi.routing import APIRoute
+from sqlalchemy.orm import Session
+
+from book_catalog.auth.csrf import issue_public_token
+from book_catalog.auth.passwords import hash_password
 from book_catalog.main import create_app
+from book_catalog.models.user import User
+from book_catalog.repositories.sessions import SessionRepository
+from book_catalog.repositories.users import UserRepository
 from book_catalog.routers import auth, books, home, loans
+from book_catalog.services.auth import AuthService
 from book_catalog.web import require_auth
 
 
@@ -48,3 +59,66 @@ def test_route_inventory_marks_every_core_route_as_protected() -> None:
     # Then
     assert protected == expected_protected
     assert public_login == {("GET", "/login"), ("POST", "/login")}
+
+
+def _request() -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/login",
+            "headers": [],
+            "scheme": "http",
+            "server": ("testserver", 80),
+            "client": ("testclient", 50000),
+            "query_string": b"",
+            "root_path": "",
+        }
+    )
+
+
+def _auth_service(db: Session, now: datetime) -> AuthService:
+    user = db.query(User).one()
+    user.password_hash = hash_password("secret")
+    db.commit()
+    return AuthService(
+        UserRepository(db),
+        SessionRepository(db),
+        lambda: now,
+        token_factory=lambda: "route-test-session",
+    )
+
+
+@pytest.mark.parametrize(
+    "next_path", [r"/\attacker.example", "/\t/attacker.example", "//attacker.example"]
+)
+def test_login_route_rejects_browser_normalized_external_redirects(
+    db: Session, fixed_now: datetime, next_path: str
+) -> None:
+    # Given / When
+    response = auth.login(
+        _request(),
+        _auth_service(db, fixed_now),
+        "reader",
+        "secret",
+        issue_public_token(),
+        next_path,
+    )
+
+    # Then
+    assert response.headers["location"] == "/"
+
+
+def test_login_route_preserves_local_redirect_with_query(db: Session, fixed_now: datetime) -> None:
+    # Given / When
+    response = auth.login(
+        _request(),
+        _auth_service(db, fixed_now),
+        "reader",
+        "secret",
+        issue_public_token(),
+        "/books?q=kindred",
+    )
+
+    # Then
+    assert response.headers["location"] == "/books?q=kindred"

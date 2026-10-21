@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Form, Request, status
+from fastapi import APIRouter, Form, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from book_catalog.auth.csrf import issue_public_token, verify_public_token
@@ -11,7 +11,9 @@ router = APIRouter()
 
 
 @router.get("/login", response_class=HTMLResponse)
-def login_form(request: Request, next_path: str = "/") -> HTMLResponse:
+def login_form(
+    request: Request, next_path: Annotated[str, Query(alias="next")] = "/"
+) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "login.html",
@@ -44,7 +46,14 @@ def login(
             {"csrf_token": issue_public_token(), "next_path": next_path, "error": str(error)},
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
-    destination = next_path if next_path.startswith("/") and not next_path.startswith("//") else "/"
+    destination = (
+        next_path
+        if next_path.startswith("/")
+        and not next_path.startswith("//")
+        and "\\" not in next_path
+        and all(character >= " " and character != "\x7f" for character in next_path)
+        else "/"
+    )
     response = RedirectResponse(destination, status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         SESSION_COOKIE,
