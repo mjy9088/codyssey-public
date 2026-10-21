@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+export GIT_PAGER=cat
 
 usage() {
   cat <<'EOF'

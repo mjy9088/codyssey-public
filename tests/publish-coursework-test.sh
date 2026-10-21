@@ -48,6 +48,15 @@ GIT_MASTER=1 exec "$REAL_GIT" -c credential.helper= "$@"
 EOF
 chmod 0755 "$fakebin/git"
 
+# A configured pager must not consume input intended for publication confirmation.
+cat >"$fakebin/pager" <<'EOF'
+#!/bin/sh
+printf 'pager\n' >>"$FAKE_GIT_LOG"
+dd bs=1 count=1 of=/dev/null </dev/tty 2>/dev/null
+cat
+EOF
+chmod 0755 "$fakebin/pager"
+
 git_run() {
   GIT_MASTER=1 "$real_git" -c credential.helper= -C "$repo" "$@"
 }
@@ -127,13 +136,18 @@ unset TEST_SIGNAL
 : >"$git_log"
 set +e
 printf 'y\n' | script -qec \
-  "env PATH='$fakebin:/usr/bin:/bin' REAL_GIT='$real_git' FAKE_GIT_LOG='$git_log' GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.invalid sh '$repo/scripts/publish-coursework.sh' --source '$head' demo https://example.invalid/submission.git" \
+  "env PATH='$fakebin:/usr/bin:/bin' REAL_GIT='$real_git' FAKE_GIT_LOG='$git_log' TERM=xterm GIT_PAGER='$fakebin/pager' GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.invalid sh '$repo/scripts/publish-coursework.sh' --source '$head' demo https://example.invalid/submission.git" \
   /dev/null \
   >"$tmp/divergence.out" 2>&1
 status=$?
 set -e
-[ "$status" -ne 0 ] || fail 'simulated diverged destination was reported as published'
+if [ "$status" -eq 0 ]; then
+  cat "$tmp/divergence.out" >&2
+  fail 'simulated diverged destination was reported as published'
+fi
 grep -q 'simulated non-fast-forward rejection' "$tmp/divergence.out" || fail 'divergence simulation did not reach the push boundary'
+! grep -q '^pager$' "$git_log" || fail 'publication output invoked a confirmation-consuming pager'
+! grep -q '^Published ' "$tmp/divergence.out" || fail 'rejected push printed a publication success message'
 push_line=$(sed -n '/^push[[:space:]]/p' "$git_log")
 if [ -z "$push_line" ]; then
   cat "$tmp/divergence.out" >&2
