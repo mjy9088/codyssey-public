@@ -21,6 +21,12 @@ sh scripts/verify.sh vm
 sh scripts/verify.sh all
 ```
 
+These canonical commands look for `.local/B4-2/agent-app-leak.zip` at the public checkout root.
+When it is present, any of the three commands runs the supplied target exactly once through the
+isolated private QEMU observer and propagates failure without falling back to synthetic results. When
+it is absent, they remain portable and clearly label fixture-only results. Use `synthetic-docker`,
+`synthetic-vm`, or `synthetic-all` to force those public regressions; `provided` requires the archive.
+
 Docker mode is read-only, drops every capability, requests one CPU and 256 MiB through Docker, and
 uses only a bounded tmpfs. Host cgroup support determines whether those outer CPU/memory requests are
 enforced. VM mode builds an ephemeral initramfs and explicitly boots with one emulated CPU and 512 MiB
@@ -57,13 +63,17 @@ and a live process across the sample window; a live PID alone is never treated a
 Authorized local users may run:
 
 ```sh
+mkdir -m 0700 -p .local/B4-2 .local/evidence/B4-2
+sh coursework/B4-2/scripts/verify.sh provided
 sh scripts/observe-private.sh /absolute/path/to/input.zip /absolute/path/to/private/evidence/B4-2
 ```
 
-The image is built only from this public subtree. The stopped container receives the untouched ZIP
+The image is built only from this public subtree, whose `.dockerignore` excludes `.local`. The stopped container receives the untouched ZIP
 at runtime with `docker cp`; extraction and execution occur only in a no-network QEMU TCG guest. The
-evidence argument is an external root; each invocation creates a fresh mode-0700 `run.XXXXXX`
-directory and refuses symlinked inputs/evidence roots or canonical paths inside the public checkout.
+evidence argument is either an external root or the canonical ignored `.local/evidence/B4-2`; each
+invocation creates a fresh mode-0700 `run.XXXXXX` directory. The only in-checkout input allowed is
+`.local/B4-2/agent-app-leak.zip`; other in-checkout paths and paths containing symlinks are rejected.
+Set `B4_PRIVATE_ARCHIVE` and `B4_PRIVATE_EVIDENCE_DIR` to absolute external paths for standalone use.
 The guest uses a dedicated non-root account, one vCPU, 768 MiB guest RAM, requested outer 1 GiB/one-CPU
 container limits, bounded extraction, and per-run plus overall wall-clock timeouts. Outer cgroup limit
 enforcement depends on the Docker host; QEMU's guest RAM and vCPU bounds remain explicit. The observer

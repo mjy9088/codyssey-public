@@ -33,11 +33,17 @@ benchmarks; only each run's asserted control relationship is used.
 
 ## Restricted-input checks
 
-The optional script must create a stopped container before runtime `docker cp`, use only this subtree
+When the canonical ignored archive is present, `scripts/verify.sh` must select it once and must not
+fall back to synthetic results after any observer failure. The optional script must create a stopped
+container before runtime `docker cp`, use only this subtree
 as build context, and write serial output only to the caller-selected private evidence directory.
 The private guest may extract and ordinarily execute the bounded x86 target, but must not inspect,
 decompile, disassemble, trace, or transmit it. Require no QEMU network device, non-root execution,
 bounded archive/member sizes, one vCPU, bounded RAM, and wall-clock limits.
+
+Only `.local/B4-2/agent-app-leak.zip` and `.local/evidence/B4-2` may be used inside the public
+checkout. Other in-checkout paths, paths containing symlink components, relative paths, and inputs
+over 50 MiB must be rejected. `.local` must remain excluded from the Docker build context.
 
 The private runs must be independent pairs: memory changes only `MEMORY_LIMIT`; CPU uses threading
 disabled and memory 512 in both runs while changing only `CPU_MAX_OCCUPY`; threading uses equal memory
