@@ -27,32 +27,50 @@ public monorepo history.
 ## History-preserving standalone branch
 
 Use `scripts/publish-coursework.sh` when the approved destination requires both a
-standalone repository root and the public monorepo history. The script fetches
-the latest `origin/public`, creates a detached temporary worktree, removes every
-tracked path, moves the selected coursework subtree to the repository root, and
-creates one submission-layout commit. It never applies those deletion or move
-operations to the normal working tree.
+standalone repository root and the public monorepo history. The script resolves a
+local committed revision, verifies that the selected path is a directory in that
+revision, creates a detached temporary worktree, removes every tracked path, moves
+the selected coursework subtree to the repository root, and creates one
+submission-layout commit. It never applies those deletion or move operations to
+the normal working tree.
 
-Set the coursework identifier and approved destination, then run the script:
+Record the verified source commit, set the coursework identifier and approved
+destination, then run the script through `sh`:
 
 ```sh
+revision=$(git rev-parse --verify HEAD)
 coursework_id=YOUR_COURSEWORK_ID
 destination=YOUR_SUBMISSION_REPOSITORY_URL
-scripts/publish-coursework.sh "$coursework_id" "$destination" main
+sh scripts/publish-coursework.sh --source "$revision" \
+  "$coursework_id" "$destination" main
 ```
 
+`--source` accepts any commit already available in the local repository and
+defaults to the local `HEAD`. The script does not fetch, so the resolved source is
+independent of later remote changes and preparation performs no network access.
+Uncommitted and staged working-tree changes are not included, and the source
+working tree and its refs are not modified.
+
 The script displays the prepared commit and its root entries, then asks for
-confirmation on the terminal. Answering `y` force-pushes the target branch;
-pressing Enter or answering anything else cancels without changing the
-destination. With no interactive terminal, the script only prepares and reports
-the commit. A confirmed push replaces the destination branch even when it has
-diverged, so its previous tip may become unreachable. Confirm that the repository
-and branch are dedicated to this submission before answering `y`.
+confirmation on the terminal. Answering `y` performs an ordinary push of the
+prepared commit; pressing Enter or answering anything else cancels without
+changing the destination. With no interactive terminal, the script only prepares
+and reports the commit. Git rejects the push if the destination branch has
+diverged, rather than overwriting its tip. Resolve the destination history
+deliberately before running the publication procedure again; this workflow has no
+force-push mode.
+
+Exercise the local preparation, validation, confirmation, and cleanup paths with
+synthetic repositories and a simulated rejected push:
+
+```sh
+sh tests/publish-coursework-test.sh
+```
 
 The destination's tip contains only the selected coursework files, but its
 parent commits retain the complete public monorepo history. Therefore this
-method is suitable only when that public history is acceptable at the
-destination.
+method is suitable only when the public history reachable from the selected
+source revision is acceptable at the destination.
 
 The script intentionally creates the submission-layout commit in a disposable
 worktree. Make fixes in the canonical coursework subtree, verify and commit them
