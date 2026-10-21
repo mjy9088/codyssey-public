@@ -3,7 +3,8 @@
 This report is a required submission document. Tracking generated run logs is normally poor practice:
 they become stale, duplicate rerunnable automation, grow repositories, and may disclose host or
 application details. Therefore this report records durable configuration and review commands, while
-current public evidence is reproduced by `scripts/verify.sh`; restricted runtime output remains in
+current public evidence is reproduced by the explicit synthetic modes of `scripts/verify.sh`;
+restricted runtime output remains in
 ignored private evidence.
 
 ## Security and network
@@ -41,11 +42,13 @@ increase. A fixed fake timestamp or manual second invocation cannot satisfy that
 ## Verification commands
 
 ```sh
-sh scripts/verify.sh docker
-sh scripts/verify.sh vm
-sh scripts/verify.sh all
+sh scripts/verify.sh synthetic-docker
+sh scripts/verify.sh synthetic-vm
+sh scripts/verify.sh synthetic-all
 ```
 
 Expected terminal markers are `SYNTHETIC-TEST-SUCCESS`, `DOCKER-VERIFY-SUCCESS`, `VM-LAB-SUCCESS`,
-and `VM-VERIFY-SUCCESS`. The private workflow has separate markers and evidence storage; public
+and `VM-VERIFY-SUCCESS`. Run these commands from the B4-1 project directory. The canonical
+`docker`, `vm`, and `all` modes instead select a supplied archive when one is staged, so they must not
+be used to demand synthetic markers. The private workflow has separate markers and evidence storage; public
 synthetic markers must never be represented as supplied-application proof.

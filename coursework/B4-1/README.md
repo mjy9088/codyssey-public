@@ -52,12 +52,12 @@ count, rejecting missing or malformed input.
 ## Private supplied-target boundary
 
 The public build context never contains restricted archives or executables; `.local` is excluded by
-`.dockerignore`. The canonical local layout and direct wrapper form are:
+`.dockerignore`. From the public checkout root, the canonical local layout and direct wrapper form are:
 
 ```sh
 mkdir -m 0700 -p .local/B4-1 .local/evidence/B4-1
 sh coursework/B4-1/scripts/verify.sh provided
-sh scripts/verify-private.sh /absolute/path/to/input.zip /absolute/path/to/private/evidence/B4-1
+sh coursework/B4-1/scripts/verify-private.sh /absolute/path/to/input.zip /absolute/path/to/private/evidence/B4-1
 ```
 
 That workflow builds a digest-pinned glibc guest, creates a stopped container, copies the untouched

@@ -2,13 +2,15 @@
 
 ## Script review
 
-Run Docker verification and inspect `bin/monitor.sh` for fail-fast process/port checks, warning-only
+From this project directory, run `sh scripts/verify.sh synthetic-docker` and inspect
+`bin/monitor.sh` for fail-fast process/port checks, warning-only
 thresholds, exact log fields, and bounded rotation. Confirm `report.sh` fails on no samples and reports
 all three resources from valid input. The synthetic target announces itself explicitly.
 
 ## Guest review
 
-Run VM verification and require all `VM-CHECK` lines plus both success markers. Inspect the guest
+Run `sh scripts/verify.sh synthetic-vm` and require all `VM-CHECK` lines plus both success markers.
+These explicit synthetic modes remain fixture checks even when a supplied archive is staged. Inspect the guest
 initialization script for effective SSH configuration, firewalld target/services/ports/interface,
 role membership, positive and negative ACL checks, script ownership/mode, manual monitoring, crontab
 installation, and a later log-line increase. QEMU must use TCG, one vCPU, bounded memory, restricted
