@@ -40,8 +40,6 @@ after success, failure, or interruption. Docker image and build caches remain av
 runs. Runtime results, logs, traces, and non-submission screenshots belong in ignored local output or
 CI artifacts rather than Git.
 
-See [the review guide](docs/REVIEW.md) for test scope and manual evaluation guidance.
-
 ## Preview the site
 
 ```sh
@@ -110,7 +108,7 @@ verify/Dockerfile           pinned Chromium test environment
 verify/vm/                  QEMU TCG guest and server
 tests/                      synthetic API, behavior, accessibility, and responsive tests
 scripts/verify.sh           container and VM verification orchestration
-docs/                       architecture, review guide, and required screenshots
+docs/                       architecture and required screenshots
 .github/workflows/pages.yml manual deployment when this subtree is a repository root
 ```
 
