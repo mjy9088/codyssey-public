@@ -6,13 +6,20 @@ mode boots a separate x86_64 Alpine kernel under TCG and configures real guest a
 OpenSSH, firewalld/nftables, cron, and log storage. It never requires KVM, privileged containers, a
 host Docker socket, DIM access, or real credentials.
 
-## Public verification
+## Verification
 
 ```sh
 sh scripts/verify.sh docker
 sh scripts/verify.sh vm
 sh scripts/verify.sh all
 ```
+
+These canonical commands look for `.local/B4-1/agent-app.zip` at the public checkout root. When it
+is present, any of the three commands runs the supplied target exactly once through the isolated
+private QEMU workflow and propagates failure without falling back to the synthetic fixture. When it
+is absent, the commands remain portable and run the clearly labeled synthetic Docker/VM checks.
+Use `synthetic-docker`, `synthetic-vm`, or `synthetic-all` to select those public regressions
+explicitly even when a local archive is staged. `provided` requires the local archive.
 
 Docker mode checks healthy and unhealthy process/port paths, logging, firewall warnings, and summary
 statistics. Its listener is a synthetic target and **is not evidence about any supplied application**.
@@ -44,19 +51,24 @@ count, rejecting missing or malformed input.
 
 ## Private supplied-target boundary
 
-The public build context never contains restricted archives or executables. An optional local-only
-workflow accepts an explicitly provided ZIP path and ignored evidence directory:
+The public build context never contains restricted archives or executables; `.local` is excluded by
+`.dockerignore`. The canonical local layout and direct wrapper form are:
 
 ```sh
+mkdir -m 0700 -p .local/B4-1 .local/evidence/B4-1
+sh coursework/B4-1/scripts/verify.sh provided
 sh scripts/verify-private.sh /absolute/path/to/input.zip /absolute/path/to/private/evidence/B4-1
 ```
 
 That workflow builds a digest-pinned glibc guest, creates a stopped container, copies the untouched
 archive into it with `docker cp`, and only then constructs an ephemeral initramfs inside the runtime.
 The guest extracts one bounded x86 target into RAM, executes it as a non-root service user with a
-40-second limit, provides exactly one synthetic key through the `t_secret.key` file path, checks its
-readiness/listener, and runs the public monitor. It does not unpack or
-execute the input on the agent host, reverse engineer it, or copy it into an image. The raw serial log
-is written only to the caller's ignored private evidence path.
+40-second limit, provides exactly one synthetic `secret.key` and passes its containing key directory,
+checks its readiness/listener, and runs the public monitor. It does not unpack or
+execute the input on the agent host, reverse engineer it, or copy it into an image. Inputs are bounded
+to 50 MiB and symlinked paths are rejected. The no-network container has bounded memory, CPU, PIDs,
+tmpfs, and wall-clock duration. Each invocation creates a mode-0700 evidence run directory containing
+mode-0600 raw and CR-normalized serial logs. The default is `.local/evidence/B4-1`; set
+`B4_PRIVATE_ARCHIVE` and `B4_PRIVATE_EVIDENCE_DIR` to absolute external paths for standalone use.
 
 See [the required operations report](docs/REPORT.md) and [review guide](docs/REVIEW.md).
