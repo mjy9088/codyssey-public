@@ -40,6 +40,10 @@ metric_max() {
 }
 
 sh "$root/tests/private-result.sh" "$out"
+if test -f "$root/scripts/verify.sh" && test -f "$root/scripts/observe-private.sh"; then
+  sh "$root/tests/verify-routing.sh"
+  sh "$root/tests/private-wrapper-guards.sh"
+fi
 
 native_marker="$out/native-124.marker"
 set +e
