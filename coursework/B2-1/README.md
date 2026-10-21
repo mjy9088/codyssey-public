@@ -87,5 +87,4 @@ access for the first pinned-image/artifact build, roughly 1 GiB RAM, and no KVM 
 privileged container. These local checks do not establish a public deployment.
 
 No generated run reports are tracked: they become stale, duplicate executable
-verification, grow history, and may disclose local data. See `docs/REVIEW.md` for a
-manual review sequence.
+verification, grow history, and may disclose local data.
