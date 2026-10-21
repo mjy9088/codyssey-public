@@ -50,8 +50,9 @@ Current coursework:
 
 ## GitHub Pages
 
-The root [Pages workflow](.github/workflows/b1-1-pages.yml) publishes only B1-1 to
-<https://mjy9088.github.io/codyssey-public/>. Relevant pushes to `main` trigger it
+The root [Pages workflow](.github/workflows/b1-1-pages.yml) prepares a project index at
+<https://mjy9088.github.io/codyssey-public/>, the portfolio at `B1-1/`, and the workshop
+planner at `B1-2/`. Relevant pushes to `main` trigger it
 automatically; it can also be started manually from Actions. The repository's Pages
 source must be **GitHub Actions**, not a publishing branch. Selecting that source
 does not itself execute a manual-only workflow.
@@ -61,9 +62,12 @@ archives, tests, documentation, and backend services are excluded. Test its boun
 with `sh tests/pages-package-test.sh`. A URL is considered live only after a
 successful deployment, not merely because the workflow exists locally.
 
-B1-2 is intentionally not included yet. Pages can host its frontend, but functional
-CRUD additionally needs an approved remote Firebase project and production
-configuration; local emulators cannot be hosted by Pages.
+B1-2's build requires three **Repository secrets** in GitHub **Settings → Secrets
+and variables → Actions**: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, and
+`VITE_FIREBASE_PROJECT_ID`. See the [B1-2 deployment checklist](coursework/B1-2/README.md#github-pages-and-firebase)
+for Firebase prerequisites, shared-demo security boundaries, and post-deployment checks.
+Pages hosts only the frontend; local emulators cannot be hosted there. Missing Firebase
+settings fail the combined publication instead of deploying a broken emulator frontend.
 
 ## Repository roles
 

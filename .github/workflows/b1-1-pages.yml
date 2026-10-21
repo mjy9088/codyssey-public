@@ -1,4 +1,4 @@
-name: Publish B1-1 to Pages
+name: Publish B1 websites to Pages
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/b1-1-pages.yml
       - coursework/B1-1/**
+      - coursework/B1-2/**
       - scripts/package-pages.sh
       - tests/pages-package-test.sh
   workflow_dispatch:
@@ -27,8 +28,29 @@ jobs:
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
       - name: Check publication boundary
         run: sh tests/pages-package-test.sh
-      - name: Stage only B1-1 website assets
-        run: sh scripts/package-pages.sh
+      - name: Build B1-2 with remote Firebase
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp --env VITE_USE_EMULATORS=false --env VITE_ROUTER_MODE=hash \
+            --env VITE_FIREBASE_API_KEY --env VITE_FIREBASE_AUTH_DOMAIN --env VITE_FIREBASE_PROJECT_ID \
+            --env GITHUB_REPOSITORY \
+            --mount "type=bind,source=$PWD/coursework/B1-2,target=/app" --workdir /app \
+            node:22.19.0-bookworm-slim@sha256:4a4884e8a44826194dff92ba316264f392056cbe243dcc9fd3551e71cea02b90 \
+            sh -c 'npm ci --ignore-scripts --no-audit --no-fund && npm run check && npm test && sh tests/deployment-build.sh && npm run build -- --base "/${GITHUB_REPOSITORY#*/}/B1-2/"'
+      - name: Stage only B1 runtime website assets
+        run: sh scripts/package-pages.sh _site coursework/B1-2/dist
+      - name: Check prefixed static websites in Chromium without external access
+        run: |
+          docker run --rm --network none --user "$(id -u):$(id -g)" --shm-size=1g \
+            --env HOME=/tmp --env "PAGES_BASE_PATH=/${GITHUB_REPOSITORY#*/}/" \
+            --mount "type=bind,source=$PWD/coursework/B1-2,target=/work" \
+            --mount "type=bind,source=$PWD/_site,target=/site,readonly" --workdir /work \
+            mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d \
+            node tests/pages-smoke.mjs /site /work/artifacts/pages
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         with:
           path: _site

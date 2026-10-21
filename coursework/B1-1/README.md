@@ -131,17 +131,19 @@ for kernel and artifact details.
 
 ## GitHub Pages
 
-The monorepo deployment target is <https://mjy9088.github.io/codyssey-public/>. A configured target
+The monorepo deployment target is <https://mjy9088.github.io/codyssey-public/B1-1/>. A configured target
 URL is not evidence that a deployment has completed; confirm a successful Actions deployment before
 claiming that it is live.
 
-The root workflow, [Publish B1-1 to Pages](../../.github/workflows/b1-1-pages.yml), automatically runs
+The root workflow, [Publish B1 websites to Pages](../../.github/workflows/b1-1-pages.yml), automatically runs
 when relevant files are pushed to `main`, and also supports **Run workflow** on `main`. With
 **Settings → Pages → Build and deployment → Source** set to **GitHub Actions**, no separate source
 branch or `/docs` directory is needed. Changing the Pages source alone does not run a workflow.
 
-The root workflow checks and packages only `index.html`, `css/`, `js/`, `images/`, and `.nojekyll`.
-Their relative URLs work under the repository's `/codyssey-public/` prefix. Run the packaging
+The root workflow places this project's `index.html`, `css/`, `js/`, and `images/` under `B1-1/`.
+Their relative URLs work under `/codyssey-public/B1-1/`. The site root contains a project index,
+and `B1-2/` contains the separately built workshop planner. The combined workflow also requires
+the [B1-2 Firebase Repository secrets](../B1-2/README.md#github-pages-and-firebase). Run the packaging
 regression from the monorepo root with `sh tests/pages-package-test.sh`.
 
 The nested `.github/workflows/pages.yml` remains a standalone-subtree template; GitHub does not

@@ -77,14 +77,83 @@ context. Firestore payloads and user form input are parsed with Zod at their bou
 - Multi-stage pinned Docker images; Nginx production server
 - QEMU TCG with pinned Alpine guest artifacts and checksum verification
 
+## GitHub Pages and Firebase
+
+The monorepo [Pages workflow](../../.github/workflows/b1-1-pages.yml) builds this frontend for
+<https://mjy9088.github.io/codyssey-public/B1-2/>. The root is a project index and B1-1 has its own
+`B1-1/` directory. These are configured targets, **not claims of a completed deployment**.
+
+Before publishing:
+
+1. Register a Firebase web app in an approved project, create the default Firestore database,
+   and enable **Anonymous** sign-in in Firebase Authentication. Use a dedicated disposable demo
+   project with synthetic data, not a project containing personal or important information.
+2. In the GitHub repository's **Settings → Secrets and variables → Actions**, add these three
+   **Repository secrets** individually. Use each raw value without quotes or the surrounding
+   Firebase configuration object:
+
+   | Repository secret | Firebase web configuration field |
+   | --- | --- |
+   | `VITE_FIREBASE_API_KEY` | `apiKey` |
+   | `VITE_FIREBASE_AUTH_DOMAIN` | `authDomain` |
+   | `VITE_FIREBASE_PROJECT_ID` | `projectId` |
+
+   Do not add service-account JSON, private keys, or administrator tokens. Firebase web configuration
+   is included in the public JavaScript bundle even when supplied through Secrets; Secrets avoid
+   hardcoding environment-specific values, not public exposure of web configuration.
+3. Review and publish Firestore rules separately through the Firebase console. The checked-in
+   `firestore.rules` is a **shared anonymous demo policy**: anyone who signs in anonymously can read,
+   edit, or delete every workshop. It does not enforce field validation, ownership, roles, rate
+   limits, or protection against quota exhaustion. Do not treat anonymous sign-in or hidden API keys
+   as access control for a private application. An untrusted public deployment needs a deliberately
+   stronger authorization/data-validation policy before use; rules are not deployed by Pages.
+4. Review Authentication's authorized domains for the intended host (`mjy9088.github.io`, without
+   a URL scheme or path). Keep the demo on **Spark without a linked Cloud Billing account** if
+   usage must stop at free quotas rather than incur usage charges. Billing budget alerts are not
+   a spending cap. Hosting, Functions, and Storage are not required by this frontend.
+5. Set GitHub **Settings → Pages → Source** to **GitHub Actions**. After a separately approved push
+   to `main`, relevant changes trigger **Publish B1 websites to Pages**; it also supports manual
+   dispatch. Updating Secrets alone does not run a build; rerun the workflow after changing them.
+
+The workflow uses the locked dependencies and pinned Node image, runs checks, and builds with
+`VITE_USE_EMULATORS=false` and `VITE_ROUTER_MODE=hash`. Missing/blank Firebase values stop the
+build. Vite's asset base is `/<repository>/B1-2/`; a workshop URL looks like
+`/codyssey-public/B1-2/#/workshops`. Hash routing allows direct links and refreshes on Pages
+without server rewrite rules. Local Docker/QEMU verification keeps its existing browser-history
+routes and emulator defaults. An independent deployment can choose its own `--base` and leave
+`VITE_ROUTER_MODE` unset when the host supports SPA history fallback.
+
+Only the built `index.html` and JavaScript/CSS assets are added to the Pages artifact. Sources,
+`.env` files, source maps, Firebase rules, tests, backend tooling, and local archives are excluded.
+The combined build does not publish a partial site when Firebase settings are missing.
+
+After a successful deployment, visit the actual B1-2 URL and test create, reload, edit, reload,
+delete, and reload against the real Firebase project. Also test a copied detail link, a missing
+route, keyboard skip navigation, and narrow screens. Check Firebase usage and remove disposable
+demo data afterward. No GitHub Secret values need to be shared in chat.
+
+For local configuration-boundary regressions with installed dependencies:
+
+```sh
+sh tests/deployment-build.sh
+```
+
+This uses synthetic web configuration only, makes no Firebase requests, and verifies required
+settings and prefixed assets. It does not prove that production credentials or rules work.
+
+The workflow also runs `node tests/pages-smoke.mjs SITE_DIR EVIDENCE_DIR` in pinned Chromium
+against the assembled Pages artifact. It serves the static files under `/codyssey-public/`
+without SPA rewrites and blocks all external requests. It checks both project links, hash-route
+refreshes, validation, skip-link focus, asset loading, and 375/768/1280px layouts. Firebase-backed
+routes deliberately exercise the authentication-unavailable state, not production CRUD.
+
 ## Deployment boundary
 
 There is **no external deployment URL yet**. Local Docker, browser, and QEMU checks are not cloud
 deployment evidence. A real submission deployment still requires an approved public repository,
-Firebase project configuration supplied as deployment environment variables, production Firestore
-rules, an authorized Auth domain, and a separately approved host such as Firebase Hosting, Vercel,
-or Netlify. After deployment, CRUD must be rerun against that actual URL; the emulator result must
-not be presented as proof of production behavior.
+Firebase project configuration supplied at build time, reviewed production Firestore
+rules, and a separately approved deployment. After deployment, CRUD must be rerun against that
+actual URL; the emulator result must not be presented as proof of production behavior.
 
 QEMU boots an independent x86_64 Linux kernel under TCG and serves the exact production `dist/` from
 inside the guest. It may run substantially slower on ARM hosts because it is an x86_64 guest check,
