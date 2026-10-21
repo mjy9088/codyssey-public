@@ -3,7 +3,13 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
-GIT_CLIENT_IMAGE=${GIT_CLIENT_IMAGE:-docker.gitea.com/gitea:1.24.7}
+GIT_CLIENT_IMAGE=${GIT_CLIENT_IMAGE:-docker.gitea.com/gitea:1.24.7@sha256:918955f16b1e91732af6c449bb2db3a34271748dbed1ccfbae48f8a2fb5480b8}
+
+if [ "$#" -gt 1 ]; then
+    echo "Usage: sh scripts/verify_public_origin.sh [tag]" >&2
+    exit 2
+fi
+
 ORIGIN_URL=$(git -C "$PROJECT_ROOT" remote get-url origin)
 REVISION=${1:-}
 

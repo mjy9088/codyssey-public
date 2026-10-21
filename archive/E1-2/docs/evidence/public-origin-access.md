@@ -6,6 +6,12 @@
 sh scripts/verify_public_origin.sh
 ```
 
-origin URL에 사용자 정보가 포함되어 있거나 인증 없이 `HEAD`와 `main`을 조회할 수 없으면 실패합니다. tag를 인자로 주면 그 tag도 원격에서 조회합니다. 향후 새로운 인증 관련 환경변수가 추가되더라도 허용 목록에 없으므로 컨테이너 안의 Git 프로세스에 전달되지 않습니다. 기본값은 버전이 고정된 Git 클라이언트 image `docker.gitea.com/gitea:1.24.7`이며 Gitea 서버는 실행하지 않습니다.
+The check fails if the origin URL contains user information or anonymous access
+cannot read `HEAD` and `main`. Supplying one tag name also checks that tag. Only
+the explicitly allowlisted environment reaches Git in the container, so future
+host authentication variables are excluded. The default Git client image is
+pinned by version and OCI index digest as
+`docker.gitea.com/gitea:1.24.7@sha256:918955f16b1e91732af6c449bb2db3a34271748dbed1ccfbae48f8a2fb5480b8`;
+the command does not start a Gitea server.
 
 검증 당시의 출력은 `snapshots/public-origin.txt`에 보존합니다.
