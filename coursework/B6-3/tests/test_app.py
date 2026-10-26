@@ -12,8 +12,8 @@ from book_catalog.models.user import User
 from book_catalog.repositories.sessions import SessionRepository
 from book_catalog.repositories.users import UserRepository
 from book_catalog.routers import auth, books, home, loans
+from book_catalog.security import require_auth
 from book_catalog.services.auth import AuthService
-from book_catalog.web import require_auth
 
 
 def test_application_imports_with_all_expected_routes() -> None:

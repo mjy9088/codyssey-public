@@ -8,7 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from budget_app.models import ExportSelection, SearchCriteria, Transaction, TransactionChanges, TransactionDraft, TransactionId, parse_amount
+from budget_app.csv_adapter import LedgerCsvAdapter
+from budget_app.models import ExportSelection, ImportResult, SearchCriteria, Transaction, TransactionChanges, TransactionDraft, TransactionId, parse_amount
 from budget_app.service import LedgerService
 from budget_app.storage import LedgerStore
 
@@ -107,6 +108,24 @@ class StorageAndServiceTests(unittest.TestCase):
         self.assertEqual(header, ["date", "type", "category", "amount", "memo", "tags"])
         self.assertEqual((exported, imported.imported, imported.skipped), (1, 1, 0))
         self.assertEqual(records[0].tags, ("one", "two"))
+
+    def test_csv_adapter_when_given_valid_and_malformed_rows_parses_boundary_records(self) -> None:
+        # Given a CSV file containing one valid row and one malformed row
+        source = self.data_dir / "adapter.csv"
+        source.write_text(
+            "date,type,category,amount,memo,tags\n"
+            "2026-03-08,expense,food,321,meal,one\n"
+            "2026-03-09,expense,food,500,missing-tags\n",
+            encoding="utf-8",
+        )
+        drafts: list[TransactionDraft] = []
+
+        # When the CSV adapter imports through a domain callback
+        result = LedgerCsvAdapter().import_file(source, lambda draft: drafts.append(draft))
+
+        # Then only structurally complete rows cross the file boundary.
+        self.assertEqual(result, ImportResult(imported=1, skipped=1))
+        self.assertEqual(drafts, [TransactionDraft("2026-03-08", "expense", "food", "321", "meal", "one")])
 
     def test_corrupt_json_when_streamed_fails_with_line_context(self) -> None:
         # Given malformed persistent data

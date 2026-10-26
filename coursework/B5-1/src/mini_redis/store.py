@@ -55,14 +55,10 @@ class MiniRedis:
 
     def _evict_to_limit(self) -> None:
         while self.maxmemory > 0 and self.used_memory > self.maxmemory:
-            key = self._lru.remove_back()
-            if key is None:
+            oldest = self._lru.tail
+            if oldest is None:
                 return
-            value = self._values.remove(key)
-            self._lru_nodes.remove(key)
-            self._expires.remove(key)
-            stored_value = "" if value is None else value
-            self.used_memory -= self._entry_size(key, stored_value)
+            self._remove(oldest.data)
             self.evicted_keys += 1
 
     def set(self, key: str, value: str) -> str:
@@ -70,14 +66,9 @@ class MiniRedis:
         new_size = self._entry_size(key, value)
         if self.maxmemory > 0 and new_size > self.maxmemory:
             return "OOM"
-        had_old_value = self._values.contains(key)
-        old_value = self._values.get(key)
-        if had_old_value:
-            stored_value = "" if old_value is None else old_value
-            self.used_memory -= self._entry_size(key, stored_value)
+        self._remove(key)
         self._values.put(key, value)
         self.used_memory += new_size
-        self._expires.remove(key)
         self._touch(key)
         self._evict_to_limit()
         return "OK"

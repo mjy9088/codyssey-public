@@ -1,13 +1,14 @@
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from typing import assert_never, final, override
 
-from book_catalog.models.loan import Loan, LoanStatus
+from book_catalog.models.loan import LoanStatus
 from book_catalog.repositories.books import BookRepository
 from book_catalog.repositories.loans import LoanRepository
-from book_catalog.schemas.domain import BookId, BookView, LoanId, LoanView, UserId
+from book_catalog.schemas.domain import LoanView, UserId
+from book_catalog.services.loan_views import LoanViewAssembler
 
 
 class LoanRule(StrEnum):
@@ -50,17 +51,12 @@ class LoanService:
         self._loans = loans
         self._books = books
         self._clock = clock
-
-    def list(self, user_id: UserId, status: str) -> tuple[LoanView, ...]:
-        normalized = None if status == "all" else status
-        if normalized not in {None, LoanStatus.BORROWED, LoanStatus.RETURNED}:
-            normalized = LoanStatus.BORROWED
-        return tuple(self._view(loan) for loan in self._loans.list_for_user(user_id, normalized))
+        self._views = LoanViewAssembler(books)
 
     def borrow(self, user_id: UserId, book_id: int) -> LoanView:
         loan = self._loans.create_available(user_id, book_id, self._clock())
         if loan is not None:
-            return self._view(loan)
+            return self._views.build(loan)
         if self._books.get(book_id) is None:
             raise LoanRuleError(LoanRule.BOOK_MISSING)
         if self._loans.active_for_book(user_id, book_id) is not None:
@@ -73,23 +69,4 @@ class LoanService:
             raise LoanRuleError(LoanRule.LOAN_MISSING)
         if loan.status != LoanStatus.BORROWED:
             raise LoanRuleError(LoanRule.RETURNED)
-        return self._view(self._loans.mark_returned(loan, self._clock()))
-
-    def _view(self, loan: Loan) -> LoanView:
-        book = loan.book
-        available = book.total_copies - self._books.active_count(book.id)
-        book_view = BookView(
-            BookId(book.id), book.title, book.author, book.year, book.total_copies, available
-        )
-        return LoanView(
-            LoanId(loan.id),
-            loan.status,
-            _as_utc(loan.borrowed_at),
-            None if loan.returned_at is None else _as_utc(loan.returned_at),
-            book_view,
-            loan.user.full_name,
-        )
-
-
-def _as_utc(value: datetime) -> datetime:
-    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+        return self._views.build(self._loans.mark_returned(loan, self._clock()))

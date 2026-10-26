@@ -15,15 +15,16 @@ const writeStoredTheme = (theme) => {
   try {
     localStorage.setItem(STORAGE_KEY, theme);
   } catch {
+    // The explicit choice still applies to this page when storage is unavailable.
   }
 };
-
-const preferredTheme = () => readStoredTheme() ?? (matchMedia("(prefers-color-scheme: dark)").matches ? DARK : LIGHT);
 
 export const initTheme = () => {
   const toggle = document.querySelector("#theme-toggle");
   const themeColors = document.querySelectorAll('meta[name="theme-color"]');
   if (!(toggle instanceof HTMLButtonElement)) return;
+  const systemTheme = matchMedia("(prefers-color-scheme: dark)");
+  let selectedTheme = readStoredTheme();
 
   const applyTheme = (theme) => {
     const dark = theme === DARK;
@@ -33,10 +34,13 @@ export const initTheme = () => {
     themeColors.forEach((meta) => meta.setAttribute("content", dark ? "#151816" : "#f4f1e8"));
   };
 
-  applyTheme(preferredTheme());
+  applyTheme(selectedTheme ?? (systemTheme.matches ? DARK : LIGHT));
+  systemTheme.addEventListener("change", (event) => {
+    if (selectedTheme === null) applyTheme(event.matches ? DARK : LIGHT);
+  });
   toggle.addEventListener("click", () => {
-    const next = document.documentElement.dataset.theme === DARK ? LIGHT : DARK;
-    applyTheme(next);
-    writeStoredTheme(next);
+    selectedTheme = document.documentElement.dataset.theme === DARK ? LIGHT : DARK;
+    applyTheme(selectedTheme);
+    writeStoredTheme(selectedTheme);
   });
 };

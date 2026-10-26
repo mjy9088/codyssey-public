@@ -4,8 +4,10 @@ from fastapi import APIRouter, Form, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from book_catalog.auth.csrf import issue_public_token, verify_public_token
+from book_catalog.dependencies import AuthServiceDep
+from book_catalog.security import SESSION_COOKIE, AuthDep, require_csrf
 from book_catalog.services.auth import InvalidCredentialsError
-from book_catalog.web import SESSION_COOKIE, AuthDep, AuthServiceDep, require_csrf, templates
+from book_catalog.web import templates
 
 router = APIRouter()
 

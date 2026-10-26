@@ -2,56 +2,9 @@
 set -eu
 umask 077
 test "$#" -eq 2 || { printf 'Usage: %s INPUT_ZIP PRIVATE_EVIDENCE_DIR\n' "$0" >&2; exit 2; }
-input_arg=$1
-evidence_arg=$2
-case "$input_arg" in /*) ;; *) printf 'Input ZIP path must be absolute\n' >&2; exit 2 ;; esac
-case "$evidence_arg" in /*) ;; *) printf 'Evidence root path must be absolute\n' >&2; exit 2 ;; esac
-path_has_symlink() {
-  path=$1
-  current=
-  old_ifs=$IFS
-  IFS=/
-  set -f
-  set -- $path
-  set +f
-  IFS=$old_ifs
-  for component do
-    test -n "$component" || continue
-    current=$current/$component
-    test ! -L "$current" || return 0
-  done
-  return 1
-}
-test -f "$input_arg" || { printf 'Input ZIP not found: %s\n' "$input_arg" >&2; exit 2; }
-if path_has_symlink "$input_arg"; then printf 'Input ZIP path must not contain symlinks\n' >&2; exit 2; fi
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
-public_root=$root
-ancestor=$root
-while test "$ancestor" != /; do
-  if test -e "$ancestor/.git"; then public_root=$ancestor; break; fi
-  ancestor=$(dirname "$ancestor")
-done
-input=$(realpath "$input_arg")
-case "$input" in
-  "$public_root/.local/B4-1/agent-app.zip") ;;
-  "$public_root"|"$public_root"/*) printf 'Input ZIP must remain outside the public checkout except at .local/B4-1/agent-app.zip\n' >&2; exit 2 ;;
-esac
-size=$(wc -c <"$input")
-test "$size" -le 52428800 || { printf 'Input ZIP exceeds 50 MiB safety bound\n' >&2; exit 2; }
-if path_has_symlink "$evidence_arg"; then printf 'Evidence root path must not contain symlinks\n' >&2; exit 2; fi
-evidence=$(realpath -m "$evidence_arg")
-case "$evidence" in
-  "$public_root/.local/evidence/B4-1") ;;
-  "$public_root"|"$public_root"/*) printf 'Evidence root must remain outside the public checkout except at .local/evidence/B4-1\n' >&2; exit 2 ;;
-esac
-if test -e "$evidence"; then
-  test -d "$evidence" || { printf 'Evidence root must be a directory\n' >&2; exit 2; }
-else
-  mkdir -m 0700 -p "$evidence"
-fi
-chmod 0700 "$evidence"
-run_dir=$(mktemp -d "$evidence/run.XXXXXX")
-chmod 0700 "$run_dir"
+. "$root/scripts/private-paths.sh"
+prepare_private_paths "$root" "$1" "$2"
 image="b4-1-private-vm:local"
 container="b4-1-private-$$"
 cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }

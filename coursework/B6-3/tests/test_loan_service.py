@@ -8,11 +8,29 @@ from book_catalog.models.user import User
 from book_catalog.repositories.books import BookRepository
 from book_catalog.repositories.loans import LoanRepository
 from book_catalog.schemas.domain import UserId
+from book_catalog.services.loan_views import LoanReadService
 from book_catalog.services.loans import LoanRuleError, LoanService
 
 
 def service(db: Session, now: datetime) -> LoanService:
     return LoanService(LoanRepository(db), BookRepository(db), lambda: now)
+
+
+def test_loan_read_service_assembles_member_views(db: Session, fixed_now: datetime) -> None:
+    # Given
+    user = db.query(User).one()
+    book = db.query(Book).one()
+    _ = service(db, fixed_now).borrow(UserId(user.id), book.id)
+    reader = LoanReadService(LoanRepository(db), BookRepository(db))
+
+    # When
+    views = reader.list(UserId(user.id), "borrowed")
+
+    # Then
+    assert len(views) == 1
+    assert views[0].book.title == "Kindred"
+    assert views[0].book.available_copies == 0
+    assert views[0].borrower_name == "Demo Reader"
 
 
 def test_borrow_and_return_are_persisted_relationship_transitions(

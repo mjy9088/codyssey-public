@@ -39,7 +39,7 @@ jobs:
             --env VITE_FIREBASE_API_KEY --env VITE_FIREBASE_AUTH_DOMAIN --env VITE_FIREBASE_PROJECT_ID \
             --env GITHUB_REPOSITORY \
             --mount "type=bind,source=$PWD/coursework/B1-2,target=/app" --workdir /app \
-            node:22.19.0-bookworm-slim@sha256:4a4884e8a44826194dff92ba316264f392056cbe243dcc9fd3551e71cea02b90 \
+            node:24.13.0-bookworm-slim@sha256:4660b1ca8b28d6d1906fd644abe34b2ed81d15434d26d845ef0aced307cf4b6f \
             sh -c 'npm ci --ignore-scripts --no-audit --no-fund && npm run check && npm test && sh tests/deployment-build.sh && npm run build -- --base "/${GITHUB_REPOSITORY#*/}/B1-2/"'
       - name: Stage only B1 runtime website assets
         run: sh scripts/package-pages.sh _site coursework/B1-2/dist

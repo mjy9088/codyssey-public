@@ -53,7 +53,7 @@ export const initReveals = (root = document) => {
   const items = [...root.querySelectorAll(".reveal:not(.is-visible)")];
   if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) {
     items.forEach((item) => item.classList.add("is-visible"));
-    return;
+    return () => {};
   }
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
@@ -63,4 +63,5 @@ export const initReveals = (root = document) => {
     });
   }, { threshold: .2 });
   items.forEach((item) => observer.observe(item));
+  return () => observer.disconnect();
 };

@@ -7,7 +7,7 @@ import { Pagination } from "../components/Pagination"
 import { EmptyState, ErrorState, LoadingState } from "../components/StateView"
 import { WorkshopCard } from "../components/WorkshopCard"
 import { useWorkshops } from "../hooks/useWorkshops"
-import { seedWorkshops } from "../lib/workshop-store"
+import { seedWorkshops } from "../lib/workshop-seed"
 
 const pageSize = 4
 

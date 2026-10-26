@@ -3,8 +3,10 @@ from typing import Annotated
 from fastapi import APIRouter, Form, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from book_catalog.dependencies import LoanReadServiceDep, LoanServiceDep
+from book_catalog.security import AuthDep, protected_context, require_csrf
 from book_catalog.services.loans import LoanRuleError
-from book_catalog.web import AuthDep, LoanServiceDep, protected_context, require_csrf, templates
+from book_catalog.web import templates
 
 router = APIRouter()
 
@@ -12,12 +14,15 @@ router = APIRouter()
 @router.get("/loans", response_class=HTMLResponse)
 def list_loans(
     request: Request,
-    loans: LoanServiceDep,
+    loans: LoanReadServiceDep,
     auth: AuthDep,
     loan_status: str = "all",
 ) -> HTMLResponse:
-    context = protected_context(request, auth)
-    context.update({"loans": loans.list(auth.user.id, loan_status), "loan_status": loan_status})
+    context = {
+        **protected_context(request, auth),
+        "loans": loans.list(auth.user.id, loan_status),
+        "loan_status": loan_status,
+    }
     return templates.TemplateResponse(request, "loans.html", context)
 
 
@@ -33,8 +38,7 @@ def borrow_book(
     try:
         _ = loans.borrow(auth.user.id, book_id)
     except LoanRuleError as error:
-        context = protected_context(request, auth)
-        context["error"] = str(error)
+        context = {**protected_context(request, auth), "error": str(error)}
         return templates.TemplateResponse(
             request, "loan-error.html", context, status_code=status.HTTP_409_CONFLICT
         )
@@ -53,8 +57,7 @@ def return_book(
     try:
         _ = loans.return_loan(auth.user.id, loan_id)
     except LoanRuleError as error:
-        context = protected_context(request, auth)
-        context["error"] = str(error)
+        context = {**protected_context(request, auth), "error": str(error)}
         return templates.TemplateResponse(
             request, "loan-error.html", context, status_code=status.HTTP_409_CONFLICT
         )

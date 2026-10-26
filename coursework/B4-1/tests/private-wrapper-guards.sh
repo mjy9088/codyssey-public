@@ -60,6 +60,7 @@ grep -Fqx '.local' "$root/.dockerignore"
 fixture=$tmp/repo/coursework/B4-1
 mkdir -p "$fixture/scripts" "$tmp/repo/.git" "$tmp/repo/.local/B4-1" "$tmp/repo/.local/evidence/B4-1"
 cp "$root/scripts/verify-private.sh" "$fixture/scripts/verify-private.sh"
+cp "$root/scripts/private-paths.sh" "$fixture/scripts/private-paths.sh"
 printf 'synthetic canonical-path fixture\n' >"$tmp/repo/.local/B4-1/agent-app.zip"
 : >"$tmp/canonical-docker.log"
 set +e

@@ -97,6 +97,12 @@ identity. These fields reject accidental replay or mixing across local runs. The
 attestation: the operator controls the local workflow and evidence files, so the fields cannot prove
 that a report is authentic, complete, or true.
 
+`scripts/private-paths.sh` owns path validation and private run-directory creation. Its
+`prepare_private_paths ROOT INPUT EVIDENCE` operation supplies the validated `input` and fresh
+`run_dir` to `observe-private.sh`. The wrapper owns container execution; `check-private-result.sh`
+owns evidence interpretation. This project's local helper deliberately has no sibling dependency,
+so copying the subtree preserves its trust boundary and runnable workflow.
+
 The public VM image compiles the fixture in a separate stage and omits compiler packages from the
 initramfs. This replaced the earlier 99,943,376-byte compressed initramfs that triggered an early
 unpack write error under the 512 MiB guest bound. The corrected image measured 33,911,770 bytes and

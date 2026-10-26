@@ -75,4 +75,9 @@ tmpfs, and wall-clock duration. Each invocation creates a mode-0700 evidence run
 mode-0600 raw and CR-normalized serial logs. The default is `.local/evidence/B4-1`; set
 `B4_PRIVATE_ARCHIVE` and `B4_PRIVATE_EVIDENCE_DIR` to absolute external paths for standalone use.
 
+`scripts/private-paths.sh` owns path validation and private run-directory creation. Its
+`prepare_private_paths ROOT INPUT EVIDENCE` operation supplies the validated `input` and fresh
+`run_dir` to `verify-private.sh`, which owns container execution and result interpretation.
+The helper stays inside this project so a standalone copy never depends on a sibling checkout.
+
 See [the required operations report](docs/REPORT.md).

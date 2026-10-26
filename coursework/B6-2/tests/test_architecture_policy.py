@@ -59,6 +59,23 @@ def test_services_do_not_construct_http_responses() -> None:
     assert not response_calls, response_calls
 
 
+def test_book_router_delegates_markup_policy_to_presentation() -> None:
+    # Given
+    tree = parse_tree(PACKAGE / "routers/books.py")
+
+    # When
+    response_calls = {
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "TemplateResponse"
+    }
+
+    # Then
+    assert not response_calls
+
+
 def test_repositories_exclusively_own_queries_and_commits() -> None:
     # Given
     source_files = tuple(PACKAGE.rglob("*.py"))

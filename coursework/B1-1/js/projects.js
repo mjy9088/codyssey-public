@@ -2,7 +2,9 @@ import { initReveals } from "./navigation.js";
 
 const API_URL = "https://api.github.com/users/mjy9088/repos?per_page=100&sort=updated";
 const REQUEST_TIMEOUT = 8000;
+const MAX_REPOSITORIES = 100;
 const MAX_PROJECTS = 12;
+const dateFormatter = new Intl.DateTimeFormat("en", { month: "short", year: "numeric", timeZone: "UTC" });
 const LOADING_MARKUP = '<div class="project-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>';
 const truncate = (text, length) => [...text.trim()].slice(0, length).join("");
 const PROJECT_CARD_MARKUP = `
@@ -21,16 +23,16 @@ const PROJECT_CARD_MARKUP = `
 const parseRepo = (value) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const { name, html_url: url, description, language, updated_at: updatedAt, fork } = value;
-  if (typeof name !== "string" || typeof url !== "string" || typeof updatedAt !== "string" || typeof fork !== "boolean") return null;
+  if (typeof name !== "string" || !name.trim() || typeof url !== "string" || typeof updatedAt !== "string" || typeof fork !== "boolean") return null;
   if (!(description === null || typeof description === "string") || !(language === null || typeof language === "string")) return null;
   let parsedUrl;
   try { parsedUrl = new URL(url); } catch { return null; }
-  if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== "github.com" || Number.isNaN(Date.parse(updatedAt))) return null;
+  if (parsedUrl.origin !== "https://github.com" || parsedUrl.username || parsedUrl.password || Number.isNaN(Date.parse(updatedAt))) return null;
   return {
     name: truncate(name, 100),
     url: parsedUrl.href,
-    description: description ? truncate(description, 280) : "A public repository without a description yet.",
-    language: language ? truncate(language, 32) : "Other",
+    description: description?.trim() ? truncate(description, 280) : "A public repository without a description yet.",
+    language: language?.trim() ? truncate(language, 32) : "Other",
     updatedAt,
     fork,
   };
@@ -44,7 +46,11 @@ const fetchRepos = async () => {
     if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
     const payload = await response.json();
     if (!Array.isArray(payload)) throw new TypeError("GitHub response was not a repository list");
-    return payload.map(parseRepo).filter((repo) => repo && !repo.fork).slice(0, MAX_PROJECTS);
+    const parsed = payload.slice(0, MAX_REPOSITORIES).map(parseRepo);
+    const rejected = parsed.filter((repo) => repo === null).length;
+    const repos = parsed.filter((repo) => repo !== null && !repo.fork).slice(0, MAX_PROJECTS);
+    if (!repos.length && rejected) throw new TypeError("GitHub returned no usable non-fork repositories");
+    return { repos, rejected };
   } finally {
     window.clearTimeout(timeout);
   }
@@ -60,7 +66,7 @@ const cardFor = (repo, template) => {
   const link = fragment.querySelector(".project-link");
   if (!(card instanceof HTMLElement) || !(language instanceof HTMLElement) || !(date instanceof HTMLElement) || !(name instanceof HTMLElement) || !(description instanceof HTMLElement) || !(link instanceof HTMLAnchorElement)) return null;
   language.textContent = repo.language;
-  date.textContent = new Intl.DateTimeFormat("en", { month: "short", year: "numeric" }).format(new Date(repo.updatedAt));
+  date.textContent = dateFormatter.format(new Date(repo.updatedAt));
   name.textContent = repo.name;
   description.textContent = repo.description;
   link.href = repo.url;
@@ -78,24 +84,29 @@ export const initProjects = () => {
   const template = document.createElement("template");
   template.innerHTML = PROJECT_CARD_MARKUP;
   let repos = [];
+  let rejected = 0;
+  let stopReveals = () => {};
 
   const render = (language = "all") => {
+    stopReveals();
     list.replaceChildren();
     const visible = language === "all" ? repos : repos.filter((repo) => repo.language === language);
     const cards = visible.map((repo) => cardFor(repo, template)).filter(Boolean);
     list.append(...cards);
     status.textContent = cards.length ? `${cards.length} public ${cards.length === 1 ? "repository" : "repositories"} shown.` : "No repositories match this language.";
-    initReveals(list);
+    if (rejected) status.textContent += ` ${rejected} invalid ${rejected === 1 ? "record" : "records"} skipped.`;
+    stopReveals = initReveals(list);
   };
 
   const load = async () => {
+    stopReveals();
     list.innerHTML = LOADING_MARKUP.repeat(3);
     status.textContent = "Loading public repositories…";
     list.setAttribute("aria-busy", "true");
     retry.hidden = true;
     filter.disabled = true;
     try {
-      repos = await fetchRepos();
+      ({ repos, rejected } = await fetchRepos());
       list.replaceChildren();
       if (!repos.length) {
         status.textContent = "No public repositories are available right now.";

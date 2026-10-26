@@ -1,5 +1,5 @@
 ARG ALPINE_IMAGE=alpine@sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412
-FROM node:22.19.0-bookworm-slim@sha256:4a4884e8a44826194dff92ba316264f392056cbe243dcc9fd3551e71cea02b90 AS site-builder
+FROM node:24.13.0-bookworm-slim@sha256:4660b1ca8b28d6d1906fd644abe34b2ed81d15434d26d845ef0aced307cf4b6f AS site-builder
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
@@ -12,9 +12,9 @@ ARG ALPINE_RELEASE=3.22.6
 ARG ALPINE_MINIROOTFS_SHA256=27694aaa55fd7a9e3ef596e0ad4eb66802308bb20172b17030cd5f4d8ae9bac2
 ARG BUSYBOX_EXTRAS_VERSION=1.37.0-r20
 ARG BUSYBOX_EXTRAS_SHA256=2b8e8919faa2fc7b52d36eebe2b42844d8a9e19e7e833de8e29883dd4eb0d6c1
-ARG LINUX_VIRT_VERSION=6.12.112-r0
-ARG LINUX_VIRT_SHA256=6694e66849759265135a930306452c944bf2159f259b8c8f1c8731e474f2830b
-RUN apk add --no-cache ca-certificates=20260909-r0 cpio=2.15-r0 curl=8.14.1-r3 gzip=1.14-r2
+ARG LINUX_VIRT_VERSION=6.12.114-r0
+ARG LINUX_VIRT_SHA256=82b7fee968e553fb34df7102e9622c969872810b729068106ed49a03c0ba4b8a
+RUN apk add --no-cache ca-certificates=20261020-r0 cpio=2.15-r0 curl=8.14.1-r4 gzip=1.14-r2
 WORKDIR /work
 RUN curl --fail --location --proto '=https' --tlsv1.2 -o rootfs.tgz "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/x86_64/alpine-minirootfs-${ALPINE_RELEASE}-x86_64.tar.gz" \
  && echo "${ALPINE_MINIROOTFS_SHA256}  rootfs.tgz" | sha256sum -c - \

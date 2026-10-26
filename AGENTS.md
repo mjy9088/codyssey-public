@@ -4,6 +4,13 @@ This public monorepo contains reference-quality implementations for the Codyssey
 AI All-in-One course. Prefer idiomatic, maintainable best practices over solutions
 that merely satisfy assessment checks.
 
+- Apply `docs/QUALITY_STANDARDS.md` during implementation and review. Exercise completion
+  and passing tests are a floor, not the approval target.
+- Keep entry points, domain rules, I/O adapters, presentation, fixture administration,
+  and composition independently owned. Do not split cohesive code just to add layers.
+- Review actual user-facing behavior and affected callers; report unavailable checks
+  honestly and resolve architecture/security blockers even when tests pass.
+
 - Write authored documentation in English.
 - Keep restricted assignment text and supplied assets/data in the private workspace;
   use publishable synthetic fixtures for public tests.

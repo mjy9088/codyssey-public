@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import csv
-import os
 from collections import defaultdict
 from collections.abc import Iterator
 from pathlib import Path
+from typing import assert_never
 
+from .csv_adapter import LedgerCsvAdapter
 from .errors import InputError, TransactionIdExhaustedError
 from .models import (
     ImportResult,
@@ -30,6 +30,7 @@ from .storage import LedgerStore
 class LedgerService:
     def __init__(self, store: LedgerStore) -> None:
         self.store = store
+        self._csv = LedgerCsvAdapter()
         self.store.initialize()
 
     def add(
@@ -96,6 +97,8 @@ class LedgerService:
                 case TransactionType.EXPENSE:
                     expense += transaction.amount
                     categories[transaction.category] += transaction.amount
+                case unreachable:
+                    assert_never(unreachable)
         ranked = tuple(sorted(categories.items(), key=lambda item: (-item[1], item[0]))[:top])
         budget = self.store.list_budgets().get(month)
         return Summary(income, expense, income - expense, ranked, budget, budget is not None and expense > budget)
@@ -132,49 +135,10 @@ class LedgerService:
         criteria = self._criteria(selection)
         if self.store.is_active_path(output):
             raise InputError("export target is an active ledger file", "Choose a path outside the three data files")
-        output.parent.mkdir(parents=True, exist_ok=True)
-        temporary = output.with_suffix(output.suffix + ".tmp")
-        count = 0
-        try:
-            with temporary.open("w", encoding="utf-8", newline="") as handle:
-                writer = csv.writer(handle)
-                writer.writerow(("date", "type", "category", "amount", "memo", "tags"))
-                for item in self.search(criteria, limit=None):
-                    writer.writerow((item.date.isoformat(), item.type.value, item.category, item.amount, item.memo, ",".join(item.tags)))
-                    count += 1
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, output)
-            descriptor = os.open(output.parent, os.O_RDONLY)
-            try:
-                os.fsync(descriptor)
-            finally:
-                os.close(descriptor)
-        finally:
-            temporary.unlink(missing_ok=True)
-        return count
+        return self._csv.export_file(output, self.search(criteria, limit=None))
 
     def import_csv(self, source: Path) -> ImportResult:
-        imported = 0
-        skipped = 0
-        with source.open(encoding="utf-8", newline="") as handle:
-            reader = csv.reader(handle)
-            expected = ["date", "type", "category", "amount", "memo", "tags"]
-            if next(reader, None) != expected:
-                raise InputError("CSV header does not match the fixed schema", "See README import/export schema")
-            for row in reader:
-                if len(row) != len(expected):
-                    skipped += 1
-                    continue
-                date_text, type_text, category, amount, memo, tags = row
-                try:
-                    self.add(TransactionDraft(date_text, type_text, category, amount, memo, tags))
-                    imported += 1
-                except TransactionIdExhaustedError:
-                    raise
-                except InputError:
-                    skipped += 1
-        return ImportResult(imported, skipped)
+        return self._csv.import_file(source, self.add)
 
     def _require_category(self, category: str) -> None:
         value = parse_category(category)

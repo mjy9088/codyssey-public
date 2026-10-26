@@ -35,6 +35,10 @@ excluded. Expiry is lazily cleaned from the heap whenever a command observes glo
 `EXPIRE` calls leave stale heap records that are safely ignored by comparison with the active expiry.
 TTL values use integer truncation of the injected monotonic clock.
 
+One internal removal operation owns value, recency-node, active-expiry, and byte-accounting
+cleanup. Explicit deletion, expiry, eviction, and replacement use that same transition. An
+oversized replacement is rejected before removing the current value, preserving its TTL and state.
+
 The verifier enforces that exact command allowlist and rejects runtime modules that introduce
 persistence, networking, subprocesses, concurrency, or locks. Local Docker/QEMU execution
 demonstrates only this implementation in those environments. It is not evidence of a production

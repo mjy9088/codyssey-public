@@ -7,8 +7,9 @@ from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from book_catalog.database import initialize_database
+from book_catalog.database import initialize_database, session_factory
 from book_catalog.routers import auth, books, home, loans
+from book_catalog.seed import seed_database
 from book_catalog.web import PACKAGE_ROOT
 
 VM_PROOF: Final = Path("/run/folio-vm-proof")
@@ -17,6 +18,8 @@ VM_PROOF: Final = Path("/run/folio-vm-proof")
 @asynccontextmanager
 async def lifespan(_application: FastAPI) -> AsyncGenerator[None]:
     initialize_database()
+    with session_factory() as session:
+        seed_database(session)
     yield
 
 

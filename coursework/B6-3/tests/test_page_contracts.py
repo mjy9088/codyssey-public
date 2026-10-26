@@ -21,9 +21,9 @@ from book_catalog.models.user import User
 from book_catalog.repositories.books import BookRepository
 from book_catalog.routers import books, home
 from book_catalog.schemas.domain import UserId, UserView
+from book_catalog.security import require_auth
 from book_catalog.services.auth import AuthContext
 from book_catalog.services.books import BookService
-from book_catalog.web import require_auth
 
 
 @pytest.fixture

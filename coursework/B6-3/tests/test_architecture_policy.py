@@ -19,10 +19,10 @@ RUNTIME_DEPENDENCIES: Final = {
 }
 AUTH_BOUNDARIES: Final = {
     "auth/__init__.py",
-    "database.py",
     "routers/auth.py",
+    "security.py",
+    "seed.py",
     "services/auth.py",
-    "web.py",
 }
 
 
@@ -108,9 +108,34 @@ def test_services_do_not_render_http_responses_or_templates() -> None:
     assert not any(name == "templates" for _, name in imports)
 
 
+def test_routers_delegate_book_markup_policy_to_presentation() -> None:
+    # Given / When
+    tree = _tree(PACKAGE / "routers/books.py")
+    response_calls = {
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "TemplateResponse"
+    }
+
+    # Then
+    assert not response_calls
+
+
+def test_dependency_composition_is_separate_from_security_helpers() -> None:
+    # Given / When
+    dependency_imports = {module for module, _ in _imports(_tree(PACKAGE / "dependencies.py"))}
+    security_imports = {module for module, _ in _imports(_tree(PACKAGE / "security.py"))}
+
+    # Then
+    assert any(module.startswith("book_catalog.repositories") for module in dependency_imports)
+    assert not any(module.startswith("book_catalog.repositories") for module in security_imports)
+
+
 def test_sqlalchemy_runtime_access_stays_in_persistence_boundaries() -> None:
     # Given
-    allowed_roots = {"database.py", "models", "repositories", "web.py"}
+    allowed_roots = {"database.py", "dependencies.py", "models", "repositories", "seed.py"}
 
     # When
     sqlalchemy_importers = {
@@ -151,7 +176,8 @@ def test_sqlalchemy_runtime_access_stays_in_persistence_boundaries() -> None:
         )
     }
     assert all(
-        path == "database.py" or path.startswith("repositories/") for path in operation_locations
+        path in {"database.py", "seed.py"} or path.startswith("repositories/")
+        for path in operation_locations
     )
 
 

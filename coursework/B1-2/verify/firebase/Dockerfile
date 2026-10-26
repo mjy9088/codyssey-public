@@ -1,5 +1,5 @@
-FROM node:22.19.0-bookworm-slim@sha256:4a4884e8a44826194dff92ba316264f392056cbe243dcc9fd3551e71cea02b90
-RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jre-headless=17.0.20.1+1-1~deb12u1 && rm -rf /var/lib/apt/lists/*
+FROM node:24.13.0-bookworm-slim@sha256:4660b1ca8b28d6d1906fd644abe34b2ed81d15434d26d845ef0aced307cf4b6f
+RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jre-headless=17.0.21+9-1~deb12u1 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 RUN npm install --global firebase-tools@14.15.2 --ignore-scripts --no-audit --no-fund
 COPY firebase.json firestore.rules ./

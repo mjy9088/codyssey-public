@@ -7,11 +7,11 @@ const fields = {
 const getElements = (config) => {
   const input = document.querySelector(config.input);
   const error = document.querySelector(config.error);
-  return input instanceof HTMLElement && error instanceof HTMLElement ? { input, error } : null;
+  return (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) && error instanceof HTMLElement ? { input, error } : null;
 };
 
 const validate = (name, entry) => {
-  const value = entry.input instanceof HTMLInputElement || entry.input instanceof HTMLTextAreaElement ? entry.input.value.trim() : "";
+  const value = entry.input.value.trim();
   let message = value ? "" : fields[name].empty;
   if (!message && name === "email" && entry.input instanceof HTMLInputElement && !entry.input.validity.valid) message = "Enter an email in the form name@example.com.";
   entry.error.textContent = message;
@@ -31,7 +31,7 @@ export const initContactForm = () => {
   Object.entries(entries).forEach(([name, entry]) => {
     if (!entry) return;
     entry.input.addEventListener("input", () => {
-      if (entry.input.getAttribute("aria-invalid") === "true") validate(name, entry);
+      if (entry.input.hasAttribute("aria-invalid")) validate(name, entry);
       status.textContent = "";
       delete status.dataset.state;
     });

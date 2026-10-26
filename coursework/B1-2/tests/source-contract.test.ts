@@ -124,4 +124,18 @@ describe("frontend source contracts", () => {
       expect(text).toMatch(/useEffect\(/)
     }
   })
+
+  it("keeps deterministic fixture administration separate from production CRUD", () => {
+    // Given: the workshop list page and the production Firestore store.
+    const workshopsPage = parse("src/pages/WorkshopsPage.tsx")
+    const workshopStore = parse("src/lib/workshop-store.ts")
+
+    // When: their module dependencies and exports are inspected.
+    const storeText = workshopStore.getFullText()
+
+    // Then: the page uses the fixture module and CRUD owns no seeding dependency or export.
+    expect(imports(workshopsPage)).toContain("../lib/workshop-seed")
+    expect(storeText).not.toMatch(/\bseedWorkshops\b/)
+    expect(storeText).not.toMatch(/\bwriteBatch\b/)
+  })
 })

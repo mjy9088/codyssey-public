@@ -80,12 +80,13 @@ failure as well.
 - The mobile menu supports its button, keyboard activation, Escape, and link selection. The page also
   provides a skip link, visible focus, explicit labels, field-level errors, and status announcements.
 - Theme selection persists in `localStorage`. If storage is unavailable, the current page still
-  changes theme; with no saved preference, the site follows the system theme.
+  remembers the explicit choice; without an explicit choice, system theme changes update the page.
 - Header styling changes after 60px of scrolling, and the back-to-top control appears after 300px.
   Reveal behavior uses a 0.2 Intersection Observer threshold and respects reduced motion.
 - The GitHub REST API request accepts at most 100 recent repositories, excludes forks, and renders up
   to 12 candidates. The language filter applies to those candidates. Loading, empty, error, and retry
-  states are distinct; the request times out after eight seconds.
+  states are distinct; the request times out after eight seconds. Rejected records are counted in the
+  status, and unusable data is not presented as an empty account. Repository dates use UTC.
 - The contact form validates name, email, and message. **It does not send email.** Its success state
   means local validation succeeded. Submission is disabled when JavaScript is unavailable.
 - Dynamic card markup is developer-owned. API text is inserted with `textContent`, and link URLs are

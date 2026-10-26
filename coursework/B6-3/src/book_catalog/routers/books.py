@@ -1,49 +1,39 @@
-from typing import Annotated, TypedDict
+from typing import Annotated
 
 from fastapi import APIRouter, Form, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from book_catalog.dependencies import BookServiceDep
+from book_catalog.presentation.books import (
+    BookDetailPage,
+    BookFormPage,
+    BookFormValues,
+    BookListPage,
+    render_book_detail,
+    render_book_edit,
+    render_book_form,
+    render_book_list,
+    render_book_missing,
+)
 from book_catalog.schemas.domain import BookInput
+from book_catalog.security import AuthDep, require_csrf
 from book_catalog.services.books import (
     BookHasLoansError,
     BookInventoryConflictError,
     BookNotFoundError,
 )
-from book_catalog.web import AuthDep, BookServiceDep, protected_context, require_csrf, templates
 
 router = APIRouter(prefix="/books")
 
 
-class BookFormValues(TypedDict):
-    title: str
-    author: str
-    year: str
-    total_copies: str
-
-
-def render_form(
-    request: Request,
-    auth: AuthDep,
-    book_id: int | None = None,
-    error: str | None = None,
-    *,
-    values: BookFormValues | None = None,
-) -> HTMLResponse:
-    context = protected_context(request, auth)
-    context.update({"book_id": book_id, "error": error, "values": values})
-    return templates.TemplateResponse(request, "book-form.html", context)
-
-
 @router.get("", response_class=HTMLResponse)
 def list_books(request: Request, books: BookServiceDep, auth: AuthDep, q: str = "") -> HTMLResponse:
-    context = protected_context(request, auth)
-    context.update({"books": books.list(q), "query": q})
-    return templates.TemplateResponse(request, "books.html", context)
+    return render_book_list(request, auth, BookListPage(books.list(q), q))
 
 
 @router.get("/new", response_class=HTMLResponse)
 def new_book(request: Request, auth: AuthDep) -> HTMLResponse:
-    return render_form(request, auth)
+    return render_book_form(request, auth)
 
 
 @router.post("")
@@ -60,11 +50,18 @@ def create_book(
     require_csrf(auth, csrf_token)
     draft = BookInput.parse(title, author, year, total_copies)
     if draft is None:
-        return render_form(
+        return render_book_form(
             request,
             auth,
-            error="Enter valid book details",
-            values=BookFormValues(title=title, author=author, year=year, total_copies=total_copies),
+            BookFormPage(
+                error="Enter valid book details",
+                values=BookFormValues(
+                    title=title,
+                    author=author,
+                    year=year,
+                    total_copies=total_copies,
+                ),
+            ),
         )
     created = books.create(draft)
     return RedirectResponse(f"/books/{created.id}", status_code=status.HTTP_303_SEE_OTHER)
@@ -77,15 +74,8 @@ def book_detail(
     try:
         book = books.get(book_id)
     except BookNotFoundError:
-        return templates.TemplateResponse(
-            request,
-            "404.html",
-            protected_context(request, auth),
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-    context = protected_context(request, auth)
-    context["book"] = book
-    return templates.TemplateResponse(request, "book-detail.html", context)
+        return render_book_missing(request, auth)
+    return render_book_detail(request, auth, BookDetailPage(book))
 
 
 @router.get("/{book_id}/edit", response_class=HTMLResponse)
@@ -93,15 +83,8 @@ def edit_book(request: Request, book_id: int, books: BookServiceDep, auth: AuthD
     try:
         book = books.get(book_id)
     except BookNotFoundError:
-        return templates.TemplateResponse(
-            request,
-            "404.html",
-            protected_context(request, auth),
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-    context = protected_context(request, auth)
-    context["book"] = book
-    return templates.TemplateResponse(request, "book-form.html", context)
+        return render_book_missing(request, auth)
+    return render_book_edit(request, auth, book)
 
 
 @router.post("/{book_id}")
@@ -119,37 +102,40 @@ def update_book(
     require_csrf(auth, csrf_token)
     draft = BookInput.parse(title, author, year, total_copies)
     if draft is None:
-        return render_form(
+        return render_book_form(
             request,
             auth,
-            book_id,
-            "Enter valid book details",
-            values=BookFormValues(title=title, author=author, year=year, total_copies=total_copies),
+            BookFormPage(
+                book_id=book_id,
+                error="Enter valid book details",
+                values=BookFormValues(
+                    title=title,
+                    author=author,
+                    year=year,
+                    total_copies=total_copies,
+                ),
+            ),
         )
     try:
         _ = books.update(book_id, draft)
     except BookInventoryConflictError as error:
-        response = render_form(
+        return render_book_form(
             request,
             auth,
-            book_id,
-            str(error),
-            values=BookFormValues(
-                title=title,
-                author=author,
-                year=year,
-                total_copies=total_copies,
+            BookFormPage(
+                book_id=book_id,
+                error=str(error),
+                values=BookFormValues(
+                    title=title,
+                    author=author,
+                    year=year,
+                    total_copies=total_copies,
+                ),
+                response_status=status.HTTP_409_CONFLICT,
             ),
         )
-        response.status_code = status.HTTP_409_CONFLICT
-        return response
     except BookNotFoundError:
-        return templates.TemplateResponse(
-            request,
-            "404.html",
-            protected_context(request, auth),
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+        return render_book_missing(request, auth)
     return RedirectResponse(f"/books/{book_id}", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -165,16 +151,15 @@ def delete_book(
     try:
         books.delete(book_id)
     except BookHasLoansError as error:
-        context = protected_context(request, auth)
-        context.update({"book": books.get(book_id), "error": str(error)})
-        return templates.TemplateResponse(
-            request, "book-detail.html", context, status_code=status.HTTP_409_CONFLICT
+        return render_book_detail(
+            request,
+            auth,
+            BookDetailPage(
+                books.get(book_id),
+                error=str(error),
+                response_status=status.HTTP_409_CONFLICT,
+            ),
         )
     except BookNotFoundError:
-        return templates.TemplateResponse(
-            request,
-            "404.html",
-            protected_context(request, auth),
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+        return render_book_missing(request, auth)
     return RedirectResponse("/books", status_code=status.HTTP_303_SEE_OTHER)
