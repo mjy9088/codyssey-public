@@ -8,7 +8,7 @@ RUN apk add --no-cache \
       util-linux-misc=2.41.6-r1 \
       zsh=5.9-r5
 WORKDIR /work
-COPY Dockerfile docker-compose.yml init.sh next-script.zsh tailnet.sh justfile mise.toml README.md HANDOFF.md verify-macos-setup.py /src/
+COPY Dockerfile docker-compose.yml init.sh next-script.zsh tailnet.sh justfile mise.toml mise.vm.toml README.md HANDOFF.md verify-macos-setup.py /src/
 COPY lib/ /src/lib/
 COPY tests/ /src/tests/
 COPY scripts/ /src/scripts/

@@ -67,9 +67,20 @@ class OrchestrationTests(unittest.TestCase):
             fakebin = work / "bin"
             fakebin.mkdir()
             for name, script in {
-                "uname": '#!/bin/sh\ncase "$1" in -s) echo Darwin;; -m) echo arm64;; esac\n',
+                "uname": '#!/bin/sh\ncase "$1" in -s) echo "${VM_TEST_PLATFORM:-Darwin}";; -m) echo arm64;; esac\n',
                 "sw_vers": "#!/bin/sh\necho 15.0\n",
-                "mise": '#!/bin/sh\n[ "$1" = exec ] && [ "$2" = tart@2.40.1 ] && [ "$3" = -- ] && [ "$4" = tart ] || exit 97\nshift 4\nexec tart "$@"\n',
+                "mise": '''#!/bin/sh
+printf '%s\\n' "$*" >> "$VM_MISE_LOG"
+[ "$1" = -C ] && [ "$2" = "$VM_TOOL_ROOT" ] && [ "$3" = -E ] && [ "$4" = vm ] || exit 97
+shift 4
+if [ "$*" = 'install tart' ]; then
+  [ "$VM_TEST_SCENARIO" != install-failure ] || exit 37
+  exit 0
+fi
+[ "$1" = exec ] && [ "$2" = tart ] && [ "$3" = -- ] && [ "$4" = tart ] || exit 97
+shift 4
+exec tart "$@"
+''',
                 "tart": "#!" + sys.executable + "\n" + FAKE_TART,
             }.items():
                 target = fakebin / name
@@ -80,13 +91,23 @@ class OrchestrationTests(unittest.TestCase):
             ready = work / "ready-count"
             env = dict(os.environ, PATH=str(fakebin) + os.pathsep + os.environ["PATH"],
                         VM_TEST_LOG=str(log), VM_TEST_PAYLOAD=str(payload),
+                        VM_MISE_LOG=str(work / "mise.log"), VM_TOOL_ROOT=str(ROOT),
                         VM_TEST_READY=str(ready), VM_TEST_SCENARIO=scenario,
+                        VM_TEST_PLATFORM="Linux" if scenario == "linux" else "Darwin",
                         TS_AUTHKEY="synthetic-secret-must-not-transfer")
             result = subprocess.run(
                 ["bash", str(ROOT / "scripts/create-macos-vm.sh"),
                  "--image", "reviewed-base", "--name", "synthetic-test", *extra],
-                env=env, text=True, capture_output=True, timeout=25,
+                cwd=work, env=env, text=True, capture_output=True, timeout=25,
             )
+            mise_calls = (work / "mise.log").read_text().splitlines() if (work / "mise.log").exists() else []
+            if scenario == "linux":
+                self.assertEqual(mise_calls, [])
+            elif mise_calls:
+                self.assertTrue(mise_calls[0].endswith("-E vm install tart"))
+                self.assertEqual(sum(line.endswith("install tart") for line in mise_calls), 1)
+            else:
+                self.assertNotEqual(result.returncode, 0)
             commands = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
             names = json.loads(payload.read_text()) if payload.exists() else []
             return result, commands, names
@@ -102,6 +123,7 @@ class OrchestrationTests(unittest.TestCase):
         self.assertIn("verify-macos-setup.py", names)
         # The guest must have every input needed to build its isolated check image.
         self.assertIn("tests/managed-j-runtime.sh", names)
+        self.assertIn("mise.vm.toml", names)
         self.assertNotIn(".env", names)
         self.assertNotIn("gost/gost.yaml", names)
         self.assertTrue(all(not name.startswith(("coursework/", "archive/")) for name in names))
@@ -109,6 +131,17 @@ class OrchestrationTests(unittest.TestCase):
         self.assertTrue(any("DOCKER_CONTEXT=colima-codyssey-verify" in cmd for cmd in commands))
         self.assertTrue(any("/Users/synthetic/guest work/scripts/verify-macos-vm.sh" in cmd for cmd in commands))
         self.assertLess(result.stdout.index("TART_STOP_COMPLETE"), result.stdout.index("PASS:"))
+
+    def test_linux_does_not_install_or_execute_tart(self):
+        result, commands, _ = self.run_case("linux")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(commands, [])
+
+    def test_install_failure_stops_before_vm_creation(self):
+        result, commands, _ = self.run_case("install-failure")
+        self.assertEqual(result.returncode, 37, result.stderr)
+        self.assertEqual(commands, [])
+        self.assertNotIn("PASS:", result.stdout)
 
     def test_preinstalled_checks_apps_and_cold_start_before_test_docker(self):
         result, commands, names = self.run_case(extra=("--preinstalled",))
