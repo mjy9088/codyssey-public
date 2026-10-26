@@ -27,9 +27,9 @@ esac
 # Use the controlling terminal so curl | sh does not consume installer text.
 if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then
   if [[ -z $dock_setup ]]; then
-    printf 'Clean up Dock pins and stacks? The j launcher is added either way. [y/N] ' >/dev/tty
+    printf 'Clean up Dock pins and stacks? The j launcher is added either way. [Y/n] ' >/dev/tty
     IFS= read -r answer </dev/tty || answer=n
-    case $answer in y|Y|yes|YES) dock_setup=1 ;; *) dock_setup=0 ;; esac
+    case $answer in ''|y|Y|yes|YES) dock_setup=1 ;; *) dock_setup=0 ;; esac
   fi
 fi
 input_switch=${input_switch:-control-space}
@@ -133,13 +133,14 @@ file_url() {
 
 apply_dock() {
   local terminal_app chrome_app terminal_url chrome_url launcher launcher_url temporary index=0 existing failed=0
+  local clean_dock=$dock_setup
   backup_domain dock com.apple.dock || return
   terminal_app="$system_applications_dir/Utilities/Terminal.app"
   chrome_app="$applications_dir/Google Chrome.app"
   [[ -d $chrome_app ]] || chrome_app="$HOME/Applications/Google Chrome.app"
-  if [[ ! -d $terminal_app || ( $dock_setup == 1 && ! -d $chrome_app ) ]]; then
-    return
-  fi
+  [[ -d $terminal_app ]] || return
+  # Missing Chrome must not prevent the j launcher from being added.
+  [[ -d $chrome_app ]] || clean_dock=0
   launcher="$HOME/Library/Application Support/codyssey-init/Codyssey j.command"
   mkdir -p "$(dirname -- "$launcher")" || return 1
   if [[ -e $launcher || -L $launcher ]]; then
@@ -159,7 +160,7 @@ apply_dock() {
   launcher_url=$(file_url "$launcher")
   terminal_url=$(file_url "$terminal_app/")
   chrome_url=$(file_url "$chrome_app/")
-  if [[ $dock_setup == 1 ]]; then
+  if [[ $clean_dock == 1 ]]; then
     "$defaults_bin" write com.apple.dock persistent-apps -array \
       "{tile-data={file-data={_CFURLString=\"$terminal_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" \
       "{tile-data={file-data={_CFURLString=\"$chrome_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" >/dev/null 2>&1 || failed=1

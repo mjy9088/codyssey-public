@@ -143,10 +143,10 @@ printf 'Preparing environment…\n'
 start_startup_preparation "$init_dir"
 
 if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then
-  printf 'Install the global j command in %s? [y/N] ' "$HOME/.local/bin" >/dev/tty
-  IFS= read -r install_j_answer </dev/tty || install_j_answer=
+  printf 'Install the global j command in %s? [Y/n] ' "$HOME/.local/bin" >/dev/tty
+  IFS= read -r install_j_answer </dev/tty || install_j_answer=n
   case $install_j_answer in
-    y|Y|yes|YES) install_managed_j "$init_dir" ;;
+    ''|y|Y|yes|YES) install_managed_j "$init_dir" ;;
     *) ;;
   esac
 fi

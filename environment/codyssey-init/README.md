@@ -81,12 +81,12 @@ state is restored.
 
 When standard output is a terminal and a controlling terminal is available, `init.sh` offers to
 install `~/.local/bin/j`, reading and writing the prompt through `/dev/tty`. This also works when the
-bootstrap script itself arrives through piped standard input. Answers `y`, `Y`, `yes`, and `YES`
+bootstrap script itself arrives through piped standard input. Enter (the `[Y/n]` default), `y`, `Y`, `yes`, and `YES`
 install a directly executable, mode-`0700` POSIX wrapper that changes to the resolved `codyssey-init`
 directory and runs `just` with the original arguments and exit status. Later accepted runs update that
 target atomically. The wrapper starts with `#!/bin/sh` followed by its ownership marker; the bootstrap
 also recognizes and migrates the earlier marker-first layout. Another existing `j` is preserved with
-a warning. Headless and declined runs do not create or change the command.
+a warning. Headless, unreadable-terminal, and declined runs do not create or change the command.
 
 ## Authentication and startup
 
@@ -261,7 +261,8 @@ OrbStack installation. Other Docker engines may need port forwarding from their 
 This environment disables text automation and configures **Gureum 1.13.2 Hangul 2-set**
 with **Control-Space for input switching and Command-Space for Spotlight**.
 Control-Space is applied automatically without a switching-key prompt. Interactive setup
-asks only whether to keep Terminal and Chrome pinned in the Dock; Enter preserves the Dock.
+asks whether to clean up Dock pins and stacks. Enter accepts, keeping Terminal and Chrome plus
+the j terminal launcher; `n` preserves existing pins and stacks and adds only the j launcher.
 Caps Lock remains unsupported. Independent preference groups continue after a failure and
 report a nonzero summary status; the bootstrap continues container and browser setup.
 To provide choices without prompting:
@@ -276,7 +277,8 @@ group, it creates a private per-run backup under
 
 - disables macOS text automation;
 - when Dock cleanup is accepted and both Terminal and Google Chrome exist, replaces Dock app pins with those two apps,
-  adds a `Codyssey j.command` terminal launcher, hides recent items, and removes folder stacks; otherwise the entire Dock group is left unchanged;
+  adds a `Codyssey j.command` terminal launcher, hides recent items, and removes folder stacks;
+  when cleanup is declined or Chrome is missing, preserves the existing Dock and adds only the j launcher;
 - preserves unrelated input sources while adding Gureum Hangul 2-set once;
 - configures Control-Space and Control-Shift-Space for input switching, Command-Space for Spotlight,
   and Option-Command-Space for the Spotlight window, and disables Caps Lock switching; and

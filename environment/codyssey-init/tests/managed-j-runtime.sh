@@ -60,7 +60,8 @@ run_interactive_init() {
     "HOME='$home' PATH='$fakebin:/usr/bin:/bin' bash \"\$INIT_SOURCE/init.sh\"" /dev/null >"$output" 2>&1
 }
 
-run_interactive_init "$work" yes "$tmp/install.out"
+run_interactive_init "$work" '' "$tmp/install.out"
+grep -Fq '[Y/n]' "$tmp/install.out"
 j="$home/.local/bin/j"
 [[ $(sed -n '1p' "$j") == '#!/bin/sh' ]]
 [[ $(sed -n '2p' "$j") == '# codyssey-init: managed-j-v1' ]]

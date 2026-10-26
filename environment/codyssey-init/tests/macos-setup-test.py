@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import os
 import plistlib
+import pty
+import select
 import shutil
 import stat
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Final, TypeAlias
 
@@ -148,15 +151,21 @@ def test_success_and_repeat() -> None:
         assert ":'Bundle ID'" in calls and ":'Input Mode'" in calls
 
 
-def test_missing_chrome_preserves_entire_dock() -> None:
+def test_missing_chrome_preserves_dock_and_adds_launcher() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         env, state = environment(Path(temporary))
         baseline(state)
-        original = state_path(state, "com.apple.dock").read_bytes()
+        original = read_domain(state, "com.apple.dock")
         (Path(env["HOME"]) / "Applications" / "Google Chrome.app").rmdir()
         result = apply(env)
         assert result.returncode == 0
-        assert state_path(state, "com.apple.dock").read_bytes() == original
+        dock = read_domain(state, "com.apple.dock")
+        assert dock["persistent-apps"] == original["persistent-apps"]
+        assert dock["show-recents"] == original["show-recents"]
+        assert dock["persistent-others"][0] == original["persistent-others"][0]
+        assert len(dock["persistent-others"]) == 2
+        assert apply(env).returncode == 0
+        assert read_domain(state, "com.apple.dock") == dock
 
 
 def test_export_and_write_failures_are_isolated_and_rolled_back() -> None:
@@ -318,19 +327,68 @@ def test_keep_dock_adds_launcher_once_and_rolls_back_failure() -> None:
         assert read_domain(state, "com.apple.dock") == original
 
 
+def test_interactive_dock_default_and_decline() -> None:
+    for answer in (b"\n", b"n\n"):
+        with tempfile.TemporaryDirectory() as temporary:
+            env, state = environment(Path(temporary))
+            baseline(state)
+            original = read_domain(state, "com.apple.dock")
+            env.pop("CODYSSEY_DOCK_SETUP", None)
+            pid, terminal = pty.fork()
+            if pid == 0:
+                os.execvpe("bash", ["bash", str(ROOT / "macos-setup.sh")], env)
+            output = b""
+            answered = False
+            status = None
+            try:
+                deadline = time.monotonic() + 30
+                while time.monotonic() < deadline:
+                    if select.select([terminal], [], [], 0.1)[0]:
+                        try:
+                            chunk = os.read(terminal, 65536)
+                        except OSError:
+                            chunk = b""
+                            time.sleep(0.02)
+                        output += chunk
+                        if not answered and b"[Y/n] " in output:
+                            os.write(terminal, answer)
+                            answered = True
+                    child, status = os.waitpid(pid, os.WNOHANG)
+                    if child:
+                        break
+                    status = None
+                if status is None:
+                    child, status = os.waitpid(pid, os.WNOHANG)
+                    if not child:
+                        os.kill(pid, 9)
+                        os.waitpid(pid, 0)
+                        raise AssertionError("Dock prompt did not finish: " + output.decode(errors="replace"))
+                assert answered and os.waitstatus_to_exitcode(status) == 0, output
+            finally:
+                os.close(terminal)
+            dock = read_domain(state, "com.apple.dock")
+            if answer == b"\n":
+                assert_success_contract(state)
+            else:
+                assert dock["persistent-apps"] == original["persistent-apps"]
+                assert dock["persistent-others"][0] == original["persistent-others"][0]
+                assert len(dock["persistent-others"]) == 2
+
+
 def main() -> None:
+    test_interactive_dock_default_and_decline()
     test_keep_dock_adds_launcher_once_and_rolls_back_failure()
     test_desktop_verifier_preserves_keyboard_and_text()
     test_launcher_executes_from_another_directory_and_preserves_arguments()
     test_success_and_repeat()
-    test_missing_chrome_preserves_entire_dock()
+    test_missing_chrome_preserves_dock_and_adds_launcher()
     test_export_and_write_failures_are_isolated_and_rolled_back()
     test_absent_domain_is_created_only_after_confirmed_absent()
     test_last_existing_domain_export_failure_is_not_absence()
     test_verifier_leaves_applied_state_on_success_and_restores_on_failure()
     test_verifier_retains_snapshot_when_restoration_fails()
     test_verifier_restores_after_keyboard_interrupt()
-    print("macOS setup isolated tests: 11 passed")
+    print("macOS setup isolated tests: 12 passed")
 
 
 if __name__ == "__main__":
