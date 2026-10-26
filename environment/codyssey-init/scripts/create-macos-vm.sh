@@ -5,7 +5,8 @@ usage() {
   cat <<'EOF'
 Usage: bash scripts/create-macos-vm.sh --image SOURCE [--name NAME] [--delete-on-success] [--preinstalled]
 SOURCE: reviewed local Tart base VM or registry image pinned with @sha256:...
-Requires Apple Silicon macOS 14+, mise-managed Tart, and a logged-in desktop with Guest Agent.
+Requires Apple Silicon macOS 14+, mise, and a logged-in desktop with Guest Agent.
+Installs the pinned Tart from mise.vm.toml on demand; no global Tart setup is needed.
 Provisioning needs Homebrew. --preinstalled checks installed apps and cold-start fixtures
 before using software-emulated Docker; the OrbStack engine is never required.
 Creates, provisions, and verifies a fresh VM.
@@ -33,10 +34,13 @@ if [[ $image == */* && ! $image =~ @sha256:[0-9a-f]{64}$ ]]; then
 fi
 [[ $(uname -s) == Darwin && $(uname -m) == arm64 ]] || { printf 'Tart requires an Apple Silicon Mac.\n' >&2; exit 1; }
 [[ $(sw_vers -productVersion | cut -d . -f 1) -ge 14 ]] || { printf 'tart exec requires macOS 14+.\n' >&2; exit 1; }
-command -v mise >/dev/null || { printf 'Configure Tart with mise on the host first.\n' >&2; exit 1; }
-tart() { MISE_QUIET=1 mise exec tart@2.40.1 -- tart "$@"; }
-tart --version >/dev/null
+command -v mise >/dev/null || { printf 'Install mise on the host first.\n' >&2; exit 1; }
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+# Name only Tart so unrelated configured tools are not installed. An explicit
+# install also works when mise's automatic installation setting is disabled.
+MISE_QUIET=1 mise -C "$root" -E vm install tart
+tart() { MISE_QUIET=1 mise -C "$root" -E vm exec tart -- tart "$@"; }
+tart --version >/dev/null
 . "$root/scripts/vm-files.sh"
 . "$root/lib/preparation.sh"
 export TART_NO_AUTO_PRUNE=1
@@ -70,7 +74,9 @@ cleanup() {
         printf 'VM retained (stopped): %s\n' "$name"
       fi
     elif (( stop_confirmed )); then
-      printf 'VM retained (stopped): %s\nOpen: mise exec tart@2.40.1 -- tart run %s\nDelete: mise exec tart@2.40.1 -- tart delete %s\n' "$name" "$name" "$name"
+      printf 'VM retained (stopped): %s\n' "$name"
+      printf 'Open: mise -C %q -E vm exec tart -- tart run %q\n' "$root" "$name"
+      printf 'Delete: mise -C %q -E vm exec tart -- tart delete %q\n' "$root" "$name"
     else
       printf 'VM retained; stop was not confirmed: %s\n' "$name"
     fi
@@ -93,7 +99,7 @@ trap 'exit 143' TERM
 tart clone "$image" "$name"
 created=1
 tart set "$name" --cpu 4 --memory 8192
-MISE_QUIET=1 mise exec tart@2.40.1 -- tart run --no-graphics "$name" &
+MISE_QUIET=1 mise -C "$root" -E vm exec tart -- tart run --no-graphics "$name" &
 runner=$!
 ready=0
 deadline=$((SECONDS + 360))

@@ -470,6 +470,21 @@ and text preferences. The local lab authenticates synthetic nodes only to its ow
 
 ### Build a base with preinstalled applications
 
+Install mise on the host; Tart does not need to be installed or configured globally.
+The host VM scripts select the opt-in `mise.vm.toml` environment using `mise -E vm`,
+install only its pinned Tart 2.40.1, then run Tart through mise. The platform check runs
+before installation and rejects Linux, Intel Macs, and macOS older than 14.
+Ordinary `mise install`, the classroom bootstrap, and non-VM checks use `mise.toml`
+(just only) and do not select Tart. There is no root-level Tart configuration.
+See [mise config environments](https://mise.jdx.dev/configuration.html).
+
+To use the same pin manually from this directory:
+
+```sh
+mise -E vm install tart
+mise -E vm exec tart -- tart list
+```
+
 To reproduce the classroom's earlier startup stage, create a separate stopped base from an existing
 reviewed Tart VM. The source must already have a logged-in desktop, Tart Guest Agent, Chrome,
 Python 3 from Command Line Tools, and Swift. No Docker engine needs to be running:
@@ -607,11 +622,8 @@ colima delete --profile codyssey-verify
 
 ### Create a new macOS VM and run everything
 
-On an Apple Silicon Mac running macOS 14 or newer, make Tart available through `mise`:
-
-```sh
-mise exec tart@2.40.1 -- tart --version
-```
+On an Apple Silicon Mac running macOS 14 or newer, install mise first. The script installs
+the configured Tart version automatically; no separate `mise use` or Tart installation is needed.
 
 Choose a reviewed, stopped local Tart base VM with Homebrew, Tart Guest Agent, and a logged-in desktop
 user. A registry image can also be used, but must be pinned to its actual OCI digest; mutable registry
@@ -639,8 +651,10 @@ overwritten. Allow substantial download time and disk space for the macOS base a
 guest. The published quick-start image is approximately 25 GB before guest provisioning.
 
 Every host Tart invocation, including the long-running VM process, uses
-`mise exec tart@2.40.1 -- tart`; the repository-wide `mise.toml` is not changed to install Tart for
-ordinary bootstrap users. The host needs no Docker engine or Docker CLI. Docker is installed and used
+`mise -C <environment-directory> -E vm exec tart -- tart`, independent of the caller's working
+directory. The version is declared only in `mise.vm.toml`. The explicit `mise install tart`
+also works with automatic installation disabled and does not install unrelated tools such as just.
+The host needs no Docker engine or Docker CLI. Docker is installed and used
 only inside the disposable macOS guest for the environment tests.
 
 If guest preparation starts the dedicated Colima profile and a later readiness check fails, the guest
