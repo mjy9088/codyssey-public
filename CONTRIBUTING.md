@@ -10,6 +10,7 @@ Read the README and any `AGENTS.md` that applies to the target directory. Each
 imported project retains its own tools and verification commands.
 Read [the implementation and review standard](docs/QUALITY_STANDARDS.md) as well.
 This repository targets maintainable reference implementations, not assessment-only acceptance.
+Agent-assisted changes also follow [the pstack workflow](docs/AGENT_WORKFLOW.md).
 
 ## Change workflow
 
