@@ -11,18 +11,44 @@ that a change is correct. The implementation and verification rules in
 sh scripts/setup-pstack.sh
 ```
 
-This explicit developer command uses Git, Node.js, and npm. It installs user-level OpenCode skills
-from pstack 0.15.32, commit `f51fdeba3d803ef90e4eaa4a95ffb4e76008ab37`, through the pinned
-`skills@1.7.4` installer. It copies `architect`, `how`, `why`, `arena`, `interrogate`, `tdd`, and the
-principle skills, retaining the upstream MIT license. It does not change application manifests,
-install frontend runtime code, configure model accounts, or publish anything. Existing skills
-with these selected names are replaced by the pinned copies; other skills are not selected.
+This explicit developer command requires Git and Node.js 22 or newer. It downloads only the public
+pstack repository, checks out pstack 0.15.32 at the full commit
+`f51fdeba3d803ef90e4eaa4a95ffb4e76008ab37`, verifies `HEAD`, and then uses a reviewed Node.js
+standard-library copier. It does not run npm, npx, Bun, package lifecycle scripts, or code from the
+checkout.
 
-The installer needs network access to public GitHub/npm sources. This script supplies only the
-downloaded public pstack checkout to it, not coursework or private materials. Restart OpenCode after
-installation; a running session does not hot-reload its skill
-catalog. Re-run this reviewed script to restore the pinned set instead of enabling automatic
-updates against an unreviewed branch.
+The copier has authority to replace exactly 30 user-level skill directories: `architect`, `how`,
+`why`, `arena`, `interrogate`, `tdd`, and the 24 reviewed `principle-*` skills named in
+`scripts/lib/pstack.mjs`. It also replaces `~/.agents/skills/pstack.LICENSE` with the upstream MIT
+license at mode `0644`. Other entries under `~/.agents/skills` are left unchanged. Before writing,
+the copier reads every selected source file, requires exactly one matching frontmatter `name`, and
+rejects nested skill declarations, symbolic links, or non-regular entries in the selected source
+and owned destination trees. Complete copies are staged in a private temporary directory inside the
+skills root; existing owned entries are backed up and restored if replacement fails.
+
+The installer serializes replacement with `~/.agents/skills/.pstack-install.lock`. It removes the
+lock after a successful install or a fully completed rollback. If rollback itself is incomplete, it
+retains both the lock and the `.pstack-install-*` recovery directory so later runs cannot overwrite
+the evidence needed for manual restoration. Inspect and restore that recovery data before removing
+the lock; do not delete it merely to make a retry proceed.
+
+Git runs with a temporary home, system and global configuration disabled, hooks and templates
+disabled, credential helpers cleared, and interactive prompting disabled. The installer still needs
+network access to public GitHub and invokes the host Git executable. Its filesystem checks cannot
+defend against a malicious process running as the same user and concurrently changing paths between
+checks and operations. The copied skills are passive Markdown and related data during installation,
+but they can direct an agent to use tools when invoked later; this installer is not an operating-system
+sandbox for subsequent agent activity.
+
+Run the deterministic offline copier and CLI-boundary tests with:
+
+```sh
+node --test tests/pstack-installer.test.mjs
+```
+
+Restart OpenCode after installation because a running session does not hot-reload its skill catalog.
+Re-run this reviewed script to restore the pinned set instead of enabling automatic updates against
+an unreviewed branch.
 
 ## Use the skills, then prove the result
 
