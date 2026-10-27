@@ -27,7 +27,7 @@ export const WorkshopDetailPage = () => {
     setDeleteError("")
     try {
       await removeWorkshop(item.id)
-      navigate("/workshops", { state: { notice: "Workshop deleted." } })
+      navigate("/workshops", { state: { workshopDeleted: true } })
     } catch {
       setDeleteError("Workshop could not be deleted. Try again.")
     } finally {
@@ -93,7 +93,7 @@ export const WorkshopDetailPage = () => {
         <section className="confirm-panel" aria-label="Delete workshop confirmation">
           <div>
             <h2>Delete this workshop?</h2>
-            <p>This removes it from the emulator and cannot be undone.</p>
+            <p>This removes it from the schedule and cannot be undone.</p>
             {deleteError ? <Notice tone="danger">{deleteError}</Notice> : null}
           </div>
           <div>

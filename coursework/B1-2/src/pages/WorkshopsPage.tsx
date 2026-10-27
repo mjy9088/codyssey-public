@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
+import { z } from "zod"
 import { Button, ButtonLink } from "../components/Button"
 import { FilterBar, type StatusFilter } from "../components/FilterBar"
 import { Notice } from "../components/Notice"
@@ -12,6 +14,14 @@ import { seedWorkshops } from "../lib/workshop-seed"
 const pageSize = 4
 
 export const WorkshopsPage = () => {
+  const { pathname, search, hash, state: navigationState } = useLocation()
+  const navigate = useNavigate()
+  const [deletedNotice] = useState(
+    () => z.object({ workshopDeleted: z.literal(true) }).safeParse(navigationState).success,
+  )
+  useEffect(() => {
+    if (deletedNotice) navigate({ pathname, search, hash }, { replace: true, state: null })
+  }, [deletedNotice, hash, navigate, pathname, search])
   const { state, reload } = useWorkshops()
   const [query, setQuery] = useState("")
   const [status, setStatus] = useState<StatusFilter>("all")
@@ -55,6 +65,7 @@ export const WorkshopsPage = () => {
       >
         <p>Search the bench, check capacity, and keep the schedule current.</p>
       </PageHeader>
+      {deletedNotice ? <Notice tone="success">Workshop deleted.</Notice> : null}
       {state.kind === "loading" ? <LoadingState /> : null}
       {state.kind === "error" ? (
         <ErrorState message={state.message} onRetry={() => void reload()} />

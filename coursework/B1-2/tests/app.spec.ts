@@ -44,7 +44,10 @@ test("creates, filters, edits, and deletes workshops through the real emulator",
   await page.getByRole("button", { name: "Delete" }).click()
   await page.getByRole("button", { name: "Delete permanently" }).click()
   await expect(page.getByRole("heading", { name: "Workshop schedule" })).toBeVisible()
+  await expect(page.getByRole("status")).toContainText("Workshop deleted.")
   await expect(page.getByText("4 results")).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole("status")).toHaveCount(0)
 })
 
 test("shows validation and creates a workshop from controlled input", async ({ page }) => {
@@ -214,9 +217,16 @@ test("recovers when loading the sample schedule initially fails", async ({ page,
 })
 
 test("all primary routes and the recovery route render", async ({ page }) => {
-  for (const route of ["/", "/workshops", "/workshops/new", "/about", "/missing"]) {
+  for (const [route, heading] of [
+    ["/", "Make room for useful work."],
+    ["/workshops", "Workshop schedule"],
+    ["/workshops/new", "Add a workshop"],
+    ["/about", "How Benchbook is put together"],
+    ["/missing", "This bench is empty"],
+  ] as const) {
     await page.goto(route)
     await expect(page.locator("main")).toBeVisible()
+    await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible()
   }
   await expect(page.getByText("This bench is empty")).toBeVisible()
 })
