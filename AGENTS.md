@@ -10,6 +10,9 @@ that merely satisfy assessment checks.
   and composition independently owned. Do not split cohesive code just to add layers.
 - Review actual user-facing behavior and affected callers; report unavailable checks
   honestly and resolve architecture/security blockers even when tests pass.
+- Follow `docs/AGENT_WORKFLOW.md` for the pinned pstack skills. Use their architecture,
+  test-first and adversarial-review methods, but never substitute model approval for
+  execution evidence or let a playbook bypass publication/privacy restrictions.
 
 - Write authored documentation in English.
 - Keep restricted assignment text and supplied assets/data in the private workspace;

@@ -13,6 +13,8 @@
 !package.json
 !package-lock.json
 !playwright.config.mjs
+!biome.json
+!tsconfig.checkjs.json
 !docs/
 !docs/screenshots/
 !docs/screenshots/desktop.png

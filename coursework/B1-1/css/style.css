@@ -1,4 +1,11 @@
 @import url("tokens.css");
 @import url("base.css");
-@import url("components.css");
+@import url("foundation.css");
+@import url("primitives.css");
 @import url("layout.css");
+@import url("components/controls.css");
+@import url("components/header.css");
+@import url("components/sections.css");
+@import url("components/projects.css");
+@import url("components/contact.css");
+@import url("motion.css");

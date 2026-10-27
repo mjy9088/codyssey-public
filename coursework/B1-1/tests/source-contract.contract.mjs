@@ -1,83 +1,86 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
+import ts from "typescript";
 
 const root = process.cwd();
-const source = (path) => readFile(join(root, path), "utf8");
+const runtime = join(root, "js");
 
-test("the portfolio keeps its static, modular source structure", async () => {
-  const required = [
-    "index.html",
-    "css/style.css",
-    "css/tokens.css",
-    "css/base.css",
-    "css/components.css",
-    "css/layout.css",
-    "js/app.js",
-    "js/theme.js",
-    "js/navigation.js",
-    "js/projects.js",
-    "js/contact.js",
-    "images/profile-notes.svg",
-  ];
-  await Promise.all(required.map(async (path) => assert.ok((await readFile(join(root, path))).length > 0, `${path} must exist`)));
+const sourcesIn = async (directory) => {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const path = join(directory, entry.name);
+      return entry.isDirectory() ? sourcesIn(path) : path.endsWith(".js") ? [path] : [];
+    }),
+  );
+  return files.flat();
+};
 
-  const html = await source("index.html");
+test("published static entry points remain available without runtime dependencies", async () => {
+  const html = await readFile(join(root, "index.html"), "utf8");
   assert.match(html, /<link[^>]+href=["']css\/style\.css["']/);
   assert.match(html, /<script[^>]+type=["']module["'][^>]+src=["']js\/app\.js["']/);
-
-  const entryCss = await source("css/style.css");
-  for (const stylesheet of ["tokens.css", "base.css", "components.css", "layout.css"])
-    assert.match(entryCss, new RegExp(`@import\\s+url\\(["']${stylesheet.replace(".", "\\.")}["']\\)`));
+  const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+  assert.deepEqual(manifest.dependencies ?? {}, {});
+  await Promise.all(["css/style.css", "js/app.js"].map((path) => readFile(join(root, path))));
 });
 
-test("responsive and interaction rules preserve the documented visual contract", async () => {
-  const [layout, components, tokens] = await Promise.all([
-    source("css/layout.css"),
-    source("css/components.css"),
-    source("css/tokens.css"),
+test("neutral base CSS has no project token or component dependency", async () => {
+  const base = await readFile(join(root, "css/base.css"), "utf8");
+  assert.doesNotMatch(base, /@import\b/);
+  assert.doesNotMatch(base, /var\s*\(\s*--/);
+  assert.doesNotMatch(base, /\.[a-zA-Z_][\w-]*/);
+});
+
+test("runtime imports respect domain, data and presentation dependency direction", async () => {
+  const files = await sourcesIn(runtime);
+  const available = new Set(files.map((file) => resolve(file)));
+  const forbiddenDomainGlobals = new Set([
+    "window",
+    "document",
+    "localStorage",
+    "fetch",
+    "matchMedia",
+    "HTMLElement",
+    "HTMLInputElement",
+    "HTMLTextAreaElement",
+    "IntersectionObserver",
   ]);
-  assert.match(layout, /@media\s*\(min-width:\s*48rem\)/);
-  assert.match(layout, /@media\s*\(min-width:\s*64rem\)/);
-  assert.match(layout, /grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\(100%,\s*18rem\),\s*1fr\)\)/);
-  assert.match(tokens, /--shadow-paper:\s*[^;]+;/);
-  const projectCard = components.match(/(?:^|\n)\.project-card\s*\{([^}]*)\}/s)?.[1] ?? "";
-  const projectHover = components.match(/\.project-card:hover,\s*\.project-card:focus-within\s*\{([^}]*)\}/s)?.[1] ?? "";
-  const button = components.match(/\.button\s*\{([^}]*)\}/s)?.[1] ?? "";
-  assert.match(projectCard, /box-shadow:\s*var\(--shadow-paper\)/);
-  assert.match(projectCard, /transition:[^;]*border-color[^;]*transform/);
-  assert.match(projectHover, /transform:\s*translateY\(calc\(var\(--space-1\)\s*\*\s*-1\)\)/);
-  assert.match(button, /transition:[^;]*background-color[^;]*border-color[^;]*color[^;]*transform/);
-});
+  assert.ok(files.some((file) => relative(runtime, file).startsWith("domain/")));
+  assert.ok(files.some((file) => relative(runtime, file).startsWith("data/")));
+  assert.ok(files.some((file) => relative(runtime, file).startsWith("ui/")));
 
-test("runtime behavior remains framework-free vanilla JavaScript", async () => {
-  const packageJson = JSON.parse(await source("package.json"));
-  assert.deepEqual(packageJson.dependencies ?? {}, {}, "the static site must not ship runtime packages");
-  const forbidden = /^(?:react|react-dom|vue|svelte|angular|@angular\/|preact|solid-js|jquery)$/;
-  for (const dependency of Object.keys(packageJson.devDependencies ?? {}))
-    assert.doesNotMatch(dependency, forbidden, `${dependency} is a frontend runtime dependency`);
-
-  const files = await readdir(join(root, "js"));
-  assert.deepEqual(files.toSorted(), ["app.js", "contact.js", "navigation.js", "projects.js", "theme.js"]);
-  const modules = await Promise.all(files.map((file) => source(`js/${file}`)));
-  for (const moduleSource of modules) {
-    for (const match of moduleSource.matchAll(/from\s+["']([^"']+)["']/g))
-      assert.ok(match[1].startsWith("./"), `runtime import must be local: ${match[1]}`);
+  for (const file of files) {
+    const name = relative(runtime, file);
+    const layer = name.split("/")[0];
+    const tree = ts.createSourceFile(file, await readFile(file, "utf8"), ts.ScriptTarget.Latest);
+    const inspect = (node) => {
+      if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+        const specifier = node.moduleSpecifier.text;
+        assert.ok(specifier.startsWith("."), `${name} must not import a runtime package`);
+        const target = resolve(dirname(file), specifier);
+        assert.ok(available.has(target), `${name}: import must resolve inside the runtime tree`);
+        const dependency = relative(runtime, target).split("/")[0];
+        if (layer === "domain")
+          assert.equal(dependency, "domain", `${name} crosses the domain boundary`);
+        if (layer === "data")
+          assert.ok(["domain", "data"].includes(dependency), `${name} imports presentation`);
+        if (layer === "ui")
+          assert.ok(
+            ["domain", "ui"].includes(dependency),
+            `${name} must receive I/O through composition`,
+          );
+      }
+      if (layer === "domain" && ts.isIdentifier(node)) {
+        assert.ok(!forbiddenDomainGlobals.has(node.text), `${name} depends on ${node.text}`);
+      }
+      if (layer === "ui" && ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+        assert.notEqual(node.expression.text, "fetch", `${name} owns an HTTP request`);
+      }
+      ts.forEachChild(node, inspect);
+    };
+    inspect(tree);
   }
-
-  const [app, theme, navigation, projects, contact] = await Promise.all([
-    source("js/app.js"),
-    source("js/theme.js"),
-    source("js/navigation.js"),
-    source("js/projects.js"),
-    source("js/contact.js"),
-  ]);
-  assert.match(app, /import\s+\{\s*initProjects\s*\}\s+from\s+["']\.\/projects\.js["']/);
-  assert.match(theme, /localStorage\.(?:getItem|setItem)\(/);
-  assert.match(navigation, /new\s+IntersectionObserver\(/);
-  assert.match(navigation, /addEventListener\(["']scroll["']/);
-  assert.match(projects, /await\s+fetch\(/);
-  assert.match(projects, /\.textContent\s*=/);
-  assert.match(contact, /addEventListener\(["']submit["']/);
 });

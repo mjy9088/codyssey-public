@@ -24,12 +24,12 @@
   --type-h3: 1.125rem;
   --type-lead: clamp(1.125rem, 2vw, 1.35rem);
   --type-body: 1rem;
-  --type-small: .875rem;
-  --type-label: .75rem;
+  --type-small: 0.875rem;
+  --type-label: 0.75rem;
 
-  --space-1: .25rem;
-  --space-2: .5rem;
-  --space-3: .75rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
   --space-4: 1rem;
   --space-5: 1.25rem;
   --space-6: 1.5rem;
@@ -46,34 +46,23 @@
   --control-size: 2.75rem;
   --header-size: 4.5rem;
 
-  --radius-sm: .25rem;
-  --radius-md: .75rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.75rem;
   --radius-lg: 1.5rem;
   --radius-round: 999rem;
-  --shadow-paper: 0 .25rem 1.125rem rgb(32 37 34 / .04), 0 .125rem .5rem rgb(32 37 34 / .03);
+  --shadow-paper:
+    0 0.25rem 1.125rem light-dark(rgb(32 37 34 / 0.04), rgb(0 0 0 / 0.18)),
+    0 0.125rem 0.5rem light-dark(rgb(32 37 34 / 0.03), rgb(0 0 0 / 0.12));
   --motion-fast: 120ms;
   --motion-base: 240ms;
   --motion-reveal: 560ms;
-  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-[data-theme="light"] { color-scheme: light; }
+[data-theme="light"] {
+  color-scheme: light;
+}
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --paper: #151816;
-  --sheet: #1d211e;
-  --sheet-strong: #252a26;
-  --ink: #f2eee2;
-  --ink-soft: #b7bcb4;
-  --line: #3b423c;
-  --line-strong: #697168;
-  --control-border: #899582;
-  --accent: #79cbbb;
-  --accent-strong: #a1dfd2;
-  --accent-soft: #203f38;
-  --danger: #ff9b92;
-  --success: #86cf9c;
-  --focus: #78bfff;
-  --shadow-paper: 0 .25rem 1.125rem rgb(0 0 0 / .18), 0 .125rem .5rem rgb(0 0 0 / .12);
 }

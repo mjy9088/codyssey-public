@@ -36,6 +36,31 @@ enterprise framework. Quality means clear ownership and correct behavior, not mo
 - Standalone coursework must not import sibling projects or root implementation helpers.
   Small local policy helpers may be intentionally repeated to preserve that isolation.
 
+### Prove the boundary, not the filename
+
+Before approving a structural change, identify each module's owned decisions and
+side effects, then trace the actual imports and affected callers. A directory name,
+short file, interface, or diagram is not evidence that the dependency direction is
+correct. Check whether changing an external format, validation rule, or rendered
+component would require editing an unrelated layer.
+
+- Validation, selection, normalization, and state rules must be executable with plain
+  values outside the UI runtime. Exercise them without a browser DOM, framework
+  request, database connection, or hidden global initialization. Adapters may obtain
+  inputs and present results, but may not be the only home of those rules.
+- Define what a stylesheet layer means. A neutral reset must not depend on project
+  theme tokens or feature classes. Themed document foundations may consume tokens;
+  component appearance and page composition need explicit owners. Do not impose a
+  universal ban on token use in every file called `base`; inspect its declared role.
+- Trace combined CSS states through the cascade. When motion and a component share
+  an element, verify ownership of transforms, transitions, animations, and reduced
+  motion in the computed browser result, not merely their source declarations.
+- Keep authored source normally formatted. Compressed multi-operation lines do not
+  make a large responsibility small. Use automated formatting and static checking
+  where available; a line-count gate must never reward minification.
+- Explain legitimate exceptions with the current contract and concrete tradeoff.
+  Do not accept a forwarding layer that leaves the original dependency unchanged.
+
 ## Behavioral preservation
 
 Before a structural change, identify callers and run the existing relevant tests. Preserve
@@ -49,6 +74,11 @@ source fragments. Architecture checks may enforce forbidden dependencies, but mu
 substitute for executing the application. Do not remove, skip, loosen, or regenerate an
 expectation merely to turn a failure green. Intentional visual updates require inspection
 before refreshing baselines and a normal comparison run afterward.
+
+Tests must permit an internal refactor that preserves behavior. Do not freeze an
+exact module inventory or selector spelling as a substitute for an architectural
+rule. Replace such a pin with a dependency-boundary check and an equal or stronger
+behavioral test. Preserve actual public asset paths, formats, and runtime constraints.
 
 ## Verification required for approval
 
@@ -66,10 +96,30 @@ before refreshing baselines and a normal comparison run afterward.
 6. Obtain independent review of correctness, architecture, security, and the rendered
    interface when applicable. Authors must resolve blocking findings before approval.
 
+The independent reviewer must read the current complete implementation, not just
+the diff, the author's summary, or a previous passing review. Ask it to challenge
+the chosen boundaries and test effectiveness. Require each significant finding to
+name the failure mode, affected responsibility or caller, and evidence. Cosmetic
+preferences alone do not keep a review open. Fix meaningful findings and review
+the current revision again; an earlier approval is not transferable evidence.
+
 Keep generated observations in ignored artifacts or CI, not a checked-in run report. A
 handoff names the exact checks performed, observed outcomes, unavailable checks and their
 reason, and remaining risks. A passing mock does not establish deployment or live-service
 behavior. An unavailable check is a limitation, never an implied pass.
+
+## Progress and completion
+
+Use distinct statements for implemented, automatically verified, manually exercised,
+and independently reviewed. A commit records progress, not approval. Commit coherent,
+runnable checkpoints after their relevant checks, even while the broader review is
+still open; do not wait for a perfect final revision to preserve working progress.
+State the remaining review scope instead of calling that checkpoint complete.
+
+Do not mark the requested work complete while a significant known architectural or
+behavioral defect remains in scope. A passing suite, clean type check, previous
+approval, or small diff does not waive it. An unresolved environment limitation
+must be named with the capability it prevents verifying, not hidden by a fallback.
 
 ## Review decision
 

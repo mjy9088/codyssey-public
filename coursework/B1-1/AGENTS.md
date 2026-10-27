@@ -4,6 +4,13 @@
   Do not import parent files, private assets, DIM configuration, or host Docker sockets.
 - Runtime code is vanilla HTML/CSS/JavaScript. Browser-test dependencies do not ship
   with the site. Use local original artwork and synthetic test fixtures.
+- Keep a neutral CSS reset independent of project tokens and feature selectors.
+  Themed document foundations, reusable presentation, page composition, and motion
+  must have explicit owners. Verify composed motion and hover/focus in a browser.
+- Keep contact validation and repository normalization/selection executable without
+  the DOM. HTTP/storage/media adapters and DOM presentation must not own those rules.
+- Use readable formatting and checked JavaScript. Tests should enforce dependency
+  direction and observable behavior, not an exact list of internal module filenames.
 - Author documentation in English. Keep instructions/design rationale in Git, not
   test-run reports, status journals, traces, logs, or generated result JSON.
 - Runtime artifacts belong in ignored `artifacts/`. The only required versioned

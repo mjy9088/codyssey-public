@@ -15,6 +15,8 @@ test "$entries" = '.nojekyll
 B1-1
 index.html'
 cmp "$root/coursework/B1-1/index.html" "$site/B1-1/index.html"
+diff -r "$root/coursework/B1-1/css" "$site/B1-1/css"
+diff -r "$root/coursework/B1-1/js" "$site/B1-1/js"
 grep -q 'href="B1-1/"' "$site/index.html"
 ! grep -q 'href="B1-2/"' "$site/index.html"
 if sh "$root/scripts/package-pages.sh" "$site" >"$work/repeat.log" 2>&1; then

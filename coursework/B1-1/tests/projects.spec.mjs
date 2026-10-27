@@ -1,9 +1,14 @@
-import { test, expect, API, repositories } from "./fixtures.mjs";
+import { API, expect, repositories, test } from "./fixtures.mjs";
 
 test("loading transitions to projects and language filtering", async ({ page }) => {
   let release;
-  const gate = new Promise((resolve) => { release = resolve; });
-  await page.route(API, async (route) => { await gate; await route.fulfill({ json: repositories }); });
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await page.route(API, async (route) => {
+    await gate;
+    await route.fulfill({ json: repositories });
+  });
   await page.goto("/");
   await expect(page.locator("#projects-status")).toContainText("Loading");
   await expect(page.locator("#project-list")).toHaveAttribute("aria-busy", "true");
@@ -31,7 +36,9 @@ test("HTTP rate limiting is recoverable through retry", async ({ page }) => {
   let attempts = 0;
   await page.route(API, (route) => {
     attempts += 1;
-    return attempts === 1 ? route.fulfill({ status: 403, json: { message: "Synthetic quota exceeded" } }) : route.fulfill({ json: repositories });
+    return attempts === 1
+      ? route.fulfill({ status: 403, json: { message: "Synthetic quota exceeded" } })
+      : route.fulfill({ json: repositories });
   });
   await page.goto("/");
   await expect(page.locator("#projects-status")).toContainText("could not be loaded");
@@ -41,7 +48,9 @@ test("HTTP rate limiting is recoverable through retry", async ({ page }) => {
   expect(attempts).toBe(2);
 });
 
-test("network failures and unexpected response shapes are honest error states", async ({ page }) => {
+test("network failures and unexpected response shapes are honest error states", async ({
+  page,
+}) => {
   await page.route(API, (route) => route.abort("failed"));
   await page.goto("/");
   await expect(page.locator("#project-retry")).toBeVisible();
@@ -52,11 +61,15 @@ test("network failures and unexpected response shapes are honest error states", 
 
 test("API text stays text and invalid destinations are excluded", async ({ page }) => {
   const text = '<em data-synthetic="true">Literal repository title</em>';
-  await page.route(API, (route) => route.fulfill({ json: [
-    { ...repositories[0], name: text, description: text },
-    { ...repositories[1], html_url: "javascript:void(0)" },
-    { ...repositories[2], html_url: "https://example.invalid/not-github" },
-  ] }));
+  await page.route(API, (route) =>
+    route.fulfill({
+      json: [
+        { ...repositories[0], name: text, description: text },
+        { ...repositories[1], html_url: "javascript:void(0)" },
+        { ...repositories[2], html_url: "https://example.invalid/not-github" },
+      ],
+    }),
+  );
   await page.goto("/");
   await expect(page.locator(".project-card")).toHaveCount(1);
   await expect(page.locator(".project-name")).toHaveText(text);

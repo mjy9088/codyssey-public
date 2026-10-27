@@ -40,7 +40,7 @@ Content jobs follow the visitor path: hero hooks, About explains, Skills orients
 | `--focus` | `#176fbd` | `#78bfff` | Keyboard focus |
 
 Rules: color is semantic; no undeclared literals in CSS. Accent is reserved for interaction and annotations. Dark mode is selected by `[data-theme="dark"]`.
-Before deferred JavaScript runs, `light-dark()` and the system color scheme already select the correct initial palette. An explicit saved theme overrides that default through `data-theme`.
+Before deferred JavaScript runs, `light-dark()` and the system color scheme already select the correct initial palette. An explicit saved theme overrides that default through `data-theme`; changing `color-scheme` selects the same semantic token branches without duplicating palette literals. The untransitioned `html` foundation exposes the settled canvas color while `body` retains the visible theme transition.
 
 ## 3. Typography
 
@@ -78,6 +78,7 @@ Local/system stacks only:
 - States: transparent/default; compact ruled surface after 60px; mobile menu open/closed; hover, active, focus.
 - Accessibility: `aria-expanded`, `aria-controls`, Escape closes and restores trigger focus; nav link closes and focus follows the destination.
 - Desktop hiding overrides the enhanced mobile selector; the native `hidden` attribute always wins over component display rules.
+- Navigation remains a compact row of usable anchors until its listeners are installed. Only then does the header receive `.navigation-ready` and the mobile menu collapse. The fallback hides the wordmark rather than expanding the fixed header over the hero.
 
 ### Action link / button
 - Structure: text plus local SVG arrow/icon; primary filled and quiet outlined variants.
@@ -103,6 +104,7 @@ Local/system stacks only:
 - Structure: 44px minimum button with inline SVG and accessible name.
 - Custom icon controls use `appearance: none` so theme changes do not switch native control paint paths.
 - States: default, hover, focus, active; icon swap for theme and menu state.
+- The theme button is hidden until its state and preference/click listeners are ready. Without JavaScript or after an initialization fault, CSS still follows the system theme without exposing an unavailable control.
 
 ## 6. Motion & Interaction
 
@@ -113,10 +115,18 @@ Local/system stacks only:
 | `--motion-reveal` | 560ms | Intersection reveal |
 | `--ease-out` | `cubic-bezier(.16,1,.3,1)` | Meaningful entrances |
 
-- Reveal starts only after JS adds `.js`; content is visible by default. Observer threshold is `.2` and items reveal once.
-- Smooth scrolling is CSS-only. Reduced motion disables smooth scrolling, reveal transforms, and nonessential transitions.
+- Content is visible by default. Only nodes successfully enrolled with a reveal observer receive `.is-reveal-pending`; a failure in another feature cannot hide the whole page through a global enhancement class. Observer threshold is `.2` and items reveal once. The reveal keyframe owns only independent `translate` and `opacity`, so component `transform` and transition states remain composable after reveal.
+- Smooth scrolling is CSS-only. Reduced motion disables smooth scrolling, reveal transforms, and nonessential transitions with zero durations. A nonzero universal transition duration would create unintended transitions on otherwise untransitioned elements such as the theme canvas.
 - Header and back-to-top visibility respond to scroll state; only transform/opacity animate.
 - The hidden back-to-top control leaves the tab order and accessibility tree. Activation moves focus to main content; section links focus their destination without timer-based focus changes.
+
+### Stylesheet ownership
+
+- `tokens.css` declares the visual tokens. `base.css` is a neutral reset with no project tokens or feature selectors.
+- `foundation.css` owns themed document foundations, global typography, and project-wide control-state defaults; `primitives.css` owns shared presentation utilities.
+- `layout.css` owns page-level section composition and responsive grids. Feature appearance belongs to the component styles imported directly by `style.css`, with shared controls before the header's navigation variants.
+- `motion.css` owns reusable reveal behavior and the global reduced-motion baseline. Components retain ownership of their interactive transforms, transitions, and stationary reduced-motion states.
+- `style.css` orders dependencies from tokens and neutral defaults through foundations, primitives, layout, and feature components, then loads the reusable motion layer. Motion may animate independent `translate` and `opacity`, but it must not declare component `transform` or component transition lists; this leaves project-card hover/focus lift entirely owned by `components/projects.css`.
 
 ## 7. Depth & Surface
 

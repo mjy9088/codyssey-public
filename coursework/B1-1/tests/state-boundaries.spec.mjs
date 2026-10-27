@@ -1,8 +1,14 @@
-import { test, expect, API, repositories } from "./fixtures.mjs";
+import { API, expect, repositories, test } from "./fixtures.mjs";
 
-test("system theme changes stay live until an explicit choice, even without storage", async ({ page }) => {
+test("system theme changes stay live until an explicit choice, even without storage", async ({
+  page,
+}) => {
   await page.addInitScript(() => {
-    Object.defineProperty(window, "localStorage", { get: () => { throw new DOMException("Blocked", "SecurityError"); } });
+    Object.defineProperty(window, "localStorage", {
+      get: () => {
+        throw new DOMException("Blocked", "SecurityError");
+      },
+    });
   });
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
@@ -34,7 +40,9 @@ test("filtering disconnects observers from removed cards", async ({ page }) => {
         super.unobserve(target);
       }
       disconnect() {
-        this.targets.forEach((target) => window.observedRevealTargets.delete(target));
+        this.targets.forEach((target) => {
+          window.observedRevealTargets.delete(target);
+        });
         this.targets.clear();
         super.disconnect();
       }
@@ -45,7 +53,11 @@ test("filtering disconnects observers from removed cards", async ({ page }) => {
   const filter = page.locator("#project-filter");
   for (const language of ["JavaScript", "all", "HTML", "all"]) {
     await filter.selectOption(language);
-    expect(await page.evaluate(() => [...window.observedRevealTargets].filter((target) => !target.isConnected).length)).toBe(0);
+    expect(
+      await page.evaluate(
+        () => [...window.observedRevealTargets].filter((target) => !target.isConnected).length,
+      ),
+    ).toBe(0);
   }
   await page.locator("#project-list").scrollIntoViewIfNeeded();
   await expect(page.locator(".project-card.is-visible")).toHaveCount(3);
@@ -76,22 +88,28 @@ test("invalid records are reported and cannot masquerade as an empty account", a
 });
 
 test("input and render caps apply independently of fork exclusion", async ({ page }) => {
-  const candidates = Array.from({ length: 20 }, (_, index) => ({ ...repositories[0], name: `candidate-${index}` }));
+  const candidates = Array.from({ length: 20 }, (_, index) => ({
+    ...repositories[0],
+    name: `candidate-${index}`,
+  }));
   await page.route(API, (route) => route.fulfill({ json: [repositories[3], ...candidates] }));
   await page.goto("/");
   await expect(page.locator(".project-card")).toHaveCount(12);
   await expect(page.locator(".project-name").first()).toHaveText("candidate-0");
   await expect(page.locator(".project-name").last()).toHaveText("candidate-11");
-  await page.route(API, (route) => route.fulfill({ json: [
-    ...Array.from({ length: 100 }, () => repositories[3]),
-    repositories[0],
-  ] }));
+  await page.route(API, (route) =>
+    route.fulfill({
+      json: [...Array.from({ length: 100 }, () => repositories[3]), repositories[0]],
+    }),
+  );
   await page.reload();
   await expect(page.locator("#projects-status")).toContainText("No public repositories");
   await expect(page.locator(".project-card")).toHaveCount(0);
 });
 
-test("validated fields remain accurate while editing and submission focuses the first error", async ({ page }) => {
+test("validated fields remain accurate while editing and submission focuses the first error", async ({
+  page,
+}) => {
   await page.goto("/");
   const name = page.locator("#field-name");
   await name.fill("Reviewer");
@@ -109,13 +127,22 @@ test("validated fields remain accurate while editing and submission focuses the 
 
 test("Skills names concrete technologies without inventing proficiency", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#skills .tag-list li")).toContainText(["HTML", "CSS", "JavaScript", "Git", "Docker", "Playwright"]);
+  await expect(page.locator("#skills .tag-list li")).toContainText([
+    "HTML",
+    "CSS",
+    "JavaScript",
+    "Git",
+    "Docker",
+    "Playwright",
+  ]);
 });
 
 test.describe("repository date semantics", () => {
   test.use({ timezoneId: "America/Los_Angeles" });
   test("UTC month does not shift with the visitor timezone", async ({ page }) => {
-    await page.route(API, (route) => route.fulfill({ json: [{ ...repositories[0], updated_at: "2026-02-01T00:00:00Z" }] }));
+    await page.route(API, (route) =>
+      route.fulfill({ json: [{ ...repositories[0], updated_at: "2026-02-01T00:00:00Z" }] }),
+    );
     await page.goto("/");
     await expect(page.locator(".project-date")).toHaveText("Feb 2026");
   });
