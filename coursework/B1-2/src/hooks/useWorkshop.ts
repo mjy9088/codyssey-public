@@ -37,13 +37,13 @@ export const useWorkshop = (id: string | undefined) => {
         ...owner,
         state: item ? { kind: "ready", item } : { kind: "missing" },
       })
-    } catch (error: unknown) {
+    } catch {
       if (!mounted.current || request.current !== requestId) return
       setOwnedState({
         ...owner,
         state: {
           kind: "error",
-          message: error instanceof Error ? error.message : "Workshop could not be loaded.",
+          message: "Workshop could not be loaded. Try again.",
         },
       })
     }
