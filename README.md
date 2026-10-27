@@ -9,3 +9,27 @@ curl -fsSL bit.ly/cody-init | sh
 ```
 
 <!-- This section alone is intentionally in Korean -->
+
+[Environment setup documentation](environment/codyssey-init/README.md).
+
+## Local development tools
+
+Install the shared command-line tools with [mise](https://mise.jdx.dev/):
+
+```sh
+mise install
+```
+
+The repository configuration pins Node.js, pnpm, Python, uv, and ShellCheck.
+When the mise shell integration is active, entering a coursework project that
+contains `uv.lock` creates and activates its `.venv` automatically. Install that
+project's locked Python dependencies from its directory, for example:
+
+```sh
+cd coursework/B6-3
+uv sync --locked
+```
+
+Each coursework project remains independently runnable through its documented
+Docker and Compose workflow; the mise configuration is an optional convenience
+for host-side development.
