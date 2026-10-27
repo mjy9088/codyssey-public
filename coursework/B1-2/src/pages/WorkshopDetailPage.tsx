@@ -1,37 +1,50 @@
 import { Calendar, MapPin, PencilSimple, Trash, User, Users } from "@phosphor-icons/react"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { Badge } from "../components/Badge"
 import { Button, ButtonLink } from "../components/Button"
 import { Notice } from "../components/Notice"
 import { ErrorState, LoadingState } from "../components/StateView"
 import { useWorkshop } from "../hooks/useWorkshop"
-import { formatDate } from "../lib/workshop"
+import { formatDate, type Workshop } from "../lib/workshop"
 import { removeWorkshop } from "../lib/workshop-store"
 
 export const WorkshopDetailPage = () => {
   const { id } = useParams()
   const { state, reload } = useWorkshop(id)
-  const navigate = useNavigate()
-  const [confirming, setConfirming] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState("")
   if (state.kind === "loading") return <LoadingState label="Loading workshop" />
   if (state.kind === "error")
     return <ErrorState message={state.message} onRetry={() => void reload()} />
   if (state.kind === "missing")
     return <ErrorState message="This workshop does not exist or was removed." />
-  const item = state.item
+  return <ReadyWorkshopDetail key={state.item.id} item={state.item} />
+}
+
+const ReadyWorkshopDetail = ({ item }: { readonly item: Workshop }) => {
+  const navigate = useNavigate()
+  const lifetime = useRef(0)
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState("")
+  useEffect(() => {
+    lifetime.current += 1
+    return () => {
+      lifetime.current += 1
+    }
+  }, [])
   const remove = async () => {
+    const lifetimeId = lifetime.current
     setDeleting(true)
     setDeleteError("")
     try {
       await removeWorkshop(item.id)
+      if (lifetime.current !== lifetimeId) return
       navigate("/workshops", { state: { workshopDeleted: true } })
     } catch {
+      if (lifetime.current !== lifetimeId) return
       setDeleteError("Workshop could not be deleted. Try again.")
     } finally {
-      setDeleting(false)
+      if (lifetime.current === lifetimeId) setDeleting(false)
     }
   }
   return (
@@ -43,12 +56,20 @@ export const WorkshopDetailPage = () => {
           <p>{item.summary}</p>
         </div>
         <div className="detail-page__actions">
-          <ButtonLink to={`/workshops/${encodeURIComponent(item.id)}/edit`} variant="secondary">
-            <PencilSimple aria-hidden="true" />
-            Edit
-          </ButtonLink>
+          {deleting ? (
+            <Button variant="secondary" disabled>
+              <PencilSimple aria-hidden="true" />
+              Edit
+            </Button>
+          ) : (
+            <ButtonLink to={`/workshops/${encodeURIComponent(item.id)}/edit`} variant="secondary">
+              <PencilSimple aria-hidden="true" />
+              Edit
+            </ButtonLink>
+          )}
           <Button
             variant="danger"
+            disabled={deleting}
             onClick={() => {
               setDeleteError("")
               setConfirming(true)
@@ -102,6 +123,7 @@ export const WorkshopDetailPage = () => {
             </Button>
             <Button
               variant="quiet"
+              disabled={deleting}
               onClick={() => {
                 setDeleteError("")
                 setConfirming(false)

@@ -1,5 +1,10 @@
-import { type FormEvent, useId, useState } from "react"
-import { type FieldErrors, parseWorkshopInput, type WorkshopInput } from "../lib/workshop"
+import { type FormEvent, useEffect, useId, useRef, useState } from "react"
+import {
+  type FieldErrors,
+  parseWorkshopInput,
+  type WorkshopId,
+  type WorkshopInput,
+} from "../lib/workshop"
 import { Button, ButtonLink } from "./Button"
 import { InputField, SelectField, TextAreaField } from "./Field"
 import { Notice } from "./Notice"
@@ -18,19 +23,28 @@ const emptyValues: FormValues = {
 export const WorkshopForm = ({
   initial,
   onSubmit,
+  onSaved,
   submitLabel,
 }: {
   readonly initial?: WorkshopInput
-  readonly onSubmit: (input: WorkshopInput) => Promise<void>
+  readonly onSubmit: (input: WorkshopInput) => Promise<WorkshopId>
+  readonly onSaved: (id: WorkshopId) => void
   readonly submitLabel: string
 }) => {
   const formId = useId()
+  const lifetime = useRef(0)
   const [values, setValues] = useState<FormValues>(
     initial ? { ...initial, capacity: String(initial.capacity) } : emptyValues,
   )
   const [errors, setErrors] = useState<FieldErrors>({})
   const [requestError, setRequestError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  useEffect(() => {
+    lifetime.current += 1
+    return () => {
+      lifetime.current += 1
+    }
+  }, [])
   const update = (key: keyof WorkshopInput, value: string) => {
     setValues((current) => ({ ...current, [key]: value }))
     setErrors((current) => ({ ...current, [key]: undefined }))
@@ -43,14 +57,18 @@ export const WorkshopForm = ({
       setErrors(parsed.errors)
       return
     }
+    const lifetimeId = lifetime.current
     setSubmitting(true)
     setRequestError("")
     try {
-      await onSubmit(parsed.data)
-    } catch (error: unknown) {
-      setRequestError(error instanceof Error ? error.message : "The workshop could not be saved.")
+      const id = await onSubmit(parsed.data)
+      if (lifetime.current !== lifetimeId) return
+      onSaved(id)
+    } catch {
+      if (lifetime.current !== lifetimeId) return
+      setRequestError("The workshop could not be saved. Try again.")
     } finally {
-      setSubmitting(false)
+      if (lifetime.current === lifetimeId) setSubmitting(false)
     }
   }
   return (
@@ -62,6 +80,7 @@ export const WorkshopForm = ({
           label="Workshop title"
           value={values.title}
           error={errors.title}
+          disabled={submitting}
           required
           onChange={(event) => update("title", event.currentTarget.value)}
         />
@@ -70,6 +89,7 @@ export const WorkshopForm = ({
           label="Summary"
           value={values.summary}
           error={errors.summary}
+          disabled={submitting}
           rows={4}
           maxLength={240}
           required
@@ -82,6 +102,7 @@ export const WorkshopForm = ({
             label="Facilitator"
             value={values.facilitator}
             error={errors.facilitator}
+            disabled={submitting}
             required
             onChange={(event) => update("facilitator", event.currentTarget.value)}
           />
@@ -90,6 +111,7 @@ export const WorkshopForm = ({
             label="Location"
             value={values.location}
             error={errors.location}
+            disabled={submitting}
             required
             onChange={(event) => update("location", event.currentTarget.value)}
           />
@@ -101,6 +123,7 @@ export const WorkshopForm = ({
             type="datetime-local"
             value={values.startsAt}
             error={errors.startsAt}
+            disabled={submitting}
             required
             onChange={(event) => update("startsAt", event.currentTarget.value)}
           />
@@ -112,6 +135,7 @@ export const WorkshopForm = ({
             max="80"
             value={values.capacity}
             error={errors.capacity}
+            disabled={submitting}
             required
             onChange={(event) => update("capacity", event.currentTarget.value)}
           />
@@ -121,6 +145,7 @@ export const WorkshopForm = ({
           label="Status"
           value={values.status}
           error={errors.status}
+          disabled={submitting}
           onChange={(event) => update("status", event.currentTarget.value)}
         >
           <option value="open">Open</option>
@@ -131,9 +156,15 @@ export const WorkshopForm = ({
           <Button type="submit" disabled={submitting}>
             {submitting ? "Saving…" : submitLabel}
           </Button>
-          <ButtonLink to="/workshops" variant="quiet">
-            Cancel
-          </ButtonLink>
+          {submitting ? (
+            <Button type="button" variant="quiet" disabled>
+              Cancel
+            </Button>
+          ) : (
+            <ButtonLink to="/workshops" variant="quiet">
+              Cancel
+            </ButtonLink>
+          )}
         </div>
       </form>
       <aside className="form-preview" aria-label="Workshop preview">

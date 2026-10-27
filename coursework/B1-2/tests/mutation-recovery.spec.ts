@@ -48,7 +48,7 @@ for (const operation of ["create", "edit"] as const) {
       name: operation === "create" ? "Create workshop" : "Save changes",
     })
     await submit.click()
-    await expect(page.getByRole("alert")).toBeVisible()
+    await expect(page.getByRole("alert")).toHaveText("The workshop could not be saved. Try again.")
     await expect(submit).toBeEnabled()
     await expect(page.getByLabel("Workshop title")).toHaveValue(title)
     await expect(page.getByLabel("Capacity")).toHaveValue("8")
