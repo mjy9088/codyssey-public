@@ -4,13 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run test:contracts && playwright test",
+    "test": "npm run check && npm run test:unit && npm run test:contracts && playwright test",
+    "check": "biome check js css tests playwright.config.mjs && tsc -p tsconfig.checkjs.json",
+    "format": "biome format --write js css tests playwright.config.mjs",
+    "test:unit": "node --test tests/unit/*.test.mjs",
     "test:browser": "playwright test",
     "test:contracts": "node --test tests/source-contract.contract.mjs",
     "test:list": "playwright test --list"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
-    "@playwright/test": "1.58.2"
+    "@biomejs/biome": "2.3.11",
+    "@playwright/test": "1.58.2",
+    "typescript": "5.9.3"
   }
 }

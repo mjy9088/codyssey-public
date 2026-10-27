@@ -3,7 +3,7 @@ WORKDIR /work
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund \
     && mkdir artifacts && chown pwuser:pwuser artifacts
-COPY playwright.config.mjs ./
+COPY playwright.config.mjs biome.json tsconfig.checkjs.json ./
 COPY tests/ tests/
 COPY index.html ./
 COPY css/ css/

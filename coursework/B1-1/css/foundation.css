@@ -1,0 +1,74 @@
+html {
+  background-color: var(--paper);
+  scroll-behavior: smooth;
+  scroll-padding-top: var(--header-size);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--type-body);
+  line-height: 1.7;
+  text-rendering: optimizeLegibility;
+  transition:
+    background-color var(--motion-base),
+    color var(--motion-base);
+}
+
+a {
+  color: var(--accent);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  color: var(--accent-strong);
+}
+
+button,
+select {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+
+h1 {
+  margin-bottom: var(--space-8);
+  font-size: var(--type-display);
+  letter-spacing: -0.055em;
+  line-height: 0.88;
+}
+
+h2 {
+  margin-bottom: var(--space-6);
+  font-size: var(--type-h1);
+  letter-spacing: -0.04em;
+  line-height: 0.96;
+}
+
+h3 {
+  margin-bottom: var(--space-3);
+  font-size: var(--type-h3);
+  line-height: 1.35;
+}
+
+:focus-visible {
+  outline: 0.15rem solid var(--focus);
+  outline-offset: 0.2rem;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
+}

@@ -1,0 +1,58 @@
+.field {
+  margin-bottom: var(--space-4);
+}
+
+.field label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: var(--type-small);
+  font-weight: 650;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--sheet-strong);
+}
+
+.field input:focus,
+.field textarea:focus {
+  border-color: var(--focus);
+  outline: 0.15rem solid var(--focus);
+  outline-offset: 0.1rem;
+}
+
+.field input[aria-invalid="true"],
+.field textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.field input[aria-invalid="false"],
+.field textarea[aria-invalid="false"] {
+  border-color: var(--success);
+}
+
+.field-error {
+  min-height: var(--space-5);
+  margin: var(--space-1) 0 0;
+  color: var(--danger);
+  font-size: var(--type-small);
+}
+
+.form-status {
+  min-height: var(--space-6);
+  margin: var(--space-4) 0 0;
+  color: var(--ink-soft);
+  font-weight: 650;
+}
+
+.form-status[data-state="error"] {
+  color: var(--danger);
+}
+
+.form-status[data-state="success"] {
+  color: var(--success);
+}

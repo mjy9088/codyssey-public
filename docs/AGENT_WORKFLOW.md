@@ -18,8 +18,9 @@ principle skills, retaining the upstream MIT license. It does not change applica
 install frontend runtime code, configure model accounts, or publish anything. Existing skills
 with these selected names are replaced by the pinned copies; other skills are not selected.
 
-The installer needs network access to public GitHub/npm sources. It does not upload repository
-contents. Restart OpenCode after installation; a running session does not hot-reload its skill
+The installer needs network access to public GitHub/npm sources. This script supplies only the
+downloaded public pstack checkout to it, not coursework or private materials. Restart OpenCode after
+installation; a running session does not hot-reload its skill
 catalog. Re-run this reviewed script to restore the pinned set instead of enabling automatic
 updates against an unreviewed branch.
 

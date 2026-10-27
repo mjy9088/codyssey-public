@@ -1,0 +1,127 @@
+.site-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 10;
+  height: var(--header-size);
+  transition:
+    background-color var(--motion-base),
+    border-color var(--motion-base);
+}
+
+.site-header.is-scrolled {
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.header-inner {
+  display: flex;
+  width: min(calc(100% - (var(--page-gutter) * 2)), var(--content-max));
+  height: 100%;
+  margin-inline: auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.wordmark {
+  margin-inline-end: auto;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  text-decoration: none;
+}
+
+.wordmark strong {
+  color: var(--accent);
+}
+
+.site-header .icon-button {
+  will-change: transform;
+}
+
+.menu-toggle {
+  display: none;
+}
+
+.primary-nav {
+  position: absolute;
+  inset: var(--header-size) var(--page-gutter) auto;
+  display: grid;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--sheet);
+  box-shadow: var(--shadow-paper);
+}
+
+.js .menu-toggle {
+  display: inline-grid;
+}
+
+.js .primary-nav {
+  display: none;
+}
+
+.js .primary-nav.is-open {
+  display: grid;
+}
+
+.primary-nav a {
+  min-height: var(--control-size);
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.primary-nav a:hover {
+  color: var(--accent);
+}
+
+.menu-icon-close,
+[aria-expanded="true"] .menu-icon-open {
+  display: none;
+}
+
+[aria-expanded="true"] .menu-icon-close {
+  display: inline;
+}
+
+.theme-icon-sun,
+[data-theme="dark"] .theme-icon-moon {
+  display: none;
+}
+
+[data-theme="dark"] .theme-icon-sun {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .theme-icon-moon {
+    display: none;
+  }
+
+  :root:not([data-theme]) .theme-icon-sun {
+    display: block;
+  }
+}
+
+@media (min-width: 48rem) {
+  .header-inner {
+    gap: var(--space-5);
+  }
+
+  .menu-toggle,
+  .js .menu-toggle {
+    display: none;
+  }
+
+  .primary-nav,
+  .js .primary-nav {
+    position: static;
+    display: flex;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+}

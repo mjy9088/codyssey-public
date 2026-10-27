@@ -30,6 +30,12 @@ network-error states; form validation; content safety; accessibility rules; and 
 GitHub responses in tests are deterministic synthetic fixtures. They do not demonstrate live API
 availability or the existence of any repository.
 
+Before browser execution, the verifier checks formatted source, lint rules, and strict checked
+JavaScript, then runs browser-independent contact/repository rules and transport tests. Architecture
+checks enforce the domain/data/UI import direction and a theme-independent CSS reset without fixing
+an incidental list of internal filenames. Normal-motion browser scenarios verify the actual composed
+card hover/focus effect in addition to reduced-motion visual baselines.
+
 The first build downloads container images, npm packages, and Alpine artifacts. A fully offline first
 build without a prepared cache is not supported. Dependencies use a lockfile, base images use
 digests, and VM artifacts use published checksums. Allow approximately 6 GiB of free disk and 2 GiB
@@ -93,15 +99,19 @@ failure as well.
   validated so remote strings are not interpreted as HTML.
 
 See [the architecture reference](docs/ARCHITECTURE.md) for state boundaries and [DESIGN.md](DESIGN.md)
-for the visual system. The site has no frontend runtime library. Playwright and axe are test-only
+for the visual system. The site has no frontend runtime library. Playwright, axe, Biome, and TypeScript are test-only
 dependencies and are not deployed.
 
 ## Directory map
 
 ```text
 index.html                  static page
-css/style.css               style entry point and component rules
-js/                         theme, navigation, API, and form modules
+css/style.css               style composition entry point
+css/                        neutral reset, themed foundations, components, layout, and motion
+js/app.js                   dependency composition and feature startup
+js/domain/                  browser-independent validation and repository rules
+js/data/                    GitHub request and deadline adapter
+js/ui/                      DOM rendering, events, focus, theme, and reveal lifetimes
 images/                     original SVG profile illustration
 Dockerfile                  non-root static server
 compose*.yaml               verification and preview configuration

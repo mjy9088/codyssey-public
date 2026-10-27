@@ -1,0 +1,106 @@
+.icon-button {
+  appearance: none;
+  display: inline-grid;
+  width: var(--control-size);
+  min-height: var(--control-size);
+  padding: var(--space-2);
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-round);
+  background: var(--sheet);
+}
+
+.icon-button:hover {
+  border-color: var(--line-strong);
+  background: var(--sheet-strong);
+}
+
+.icon-button:active,
+.button:active {
+  transform: scale(0.97);
+}
+
+.icon-button svg {
+  width: var(--space-5);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.75;
+}
+
+.button {
+  display: inline-flex;
+  min-height: var(--control-size);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-weight: 650;
+  text-decoration: none;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    transform var(--motion-fast);
+}
+
+.button-primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.button-primary:hover {
+  background: var(--accent-strong);
+  color: var(--sheet-strong);
+}
+
+.button-secondary {
+  border-color: var(--line-strong);
+  background: var(--sheet);
+  color: var(--ink);
+}
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 650;
+}
+
+.text-link span {
+  transition: transform var(--motion-fast);
+}
+
+.text-link:hover span {
+  transform: translateX(var(--space-1));
+}
+
+.back-to-top {
+  position: fixed;
+  inset-inline-end: var(--space-4);
+  inset-block-end: var(--space-4);
+  z-index: 8;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(var(--space-4));
+  transition:
+    opacity var(--motion-base),
+    transform var(--motion-base);
+}
+
+.back-to-top.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon-button:active,
+  .button:active,
+  .text-link:hover span {
+    transform: none;
+  }
+}
