@@ -43,7 +43,7 @@ export const WorkshopDetailPage = () => {
           <p>{item.summary}</p>
         </div>
         <div className="detail-page__actions">
-          <ButtonLink to={`/workshops/${item.id}/edit`} variant="secondary">
+          <ButtonLink to={`/workshops/${encodeURIComponent(item.id)}/edit`} variant="secondary">
             <PencilSimple aria-hidden="true" />
             Edit
           </ButtonLink>

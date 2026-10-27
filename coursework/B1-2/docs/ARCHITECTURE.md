@@ -11,7 +11,9 @@ reads and the Firestore adapter for mutations.
 React initialization requirement. Controlled form strings cross that schema once before becoming
 typed mutation inputs. `lib/workshop-store.ts` owns Firestore requests and parses stored records at
 the read boundary. The snapshot's document ID is authoritative: a stored `id` field must never
-redirect a link, update, or deletion to another document.
+redirect a link, update, or deletion to another document. Links and post-save navigation encode the
+ID as a URL path segment; URL-reserved characters must not turn document identity into a query or
+fragment. React Router decodes that segment before the SDK lookup.
 
 `lib/workshop-seed.ts` owns deterministic sample administration with an atomic write batch. It is
 separate from ordinary CRUD, and the list page owns its pending/error state. Fixture creation is

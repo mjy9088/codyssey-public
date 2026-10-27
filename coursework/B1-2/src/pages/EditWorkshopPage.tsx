@@ -17,7 +17,7 @@ export const EditWorkshopPage = () => {
     return <ErrorState message="This workshop does not exist or was removed." />
   const save = async (input: WorkshopInput) => {
     await updateWorkshop(state.item.id, input)
-    navigate(`/workshops/${state.item.id}`)
+    navigate(`/workshops/${encodeURIComponent(state.item.id)}`)
   }
   return (
     <div className="route-page">

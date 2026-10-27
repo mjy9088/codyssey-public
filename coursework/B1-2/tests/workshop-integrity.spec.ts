@@ -4,7 +4,7 @@ const documents =
   "http://firebase:8080/v1/projects/benchbook-local/databases/(default)/documents/workshops"
 
 const storeFixture = async (request: APIRequestContext, id: string, title: string) => {
-  const response = await request.patch(`${documents}/${id}`, {
+  const response = await request.patch(`${documents}/${encodeURIComponent(id)}`, {
     headers: { Authorization: "Bearer owner" },
     data: {
       fields: {
@@ -69,4 +69,40 @@ test("detail edits and deletes only the requested document despite a conflicting
   expect(removed.status()).toBe(404)
   await page.goto("/workshops/other-workshop")
   await expect(page.getByRole("heading", { name: "Other workshop", exact: true })).toBeVisible()
+})
+
+test("preserves document identity through URL-reserved characters in links and edit navigation", async ({
+  page,
+  request,
+}) => {
+  const id = "workshop?query#fragment%literal"
+  const path = `/workshops/${encodeURIComponent(id)}`
+  await storeFixture(request, id, "Reserved identity workshop")
+  await page.goto("/workshops")
+  const link = page.getByRole("link", { name: "Reserved identity workshop", exact: true })
+  await expect(link).toHaveAttribute("href", path)
+  await link.click()
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Reserved identity workshop", exact: true }),
+  ).toBeVisible()
+  await page.getByRole("link", { name: "Edit", exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`${encodeURIComponent(id)}/edit$`))
+  await page.getByLabel("Workshop title").fill("Updated reserved identity workshop")
+  await page.getByRole("button", { name: "Save changes" }).click()
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Updated reserved identity workshop",
+      exact: true,
+    }),
+  ).toBeVisible()
+  await expect(page).toHaveURL(`${new URL(page.url()).origin}${path}`)
+  await page.reload()
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Updated reserved identity workshop",
+      exact: true,
+    }),
+  ).toBeVisible()
 })

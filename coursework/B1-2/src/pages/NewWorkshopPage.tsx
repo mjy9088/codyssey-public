@@ -8,7 +8,7 @@ export const NewWorkshopPage = () => {
   const navigate = useNavigate()
   const create = async (input: WorkshopInput) => {
     const id = await createWorkshop(input)
-    navigate(`/workshops/${id}`)
+    navigate(`/workshops/${encodeURIComponent(id)}`)
   }
   return (
     <div className="route-page">
