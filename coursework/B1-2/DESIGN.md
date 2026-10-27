@@ -71,6 +71,7 @@ System-local fonts avoid network dependency. Display uses `Georgia, Cambria, ser
 - Structure: skip link, sticky header, brand, primary links, signed-in identity, main, footer.
 - States: current route, hover, focus, signed-in/loading. The document owns scrolling.
 - Accessibility: landmarks, current-page semantics, 44px targets.
+- Only an exact primary-navigation destination receives `aria-current="page"`; ancestor sections are not reported as the current page of a create, detail, or edit screen.
 
 ### Button / text action
 - Variants: primary, secondary, quiet, danger. Spacing uses `--space-2` and `--space-4`.
@@ -95,10 +96,12 @@ System-local fonts avoid network dependency. Display uses `Georgia, Cambria, ser
 ### Workshop form
 - Structure: controlled fields, live preview aside, submit/cancel actions, request error.
 - States: pristine, invalid, submitting, request failure. Document scroll.
+- Creation waits for authentication and offers retry on authentication failure. During save, fields and local Cancel are disabled. Leaving through global navigation does not cancel an SDK write, but a completion cannot redirect an obsolete screen.
 
 ### Notice and confirmation panel
 - Variants: informational, success, warning, destructive confirmation.
 - Accessibility: `role=status` or `role=alert`; destructive action requires explicit confirmation.
+- While deletion is pending, Keep, Delete, and Edit cannot contradict the submitted operation. Switching records or leaving the screen ends its UI ownership, not the SDK write itself.
 
 ## 6. Motion & Interaction
 

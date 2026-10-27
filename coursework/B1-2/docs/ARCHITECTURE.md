@@ -32,6 +32,14 @@ new load or ownership transition. Unmount invalidates pending completions. The S
 may still complete; `reload()` remains an awaitable operation for callers such as sample loading.
 Form drafts remain component-local and are recreated when a new detail load replaces the form.
 
+The form owns the save lifetime: `onSubmit` returns the saved identity and `onSaved` is delivered only
+to the still-mounted form. Pages own the subsequent navigation. Creation waits for authentication
+and offers the same auth retry path as reads. Pending fields and local cancellation controls are
+disabled. A keyed detail component similarly owns delete confirmation and completion; navigating
+away or changing records must not let an old completion redirect the visitor. SDK writes are not
+claimed to be cancelled when their screen disappears. Expected load/save failures use stable
+recovery copy rather than rendering SDK or schema diagnostics.
+
 Deletion navigates with a typed success marker rather than arbitrary display copy. The list renders
 the success notice and clears the consumed history state, so refreshing does not repeat an old
 notification. Destructive confirmation describes the schedule, not an assumed backend environment.
@@ -61,5 +69,9 @@ still apply. No rule or cloud configuration is published by local verification.
 - The verifier runs Biome, strict application and test TypeScript, unit tests, deployment-build
   checks, and Chromium. Logs, traces, and screenshots are copied out before its containers are
   removed and remain ignored under `artifacts/docker/` or `artifacts/vm/`.
+- A shell lifecycle check uses an isolated temporary script copy and a recording Docker boundary
+  inside the test container. It verifies argument rejection, signal exit codes, artifact-copy order,
+  and cleanup sequencing without a Docker socket or changing real lab services. Emulator rules
+  used for browser fault setup are restored in setup and teardown, including failed test paths.
 - QEMU serves the same built SPA from an independent guest kernel. The browser and emulators stay
   Compose services; this is local portability evidence, not an external Firebase deployment.

@@ -5,8 +5,9 @@ RUN npm ci --ignore-scripts --no-audit --no-fund && mkdir -p artifacts && chown 
 COPY index.html biome.json playwright.config.ts vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json tsconfig.tests.json ./
 COPY firestore.rules ./
 COPY tests/ tests/
+COPY scripts/ scripts/
 COPY src/ src/
 RUN chmod -R a+rX /work && chown -R pwuser:pwuser /work/artifacts && chown pwuser:pwuser /work
 USER pwuser
 ENV HOME=/tmp
-CMD ["sh", "-c", "npm run check && npm test && sh tests/deployment-build.sh && npx playwright test"]
+CMD ["sh", "-c", "sh tests/verify-lifecycle.sh && npm run check && npm test && sh tests/deployment-build.sh && npx playwright test"]

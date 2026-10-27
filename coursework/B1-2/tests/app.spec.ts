@@ -17,11 +17,14 @@ const setWriteFailure = (request: APIRequestContext) => installRules(request, de
 const clearWriteFailure = (request: APIRequestContext) => installRules(request, baselineRules)
 
 test.beforeEach(async ({ request }) => {
+  await clearWriteFailure(request)
   const response = await request.delete(
     `http://firebase:8080/emulator/v1/projects/${projectId}/databases/(default)/documents`,
   )
   expect(response.ok()).toBeTruthy()
 })
+
+test.afterEach(async ({ request }) => clearWriteFailure(request))
 
 test("creates, filters, edits, and deletes workshops through the real emulator", async ({
   page,
