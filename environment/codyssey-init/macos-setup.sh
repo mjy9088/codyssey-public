@@ -131,6 +131,13 @@ file_url() {
   done
 }
 
+dock_tile() {
+  # OpenStep dictionaries passed to defaults turn bare numbers into strings.
+  # Use typed XML so Dock can resolve the file URL instead of showing "?".
+  local url=$1 label=$2 kind=$3
+  printf '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>%s</string><key>_CFURLStringType</key><integer>15</integer></dict><key>file-label</key><string>%s</string><key>file-type</key><integer>%s</integer></dict><key>tile-type</key><string>file-tile</string></dict>' "$url" "$label" "$kind"
+}
+
 apply_dock() {
   local terminal_app chrome_app terminal_url chrome_url launcher launcher_url temporary index=0 existing failed=0
   local clean_dock=$dock_setup
@@ -162,10 +169,10 @@ apply_dock() {
   chrome_url=$(file_url "$chrome_app/")
   if [[ $clean_dock == 1 ]]; then
     "$defaults_bin" write com.apple.dock persistent-apps -array \
-      "{tile-data={file-data={_CFURLString=\"$terminal_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" \
-      "{tile-data={file-data={_CFURLString=\"$chrome_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" >/dev/null 2>&1 || failed=1
+      "$(dock_tile "$terminal_url" 'Terminal' 1)" \
+      "$(dock_tile "$chrome_url" 'Google Chrome' 1)" >/dev/null 2>&1 || failed=1
     "$defaults_bin" write com.apple.dock persistent-others -array \
-      "{tile-data={file-data={_CFURLString=\"$launcher_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" >/dev/null 2>&1 || failed=1
+      "$(dock_tile "$launcher_url" 'Codyssey j' 32)" >/dev/null 2>&1 || failed=1
     "$defaults_bin" write com.apple.dock show-recents -bool false >/dev/null 2>&1 || failed=1
     "$defaults_bin" write com.apple.dock static-only -bool false >/dev/null 2>&1 || failed=1
   else
@@ -177,7 +184,7 @@ apply_dock() {
       done
     fi
     "$defaults_bin" write com.apple.dock persistent-others -array-add \
-      "{tile-data={file-data={_CFURLString=\"$launcher_url\";_CFURLStringType=15;};};tile-type=\"file-tile\";}" >/dev/null 2>&1 || failed=1
+      "$(dock_tile "$launcher_url" 'Codyssey j' 32)" >/dev/null 2>&1 || failed=1
   fi
   if [[ $failed -eq 1 ]]; then
     restore_domain com.apple.dock || warn 'Dock rollback failed; backup retained'

@@ -158,12 +158,19 @@ def verify_dock(dock_values: dict[str, PlistValue]) -> None:
         tile_data = app.get("tile-data")
         if not isinstance(tile_data, dict) or not isinstance(tile_data.get("file-data"), dict):
             raise VerificationError("Dock entry has an invalid plist shape")
+        url_type = tile_data["file-data"].get("_CFURLStringType")
+        if type(url_type) is not int or url_type != 15 or type(tile_data.get("file-type")) is not int or tile_data["file-type"] != 1:
+            raise VerificationError("Dock app URL/file types must be plist integers")
         urls.append(tile_data["file-data"].get("_CFURLString"))
     others = dictionaries(dock_values.get("persistent-others", []), "persistent-others")
     launcher = Path.home() / "Library/Application Support/codyssey-init/Codyssey j.command"
     launcher_urls = [item.get("tile-data", {}).get("file-data", {}).get("_CFURLString") for item in others]
     if urls != expected_urls or launcher_urls != [launcher.as_uri()] or dock_values.get("show-recents") is not False or dock_values.get("static-only") is not False:
         raise VerificationError("Dock preferences do not exactly match the requested state")
+    launcher_tile = others[0]["tile-data"]
+    url_type = launcher_tile["file-data"].get("_CFURLStringType")
+    if type(url_type) is not int or url_type != 15 or type(launcher_tile.get("file-type")) is not int or launcher_tile["file-type"] != 32:
+        raise VerificationError("Dock launcher URL/file types must be plist integers")
     if not launcher.is_file() or not os.access(launcher, os.X_OK):
         raise VerificationError("Dock terminal launcher is missing or not executable")
 

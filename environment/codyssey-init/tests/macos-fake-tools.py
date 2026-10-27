@@ -97,10 +97,7 @@ def defaults(arguments: list[str]) -> int:
     elif option == "-array":
         entries: list[PlistValue] = []
         for literal in rest[3:]:
-            marker = '_CFURLString="'
-            start = literal.index(marker) + len(marker)
-            url = literal[start : literal.index('"', start)]
-            entries.append({"tile-data": {"file-data": {"_CFURLString": url, "_CFURLStringType": 15}}, "tile-type": "file-tile"})
+            entries.append(plistlib.loads(('<plist version="1.0">' + literal + '</plist>').encode()))
         data[key] = entries
     elif option == "-array-add":
         current = data.setdefault(key, [])
@@ -110,9 +107,7 @@ def defaults(arguments: list[str]) -> int:
         if "InputSourceKind" in literal:
             current.append({"InputSourceKind": "Keyboard Layout", "KeyboardLayout Name": "Korean 2-Set"})
         else:
-            marker = '_CFURLString="'
-            start = literal.index(marker) + len(marker)
-            current.append({"tile-data": {"file-data": {"_CFURLString": literal[start : literal.index('"', start)]}}})
+            current.append(plistlib.loads(('<plist version="1.0">' + literal + '</plist>').encode()))
     else:
         return 2
     save(path, data)

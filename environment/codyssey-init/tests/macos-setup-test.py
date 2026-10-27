@@ -5,6 +5,7 @@ import os
 import plistlib
 import pty
 import select
+import copy
 import shutil
 import stat
 import subprocess
@@ -375,7 +376,24 @@ def test_interactive_dock_default_and_decline() -> None:
                 assert len(dock["persistent-others"]) == 2
 
 
+def test_verifier_rejects_string_dock_types() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        env, state = environment(Path(temporary))
+        baseline(state)
+        assert apply(env).returncode == 0
+        original = read_domain(state, "com.apple.dock")
+        code = 'import runpy,plistlib,sys; m=runpy.run_path(sys.argv[1]); m["verify_dock"](plistlib.load(open(sys.argv[2],"rb")))'
+        for group in ("persistent-apps", "persistent-others"):
+            broken = copy.deepcopy(original)
+            broken[group][0]["tile-data"]["file-data"]["_CFURLStringType"] = "15"
+            write_domain(state, "com.apple.dock", broken)
+            result = subprocess.run(["python3", "-c", code, str(ROOT / "verify-macos-setup.py"),
+                                     str(state_path(state, "com.apple.dock"))], env=env, text=True, capture_output=True)
+            assert result.returncode != 0 and "must be plist integers" in result.stderr, result.stderr
+
+
 def main() -> None:
+    test_verifier_rejects_string_dock_types()
     test_interactive_dock_default_and_decline()
     test_keep_dock_adds_launcher_once_and_rolls_back_failure()
     test_desktop_verifier_preserves_keyboard_and_text()
@@ -388,7 +406,7 @@ def main() -> None:
     test_verifier_leaves_applied_state_on_success_and_restores_on_failure()
     test_verifier_retains_snapshot_when_restoration_fails()
     test_verifier_restores_after_keyboard_interrupt()
-    print("macOS setup isolated tests: 12 passed")
+    print("macOS setup isolated tests: 13 passed")
 
 
 if __name__ == "__main__":
