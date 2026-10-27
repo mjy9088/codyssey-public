@@ -11,8 +11,18 @@ case "$mode" in
 esac
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 project="benchbook-$mode-$$"
+runner="$project-check"
+output="$root/artifacts/$mode"
 compose() { docker compose -p "$project" -f "$root/compose.yaml" --profile verify --profile vm "$@"; }
-cleanup() { compose down --volumes --remove-orphans >/dev/null 2>&1 || true; }
+cleanup() {
+  compose logs --no-color firebase "$server" > "$output/server.log" 2>&1 || true
+  docker rm -f "$runner" >/dev/null 2>&1 || true
+  compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+}
+if [ -e "$output" ]; then
+  mv "$output" "$output-previous-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+fi
+mkdir -p "$output"
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
@@ -20,7 +30,14 @@ docker version >/dev/null
 compose config --quiet
 compose build firebase "$server" verify
 compose up -d --wait --wait-timeout 240 firebase "$server"
-compose run --rm --no-deps -e "BASE_URL=http://$server:8080" verify
+if compose run --name "$runner" --no-deps -e "BASE_URL=http://$server:8080" verify; then
+  result=0
+else
+  result=$?
+fi
+docker cp "$runner:/work/artifacts/." "$output/"
 if [ "$mode" = vm ]; then
   compose exec -T vm wget -q -O - http://127.0.0.1:8080/__vm-proof.txt
 fi
+printf 'Verification mode=%s exit=%s artifacts=%s\n' "$mode" "$result" "$output"
+exit "$result"

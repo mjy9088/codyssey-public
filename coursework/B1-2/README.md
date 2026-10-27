@@ -69,6 +69,9 @@ filter bar, pagination, status views, notices, and workshop form. `useWorkshops`
 own asynchronous request states; form drafts remain local; anonymous Auth state is shared through
 context. Firestore payloads and user form input are parsed with Zod at their boundaries.
 
+See [the ownership reference](docs/ARCHITECTURE.md) for asynchronous request lifetimes, authoritative
+document identity, fixture administration, and verification boundaries.
+
 ## Technology
 
 - React 19, React Router, TypeScript with strict boundary flags
@@ -165,3 +168,9 @@ This proves VM frontend portability, not an all-in-guest backend or external col
 Runtime screenshots, traces, reports, and logs stay in ignored `artifacts/`. This assignment does not
 require tracked screenshots, and committing generated evidence would become stale, duplicate the
 rerunnable checks, grow history, and risk exposing environment details.
+
+The verifier runs formatting/lint, strict application and test type checks, unit tests, and synthetic
+deployment-build checks before the browser scenarios. It copies browser output and service logs into
+`artifacts/docker/` or `artifacts/vm/` before removing containers, including after test failures. Older
+output is moved aside locally rather than overwritten. Emulator selection defaults to `true` for
+standalone local builds; only the exact values `true` and `false` are accepted.

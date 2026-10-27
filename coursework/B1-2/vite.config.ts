@@ -4,7 +4,11 @@ import { defineConfig } from "vitest/config"
 
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_")
-  if (command === "build" && env.VITE_USE_EMULATORS === "false") {
+  const emulatorMode = env.VITE_USE_EMULATORS ?? "true"
+  if (emulatorMode !== "true" && emulatorMode !== "false") {
+    throw new Error("VITE_USE_EMULATORS must be exactly true or false")
+  }
+  if (command === "build" && emulatorMode === "false") {
     for (const name of [
       "VITE_FIREBASE_API_KEY",
       "VITE_FIREBASE_AUTH_DOMAIN",

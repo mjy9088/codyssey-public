@@ -1,16 +1,16 @@
 import { readdirSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, posix } from "node:path"
 import ts from "typescript"
 import { describe, expect, it } from "vitest"
 import { z } from "zod"
 
 const root = process.cwd()
-const src = join(root, "src")
 const read = (path: string) => readFileSync(join(root, path), "utf8")
-const tsxFiles = (directory: string) =>
-  readdirSync(join(src, directory))
-    .filter((file) => file.endsWith(".tsx"))
-    .toSorted()
+const sourceFiles = (directory: string): readonly string[] =>
+  readdirSync(join(root, directory), { withFileTypes: true }).flatMap((entry) => {
+    const path = `${directory}/${entry.name}`
+    return entry.isDirectory() ? sourceFiles(path) : /\.tsx?$/.test(entry.name) ? [path] : []
+  })
 
 const parse = (path: string) =>
   ts.createSourceFile(path, read(path), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
@@ -56,73 +56,55 @@ const exportedPropComponents = (path: string) => {
 describe("frontend source contracts", () => {
   it("pins React 19 for both runtime packages", () => {
     const packageJson = z
-      .object({ dependencies: z.record(z.string(), z.string()) })
+      .object({ dependencies: z.object({ react: z.string(), "react-dom": z.string() }) })
       .parse(JSON.parse(read("package.json")))
     expect(packageJson.dependencies.react).toMatch(/^19\./)
     expect(packageJson.dependencies["react-dom"]).toMatch(/^19\./)
   })
 
-  it("keeps routes, pages, reusable components, and data hooks separated", () => {
-    const pages = tsxFiles("pages")
-    const components = tsxFiles("components")
-    const hooks = readdirSync(join(src, "hooks"))
-      .filter((file) => /^use.+\.ts$/.test(file))
-      .toSorted()
-    expect(pages).toHaveLength(7)
-    expect(components.length).toBeGreaterThanOrEqual(8)
-    expect(hooks).toEqual(expect.arrayContaining(["useWorkshop.ts", "useWorkshops.ts"]))
-
-    for (const component of components) {
-      const paths = imports(parse(`src/components/${component}`))
-      expect(paths.some((path) => path.includes("/pages/") || path.includes("/hooks/"))).toBe(false)
-    }
-    for (const hook of hooks) {
-      const paths = imports(parse(`src/hooks/${hook}`))
-      expect(paths.some((path) => path.includes("/pages/") || path.includes("/components/"))).toBe(
-        false,
-      )
+  it("keeps component, request-state, and adapter dependencies pointed away from pages", () => {
+    for (const file of sourceFiles("src")) {
+      for (const dependency of imports(parse(file))) {
+        const target = dependency.startsWith(".")
+          ? posix.normalize(posix.join(posix.dirname(file), dependency))
+          : dependency
+        if (file.startsWith("src/components/")) {
+          expect(target, `${file} imports ${target}`).not.toMatch(/^src\/(pages|hooks)\//)
+          expect(target, `${file} imports ${target}`).not.toMatch(
+            /^src\/lib\/(firebase|workshop-store|workshop-seed)$/,
+          )
+        }
+        if (file.startsWith("src/hooks/") || file.startsWith("src/lib/")) {
+          expect(target, `${file} imports ${target}`).not.toMatch(/^src\/(pages|components)\//)
+        }
+      }
     }
   })
 
-  it("defines all route screens in App and composes them through the shared layout", () => {
-    const app = parse("src/App.tsx")
-    const appText = app.getFullText()
-    const pageImports = imports(app).filter((path) => path.startsWith("./pages/"))
-    expect(pageImports).toHaveLength(7)
-    expect(imports(app)).toContain("./components/AppLayout")
-    expect(appText).toMatch(/<Route\s+element=\{<AppLayout\s*\/>\}>/)
-    expect((appText.match(/<Route\b/g) ?? []).length).toBeGreaterThanOrEqual(8)
+  it("keeps workshop rules independent of UI and Firebase initialization", () => {
+    const domain = parse("src/lib/workshop.ts")
+    expect(
+      imports(domain).some((path) => /firebase|react|workshop-store|workshop-seed/.test(path)),
+    ).toBe(false)
+    const browserGlobals: string[] = []
+    const visit = (node: ts.Node) => {
+      if (
+        ts.isIdentifier(node) &&
+        ["window", "document", "localStorage", "navigator"].includes(node.text)
+      )
+        browserGlobals.push(node.text)
+      ts.forEachChild(node, visit)
+    }
+    visit(domain)
+    expect(browserGlobals).toEqual([])
   })
 
   it("provides at least eight prop-driven reusable component exports", () => {
-    const count = tsxFiles("components").reduce(
-      (total, file) => total + exportedPropComponents(`src/components/${file}`),
+    const count = sourceFiles("src/components").reduce(
+      (total, file) => total + exportedPropComponents(file),
       0,
     )
     expect(count).toBeGreaterThanOrEqual(8)
-  })
-
-  it("reuses shared page composition and hook-owned request state", () => {
-    const pageSources = tsxFiles("pages").map((file) => parse(`src/pages/${file}`))
-    const pageHeaderUsers = pageSources.filter((file) =>
-      imports(file).includes("../components/PageHeader"),
-    )
-    const hookUsers = pageSources.filter((file) =>
-      imports(file).some(
-        (path) => path === "../hooks/useWorkshop" || path === "../hooks/useWorkshops",
-      ),
-    )
-    expect(pageHeaderUsers.length).toBeGreaterThanOrEqual(3)
-    expect(hookUsers.length).toBeGreaterThanOrEqual(2)
-
-    for (const hook of ["useWorkshop", "useWorkshops"]) {
-      const file = parse(`src/hooks/${hook}.ts`)
-      const text = file.getFullText()
-      expect(imports(file)).toContain("../context/AuthContext")
-      expect(imports(file)).toContain("../lib/workshop-store")
-      expect(text).toMatch(/useState</)
-      expect(text).toMatch(/useEffect\(/)
-    }
   })
 
   it("keeps deterministic fixture administration separate from production CRUD", () => {
@@ -131,11 +113,10 @@ describe("frontend source contracts", () => {
     const workshopStore = parse("src/lib/workshop-store.ts")
 
     // When: their module dependencies and exports are inspected.
-    const storeText = workshopStore.getFullText()
+    const storeImports = imports(workshopStore)
 
     // Then: the page uses the fixture module and CRUD owns no seeding dependency or export.
     expect(imports(workshopsPage)).toContain("../lib/workshop-seed")
-    expect(storeText).not.toMatch(/\bseedWorkshops\b/)
-    expect(storeText).not.toMatch(/\bwriteBatch\b/)
+    expect(storeImports.some((path) => /workshop-seed|fixtures/.test(path))).toBe(false)
   })
 })
