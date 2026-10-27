@@ -5,7 +5,6 @@ import { initProjects } from "./ui/projects.js";
 import { initReveals } from "./ui/reveals.js";
 import { initTheme } from "./ui/theme.js";
 
-document.documentElement.classList.add("js");
 initTheme();
 initNavigation();
 initContactForm();

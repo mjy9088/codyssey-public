@@ -43,7 +43,6 @@ export function initTheme() {
     for (const meta of themeColors) meta.setAttribute("content", renderedPaper);
   };
 
-  applyTheme(selectedTheme ?? (systemTheme.matches ? DARK : LIGHT));
   systemTheme.addEventListener("change", (event) => {
     if (selectedTheme === null) applyTheme(event.matches ? DARK : LIGHT);
   });
@@ -52,4 +51,6 @@ export function initTheme() {
     applyTheme(selectedTheme);
     writeStoredTheme(selectedTheme);
   });
+  applyTheme(selectedTheme ?? (systemTheme.matches ? DARK : LIGHT));
+  toggle.hidden = false;
 }

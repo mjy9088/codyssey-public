@@ -1,5 +1,5 @@
-export const MAX_REPOSITORY_INPUTS = 100;
-export const MAX_SELECTED_PROJECTS = 12;
+const MAX_REPOSITORY_INPUTS = 100;
+const MAX_SELECTED_PROJECTS = 12;
 
 const DEFAULT_LANGUAGE = "Other";
 
@@ -33,7 +33,7 @@ function truncate(text, length) {
 }
 
 /** @param {unknown} value @returns {Repository | null} */
-export function normalizeRepository(value) {
+function normalizeRepository(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
   if (
     !("name" in value) ||

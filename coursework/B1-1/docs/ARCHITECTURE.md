@@ -72,8 +72,17 @@ entries is an error with retry, not an apparently empty account. An empty respon
 fork-only response is an empty state. Language filtering applies only to the selected candidates
 and retains the invalid-entry notice.
 
-An `AbortController` enforces the request deadline. Its timer is cleared in `finally`, and the error
-state provides a retry action. The account is configured in the GitHub adapter under `js/data/` and the
+An `AbortController` enforces the request deadline. Its timer is cleared and its signal aborted in
+`finally`, including non-OK responses whose streaming body has not been consumed. Native fetch and JSON
+decoding classify their own expected failures. The injectable request operation returns decoded JSON,
+not a `Response`; its implementation errors propagate unchanged instead of being guessed from a broad
+`TypeError` catch. Plain-value repository parsing then classifies invalid data separately.
+
+Retry focuses the loading status before hiding its trigger. Completion moves focus to the enabled
+filter or the restored retry button only while the status still holds focus; an empty result leaves
+the notice focused, and a visitor who moved elsewhere is not interrupted.
+
+The account is configured in the GitHub adapter under `js/data/` and the
 profile link in `index.html`; changing it also requires updating the synthetic fixture route and
 associated tests. Tests require no authentication token.
 
@@ -83,6 +92,10 @@ Semantic elements, native input types, accessible names, and explicit labels tak
 custom behavior. Errors use text as well as color, and a failed submission focuses the first invalid
 field. Without JavaScript, page content and links remain available while live projects display an
 explanation and form submission stays disabled.
+
+Each enhancement owns its readiness. Navigation collapses only after its listeners are installed;
+until then, compact header links remain usable even if an earlier feature fails. The theme button
+begins hidden and is revealed only after its initial state and preference/click listeners are ready.
 
 Fields are first validated on blur or submit. Once validated, every edit revalidates the field,
 including edits that turn a valid value into an invalid one. Both the inline error and

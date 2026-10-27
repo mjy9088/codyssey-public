@@ -142,8 +142,7 @@ test("system palette is correct before deferred JavaScript finishes loading", as
       "filter",
       dark ? "invert(1) hue-rotate(180deg)" : "none",
     );
-    await expect(page.locator(dark ? ".theme-icon-sun" : ".theme-icon-moon")).toBeVisible();
-    await expect(page.locator(dark ? ".theme-icon-moon" : ".theme-icon-sun")).toBeHidden();
+    await expect(page.locator("#theme-toggle")).toBeHidden();
     await expect(page.locator(`#theme-toggle`)).toHaveAttribute("aria-label", "Toggle color theme");
     await expect(
       page.locator(
@@ -156,6 +155,13 @@ test("system palette is correct before deferred JavaScript finishes loading", as
   await expect(page.locator("html")).toHaveAttribute(
     "data-theme",
     info.project.name === "dark" ? "dark" : "light",
+  );
+  await expect(page.locator("#theme-toggle")).toBeVisible();
+  await expect(page.locator("#theme-toggle")).toBeEnabled();
+  await page.locator("#theme-toggle").click();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-theme",
+    info.project.name === "dark" ? "light" : "dark",
   );
 });
 

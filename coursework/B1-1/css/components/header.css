@@ -52,15 +52,15 @@
   box-shadow: var(--shadow-paper);
 }
 
-.js .menu-toggle {
+.navigation-ready .menu-toggle {
   display: inline-grid;
 }
 
-.js .primary-nav {
+.navigation-ready .primary-nav {
   display: none;
 }
 
-.js .primary-nav.is-open {
+.navigation-ready .primary-nav.is-open {
   display: grid;
 }
 
@@ -110,12 +110,12 @@
   }
 
   .menu-toggle,
-  .js .menu-toggle {
+  .navigation-ready .menu-toggle {
     display: none;
   }
 
   .primary-nav,
-  .js .primary-nav {
+  .navigation-ready .primary-nav {
     position: static;
     display: flex;
     padding: 0;
@@ -124,4 +124,24 @@
     background: transparent;
     box-shadow: none;
   }
+}
+
+.site-header:not(.navigation-ready) .wordmark {
+  display: none;
+}
+
+.site-header:not(.navigation-ready) .primary-nav {
+  position: static;
+  display: flex;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.site-header:not(.navigation-ready) .primary-nav a {
+  min-width: var(--control-size);
+  padding-inline: var(--space-1);
+  font-size: var(--type-small);
 }

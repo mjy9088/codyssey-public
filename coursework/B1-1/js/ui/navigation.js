@@ -7,6 +7,7 @@ export function initNavigation() {
   const menu = requiredElement(document, "#primary-nav", HTMLElement);
   const toggle = requiredElement(document, "#menu-toggle", HTMLButtonElement);
   const backToTop = requiredElement(document, "#back-to-top", HTMLButtonElement);
+  const main = requiredElement(document, "#main-content", HTMLElement);
 
   const label = requiredElement(toggle, ".sr-only", HTMLElement);
   /** @param {boolean} open @param {boolean} [restoreFocus] */
@@ -46,11 +47,11 @@ export function initNavigation() {
   addEventListener("scroll", updateViewportState, { passive: true });
   updateViewportState();
   backToTop.addEventListener("click", () => {
-    const main = requiredElement(document, "#main-content", HTMLElement);
     main.focus({ preventScroll: true });
     scrollTo({
       top: 0,
       behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
     });
   });
+  header.classList.add("navigation-ready");
 }

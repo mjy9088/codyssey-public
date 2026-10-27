@@ -2,9 +2,13 @@ import { ProjectLoadError } from "../domain/project-load.js";
 import { InvalidRepositoryDataError, selectRepositories } from "../domain/projects.js";
 
 const API_URL = "https://api.github.com/users/mjy9088/repos?per_page=100&sort=updated";
-export const GITHUB_REQUEST_TIMEOUT_MS = 8000;
+const GITHUB_REQUEST_TIMEOUT_MS = 8000;
 
-/** @typedef {(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>} FetchImplementation */
+/**
+ * Returns decoded repository JSON and honors the supplied signal.
+ * Implementations own transport/decoding failure classification; their own errors propagate.
+ * @typedef {(signal: AbortSignal) => Promise<unknown>} RepositoryJsonRequest
+ */
 
 export class GitHubHttpError extends ProjectLoadError {
   /** @param {number} status */
@@ -38,14 +42,37 @@ export class GitHubPayloadError extends ProjectLoadError {
   }
 }
 
+/** @param {AbortSignal} signal @returns {Promise<unknown>} */
+async function nativeGitHubJson(signal) {
+  let response;
+  try {
+    response = await fetch(API_URL, {
+      headers: { Accept: "application/vnd.github+json" },
+      signal,
+    });
+  } catch (error) {
+    if (!signal.aborted && error instanceof TypeError) throw new GitHubNetworkError(error);
+    throw error;
+  }
+  if (!response.ok) throw new GitHubHttpError(response.status);
+  try {
+    return await response.json();
+  } catch (error) {
+    if (signal.aborted) throw error;
+    if (error instanceof SyntaxError) throw new GitHubPayloadError(error);
+    if (error instanceof TypeError) throw new GitHubNetworkError(error);
+    throw error;
+  }
+}
+
 /**
  * Load and normalize the portfolio repository candidates.
  *
- * @param {{ fetchImpl?: FetchImplementation, timeoutMs?: number }} [options]
+ * @param {{ requestJson?: RepositoryJsonRequest, timeoutMs?: number }} [options]
  * @returns {Promise<import("../domain/projects.js").RepositorySelection>}
  */
 export async function loadGitHubRepositories(options = {}) {
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const requestJson = options.requestJson ?? nativeGitHubJson;
   const timeoutMs = options.timeoutMs ?? GITHUB_REQUEST_TIMEOUT_MS;
   const controller = new AbortController();
   let deadlineReached = false;
@@ -55,27 +82,12 @@ export async function loadGitHubRepositories(options = {}) {
   }, timeoutMs);
 
   try {
-    let response;
-    try {
-      response = await fetchImpl(API_URL, {
-        headers: { Accept: "application/vnd.github+json" },
-        signal: controller.signal,
-      });
-    } catch (error) {
-      if (deadlineReached) throw new GitHubTimeoutError();
-      if (error instanceof TypeError) throw new GitHubNetworkError(error);
-      throw error;
-    }
-    if (!response.ok) throw new GitHubHttpError(response.status);
-
     /** @type {unknown} */
     let payload;
     try {
-      payload = await response.json();
+      payload = await requestJson(controller.signal);
     } catch (error) {
       if (deadlineReached) throw new GitHubTimeoutError();
-      if (error instanceof SyntaxError) throw new GitHubPayloadError(error);
-      if (error instanceof TypeError) throw new GitHubNetworkError(error);
       throw error;
     }
     try {
@@ -86,5 +98,6 @@ export async function loadGitHubRepositories(options = {}) {
     }
   } finally {
     clearTimeout(timeout);
+    controller.abort();
   }
 }

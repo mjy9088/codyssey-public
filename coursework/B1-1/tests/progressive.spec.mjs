@@ -13,10 +13,17 @@ test("an initialization fault does not globally conceal static content", async (
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   await expect.poll(() => errors.length).toBe(1);
-  await expect(page.locator("html")).toHaveClass(/js/);
+  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+  await expect(navigation).toBeVisible();
+  await expect(page.locator("#menu-toggle")).toBeHidden();
+  await expect(page.locator("#theme-toggle")).toBeHidden();
   await expect(page.locator(".hero-copy")).toHaveCSS("opacity", "1");
   await expect(page.locator("#about .section-heading")).toHaveCSS("opacity", "1");
   await expect(page.locator(".is-reveal-pending")).toHaveCount(0);
+  await navigation.getByRole("link", { name: "About", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#about$/);
+  await expect(page.locator("#about-title")).toBeInViewport();
 });
 
 test("content and safe contact behavior survive disabled JavaScript", async ({

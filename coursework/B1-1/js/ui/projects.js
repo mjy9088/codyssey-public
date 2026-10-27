@@ -56,6 +56,7 @@ export function initProjects({ loadRepositories, startReveals }) {
   const status = requiredElement(document, "#projects-status", HTMLElement);
   const retry = requiredElement(document, "#project-retry", HTMLButtonElement);
   const filter = requiredElement(document, "#project-filter", HTMLSelectElement);
+  status.tabIndex = -1;
 
   const template = document.createElement("template");
   template.innerHTML = PROJECT_CARD_MARKUP;
@@ -79,11 +80,13 @@ export function initProjects({ loadRepositories, startReveals }) {
     stopReveals = startReveals(list);
   };
 
-  const load = async () => {
+  /** @param {boolean} [userInitiated] */
+  const load = async (userInitiated = false) => {
     stopReveals();
     list.innerHTML = LOADING_MARKUP.repeat(3);
     status.textContent = "Loading public repositories…";
     list.setAttribute("aria-busy", "true");
+    if (userInitiated) status.focus({ preventScroll: true });
     retry.hidden = true;
     filter.disabled = true;
     try {
@@ -97,6 +100,7 @@ export function initProjects({ loadRepositories, startReveals }) {
       filter.replaceChildren(new Option("All languages", "all"), ...options);
       filter.disabled = false;
       render();
+      if (userInitiated && document.activeElement === status) filter.focus({ preventScroll: true });
     } catch (error) {
       if (!(error instanceof ProjectLoadError)) throw error;
       repositories = [];
@@ -107,12 +111,15 @@ export function initProjects({ loadRepositories, startReveals }) {
           ? "GitHub took too long to respond."
           : "Public repositories could not be loaded.";
       retry.hidden = false;
+      if (userInitiated && document.activeElement === status) retry.focus({ preventScroll: true });
     } finally {
       list.setAttribute("aria-busy", "false");
     }
   };
 
   filter.addEventListener("change", () => render(filter.value));
-  retry.addEventListener("click", load);
+  retry.addEventListener("click", () => {
+    void load(true);
+  });
   void load();
 }

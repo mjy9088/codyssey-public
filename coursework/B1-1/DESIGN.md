@@ -78,6 +78,7 @@ Local/system stacks only:
 - States: transparent/default; compact ruled surface after 60px; mobile menu open/closed; hover, active, focus.
 - Accessibility: `aria-expanded`, `aria-controls`, Escape closes and restores trigger focus; nav link closes and focus follows the destination.
 - Desktop hiding overrides the enhanced mobile selector; the native `hidden` attribute always wins over component display rules.
+- Navigation remains a compact row of usable anchors until its listeners are installed. Only then does the header receive `.navigation-ready` and the mobile menu collapse. The fallback hides the wordmark rather than expanding the fixed header over the hero.
 
 ### Action link / button
 - Structure: text plus local SVG arrow/icon; primary filled and quiet outlined variants.
@@ -103,6 +104,7 @@ Local/system stacks only:
 - Structure: 44px minimum button with inline SVG and accessible name.
 - Custom icon controls use `appearance: none` so theme changes do not switch native control paint paths.
 - States: default, hover, focus, active; icon swap for theme and menu state.
+- The theme button is hidden until its state and preference/click listeners are ready. Without JavaScript or after an initialization fault, CSS still follows the system theme without exposing an unavailable control.
 
 ## 6. Motion & Interaction
 
@@ -122,7 +124,7 @@ Local/system stacks only:
 
 - `tokens.css` declares the visual tokens. `base.css` is a neutral reset with no project tokens or feature selectors.
 - `foundation.css` owns themed document foundations, global typography, and project-wide control-state defaults; `primitives.css` owns shared presentation utilities.
-- `layout.css` owns page-level section composition and responsive grids. Feature appearance belongs to the grouped component styles imported by `components.css`.
+- `layout.css` owns page-level section composition and responsive grids. Feature appearance belongs to the component styles imported directly by `style.css`, with shared controls before the header's navigation variants.
 - `motion.css` owns reusable reveal behavior and the global reduced-motion baseline. Components retain ownership of their interactive transforms, transitions, and stationary reduced-motion states.
 - `style.css` orders dependencies from tokens and neutral defaults through foundations, primitives, layout, and feature components, then loads the reusable motion layer. Motion may animate independent `translate` and `opacity`, but it must not declare component `transform` or component transition lists; this leaves project-card hover/focus lift entirely owned by `components/projects.css`.
 
