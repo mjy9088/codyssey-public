@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' 0 HUP INT TERM
 repo=$tmp/repo
@@ -33,8 +33,13 @@ case $command_name in
     exit 91
     ;;
   push)
-    printf 'simulated non-fast-forward rejection\n' >&2
-    exit 1
+    case " $* " in
+      *" --force "*) exit 0 ;;
+      *)
+        printf 'simulated non-fast-forward rejection\n' >&2
+        exit 1
+        ;;
+    esac
     ;;
   worktree)
     case " $* " in
@@ -97,7 +102,7 @@ grep -q 'Unknown option' "$tmp/unknown.out" || fail 'unknown option lacked a use
 [ ! -s "$git_log" ] || fail 'invalid CLI input invoked Git'
 
 : >"$git_log"
-run_publisher demo https://example.invalid/submission.git >"$tmp/default.out"
+run_publisher demo >"$tmp/default.out"
 grep -q "from $head" "$tmp/default.out" || fail 'default source was not the committed local HEAD'
 grep -q 'No interactive terminal; the destination was not changed.' "$tmp/default.out" || fail 'no-TTY preparation did not stop before push'
 ! grep -q '^fetch' "$git_log" || fail 'preparation fetched from a remote'
@@ -135,28 +140,54 @@ unset TEST_SIGNAL
 
 : >"$git_log"
 set +e
-printf 'y\n' | script -qec \
-  "env PATH='$fakebin:/usr/bin:/bin' REAL_GIT='$real_git' FAKE_GIT_LOG='$git_log' TERM=xterm GIT_PAGER='$fakebin/pager' GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.invalid sh '$repo/scripts/publish-coursework.sh' --source '$head' demo https://example.invalid/submission.git" \
-  /dev/null \
-  >"$tmp/divergence.out" 2>&1
-status=$?
+case $(uname -s) in
+  Darwin)
+    # Tcl variables in the Expect program must remain single-quoted here.
+    # shellcheck disable=SC2016
+    TEST_PATH="$fakebin:/usr/bin:/bin" TEST_REAL_GIT="$real_git" \
+      TEST_GIT_LOG="$git_log" TEST_PAGER="$fakebin/pager" \
+      TEST_PUBLISHER="$repo/scripts/publish-coursework.sh" TEST_HEAD="$head" \
+      expect -c '
+      set timeout 10
+      spawn env PATH=$env(TEST_PATH) REAL_GIT=$env(TEST_REAL_GIT) \
+        FAKE_GIT_LOG=$env(TEST_GIT_LOG) TERM=xterm GIT_PAGER=$env(TEST_PAGER) \
+        GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid \
+        GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.invalid \
+        sh $env(TEST_PUBLISHER) --source $env(TEST_HEAD) demo
+      expect "Force-push this commit"
+      send "y\r"
+      expect eof
+      set result [wait]
+      exit [lindex $result 3]
+    ' \
+      >"$tmp/push.out" 2>&1
+    ;;
+  *)
+    printf 'y\n' | script -qec \
+      "env PATH='$fakebin:/usr/bin:/bin' REAL_GIT='$real_git' FAKE_GIT_LOG='$git_log' TERM=xterm GIT_PAGER='$fakebin/pager' GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.invalid sh '$repo/scripts/publish-coursework.sh' --source '$head' demo" \
+      /dev/null \
+      >"$tmp/push.out" 2>&1
+    ;;
+esac
+push_status=$?
 set -e
-if [ "$status" -eq 0 ]; then
-  cat "$tmp/divergence.out" >&2
-  fail 'simulated diverged destination was reported as published'
+if [ "$push_status" -ne 0 ]; then
+  cat "$tmp/push.out" >&2
+  fail 'confirmed forced push failed'
 fi
-grep -q 'simulated non-fast-forward rejection' "$tmp/divergence.out" || fail 'divergence simulation did not reach the push boundary'
 ! grep -q '^pager$' "$git_log" || fail 'publication output invoked a confirmation-consuming pager'
-! grep -q '^Published ' "$tmp/divergence.out" || fail 'rejected push printed a publication success message'
+grep -q '^Published ' "$tmp/push.out" || fail 'successful forced push lacked a publication message'
 push_line=$(sed -n '/^push[[:space:]]/p' "$git_log")
 if [ -z "$push_line" ]; then
-  cat "$tmp/divergence.out" >&2
+  cat "$tmp/push.out" >&2
   fail 'confirmed TTY run did not attempt a push'
 fi
 case $push_line in
-  *--force*) fail 'confirmed push used a force option' ;;
+  *'--force'*) ;;
+  *) fail 'confirmed push did not use a force option' ;;
 esac
-printf '%s\n' "$push_line" | grep -q 'HEAD:refs/heads/main' || fail 'ordinary push targeted the wrong ref'
-[ "$(git_run worktree list --porcelain | grep -c '^worktree ')" -eq 1 ] || fail 'rejected push left a temporary worktree'
+printf '%s\n' "$push_line" | grep -q 'HEAD:refs/heads/main' || fail 'forced push targeted the wrong ref'
+printf '%s\n' "$push_line" | grep -q 'https://github.com/mjy9088/codyssey-submit.git' || fail 'default destination was not used'
+[ "$(git_run worktree list --porcelain | grep -c '^worktree ')" -eq 1 ] || fail 'successful push left a temporary worktree'
 
 printf '%s\n' 'Coursework publisher checks passed.'

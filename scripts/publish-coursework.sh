@@ -5,11 +5,11 @@ export GIT_PAGER=cat
 usage() {
   cat <<'EOF'
 Usage:
-  sh scripts/publish-coursework.sh [--source REVISION] SUBTREE DESTINATION [TARGET_BRANCH]
+  sh scripts/publish-coursework.sh [--source REVISION] SUBTREE [DESTINATION] [TARGET_BRANCH]
 
 Prepare a standalone-root submission commit from a local committed revision.
 The source checkout is not modified. After preparing the commit, the script asks
-for confirmation on a terminal before pushing to DESTINATION.
+for confirmation on a terminal before force-pushing to DESTINATION.
 
 Options:
   --source REVISION  Local committed revision to publish (default: HEAD)
@@ -17,16 +17,17 @@ Options:
 Arguments:
   SUBTREE       Coursework identifier or repository-relative coursework path
   DESTINATION   Git remote URL for the submission repository
+                (default: https://github.com/mjy9088/codyssey-submit.git)
   TARGET_BRANCH Destination branch (default: main)
 
 Examples:
   coursework_id=YOUR_COURSEWORK_ID
-  destination=YOUR_SUBMISSION_REPOSITORY_URL
-  sh scripts/publish-coursework.sh --source HEAD "$coursework_id" "$destination" main
+  sh scripts/publish-coursework.sh --source HEAD "$coursework_id"
 EOF
 }
 
 source_revision=HEAD
+default_destination=https://github.com/mjy9088/codyssey-submit.git
 case ${1-} in
   --help|-h)
     usage
@@ -48,7 +49,7 @@ case ${1-} in
     ;;
 esac
 
-if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
   usage >&2
   exit 2
 fi
@@ -57,7 +58,7 @@ case $1 in
   coursework/*) subtree=$1 ;;
   *) subtree=coursework/$1 ;;
 esac
-destination=$2
+destination=${2-$default_destination}
 target_branch=${3-main}
 
 case $subtree in
@@ -65,14 +66,14 @@ case $subtree in
   *) printf 'Invalid coursework subtree: %s\n' "$subtree" >&2; exit 2 ;;
 esac
 case $subtree in
-  *..*|*/.|*/../*|*/) printf 'Invalid coursework subtree: %s\n' "$subtree" >&2; exit 2 ;;
+  *..*|*/.|*/) printf 'Invalid coursework subtree: %s\n' "$subtree" >&2; exit 2 ;;
 esac
 if ! git check-ref-format --branch "$target_branch" >/dev/null 2>&1; then
   printf 'Invalid target branch: %s\n' "$target_branch" >&2
   exit 2
 fi
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 root=$(git -C "$script_dir/.." rev-parse --show-toplevel)
 cd "$root"
 
@@ -125,7 +126,7 @@ if [ ! -t 0 ]; then
   exit 0
 fi
 
-printf '\nPush this commit to %s (%s)? [y/N] ' \
+printf '\nForce-push this commit to %s (%s)? [y/N] ' \
   "$destination" "$target_branch"
 IFS= read -r answer
 case $answer in
@@ -137,6 +138,6 @@ case $answer in
 esac
 
 printf '\nPushing %s to %s (%s)...\n' "$commit" "$destination" "$target_branch"
-git -C "$worktree" push -- "$destination" \
+git -C "$worktree" push --force -- "$destination" \
   "HEAD:refs/heads/$target_branch"
 printf 'Published %s to %s.\n' "$project" "$destination"

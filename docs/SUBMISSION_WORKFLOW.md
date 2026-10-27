@@ -34,15 +34,14 @@ the selected coursework subtree to the repository root, and creates one
 submission-layout commit. It never applies those deletion or move operations to
 the normal working tree.
 
-Record the verified source commit, set the coursework identifier and approved
-destination, then run the script through `sh`:
+Record the verified source commit and coursework identifier, then run the script
+through `sh`:
 
 ```sh
 revision=$(git rev-parse --verify HEAD)
 coursework_id=YOUR_COURSEWORK_ID
-destination=YOUR_SUBMISSION_REPOSITORY_URL
 sh scripts/publish-coursework.sh --source "$revision" \
-  "$coursework_id" "$destination" main
+  "$coursework_id"
 ```
 
 `--source` accepts any commit already available in the local repository and
@@ -51,17 +50,20 @@ independent of later remote changes and preparation performs no network access.
 Uncommitted and staged working-tree changes are not included, and the source
 working tree and its refs are not modified.
 
-The script displays the prepared commit and its root entries, then asks for
-confirmation on the terminal. Answering `y` performs an ordinary push of the
-prepared commit; pressing Enter or answering anything else cancels without
-changing the destination. With no interactive terminal, the script only prepares
-and reports the commit. Git rejects the push if the destination branch has
-diverged, rather than overwriting its tip. Resolve the destination history
-deliberately before running the publication procedure again; this workflow has no
-force-push mode.
+The destination defaults to
+`https://github.com/mjy9088/codyssey-submit.git` and the destination branch
+defaults to `main`. Pass `DESTINATION` and, if needed, `TARGET_BRANCH` after the
+coursework identifier to override those defaults.
 
-Exercise the local preparation, validation, confirmation, and cleanup paths with
-synthetic repositories and a simulated rejected push:
+The script displays the prepared commit and its root entries, then asks for
+confirmation on the terminal. Answering `y` force-pushes the prepared commit;
+pressing Enter or answering anything else cancels without changing the
+destination. With no interactive terminal, the script only prepares and reports
+the commit. A confirmed run overwrites a diverged destination branch, so inspect
+the displayed destination and branch before confirming.
+
+Exercise the local preparation, validation, force-push confirmation, and cleanup
+paths with synthetic repositories and a simulated push:
 
 ```sh
 sh tests/publish-coursework-test.sh
