@@ -5,7 +5,7 @@
 A working studio ledger: warm paper, graphite type, cobalt registration marks, and terse operational
 copy. The signature is a slim cobalt "binding" at the left of each workshop card, with status and
 capacity reading like annotations rather than dashboard chrome. The memorable interaction is the
-list reorganizing immediately as filters change while the URL and result count remain in sync.
+list reorganizing immediately as filters change while the result count and pagination remain in sync.
 
 Design read: a task-focused planning SPA for workshop coordinators, with calm editorial productivity
 language inspired by Notion rather than a generic SaaS dashboard. Dials: variance 5, motion 3, density 6.

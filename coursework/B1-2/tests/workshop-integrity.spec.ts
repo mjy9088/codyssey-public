@@ -61,7 +61,7 @@ test("detail edits and deletes only the requested document despite a conflicting
   ).toBeVisible()
   await page.getByRole("button", { name: "Delete", exact: true }).click()
   await page.getByRole("button", { name: "Delete permanently" }).click()
-  await expect(page.getByRole("status")).toContainText("Workshop deleted.")
+  await expect(page.getByRole("status").filter({ hasText: "Workshop deleted." })).toBeVisible()
   await expect(page.getByRole("link", { name: "Other workshop", exact: true })).toBeVisible()
   const removed = await request.get(`${documents}/actual-workshop`, {
     headers: { Authorization: "Bearer owner" },
