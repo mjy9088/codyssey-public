@@ -351,6 +351,8 @@ Setup pins `Codyssey j.command` in the document area of the Dock. Clicking it op
 Terminal in this installation and runs `just`, with the user-local mise tools on PATH. It does not
 require the optional global `j` wrapper. An unowned launcher is preserved. Declining Dock cleanup keeps existing pins, stacks and recent-app settings, and adds only the j launcher without duplicates. Run
 `bash macos-setup.sh --desktop-only` to apply only Dock and desktop cleanup.
+Dock tiles use typed XML plist values: URL type 15 and file types are integers, not OpenStep
+strings. This setup targets fresh installations; it does not migrate malformed tiles from older installs.
 
 The desktop helper hides OrbStack's GUI without stopping Docker or requiring Accessibility access.
 `just quiet-desktop` hides it again; the window may be reopened from its menu bar icon.
@@ -382,6 +384,11 @@ CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 verify-macos-setup.py
 with `--list`, and preserves keyboard/text preferences. The unattended VM uses this mode plus
 independent live shortcut verification, so input-source approval cannot block its service tests.
 This mode does not verify notification dismissal or suppression.
+The VM driver additionally runs `scripts/verify-dock-ui.swift` to require named, resolved Terminal,
+Chrome and j items in the actual Dock UI. This read-only test requires the VM Guest Agent's existing
+Accessibility authorization; it fails when unavailable rather than reporting UI success. Production
+Dock setup does not use Accessibility or request this permission. Screenshots and a direct Terminal
+launch are separate checks; a matching plist alone does not prove that Dock rendered an icon.
 
 On success, the requested setup remains applied and the temporary verifier snapshot is removed. On
 any failure or interruption, restoration is attempted for every captured domain before the original

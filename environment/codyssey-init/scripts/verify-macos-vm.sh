@@ -118,6 +118,7 @@ python3 scripts/verify-tailnet-runtime.py --disposable
 python3 scripts/verify-portable-browser.py --disposable
 # Use the retained source tree, so Dock never points into the removed test copy.
 CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 "$root/verify-macos-setup.py" --desktop-only
+swift "$root/scripts/verify-dock-ui.swift"
 swift "$root/enable-korean.swift" --shortcuts
 swift "$root/enable-korean.swift" --verify-shortcuts
 printf 'Input-source approval and physical Hangul typing require an interactive desktop check.\n'
