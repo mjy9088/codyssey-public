@@ -61,6 +61,68 @@ component would require editing an unrelated layer.
 - Explain legitimate exceptions with the current contract and concrete tradeoff.
   Do not accept a forwarding layer that leaves the original dependency unchanged.
 
+### UI mechanics are not independent policy
+
+Classify owned decisions, not all code containing an `if`, and not all uses of a browser API.
+Presentation may own focus, menu visibility, touched/error display flags, pending controls,
+observer enrollment, viewport breakpoints, and rendering-specific motion. These decisions describe
+the interface itself. A cohesive view controller may coordinate those mechanics without a separate
+store, reducer, service, or file for each operation.
+
+Independent policy includes validation, acceptance/selection, ordering, preference precedence,
+fallback choice, and state invariants that remain meaningful when the view or I/O implementation
+changes. Such rules must accept ordinary values and execute without DOM/framework initialization
+or external I/O. For example, whether an explicit theme choice overrides the system preference is
+policy; updating the theme button's ARIA state is presentation. Storage access and media preference
+observation are environmental inputs, not the authority that decides that precedence.
+
+Identify each state's authority and its projections. An input's value or a menu's accessibility
+state may be native UI state. Do not use rendered attributes, classes, labels, or computed styles as
+the authority for an independent policy. Computed style may still supply presentation values, such
+as the resolved canvas color projected into browser theme metadata.
+
+Keep external formats, persistence, and environmental input acquisition at explicit adapter
+boundaries. UI-specific browser mechanics such as intersection observation and responsive layout
+measurement may remain in their view controller when they serve only that rendering lifecycle.
+Classify the decision and its change axis; the API name alone does not settle ownership.
+
+An architectural defect need not already cause a visible malfunction. Show the independently
+changing decision, misplaced dependency/state authority, duplicated invariant, or inability to
+execute a rule independently. Green browser tests prove behavior, not this separation. Conversely,
+an extraction request must identify that responsibility: moving a comparison to a forwarding helper
+or imposing a fixed layer/file count is not an improvement.
+
+An exception must name the responsibility being kept together, its shared invariant or rendering
+lifecycle, the concrete tradeoff, and the evidence that the retained boundary is sound. "Small",
+"one feature", "the tests pass", or "a previous reviewer approved it" is not sufficient alone.
+
+### Mandatory architecture-review coverage
+
+Every independent architecture review must identify its revision and scope, including unchanged
+modules and affected callers within that scope. In its response or ignored evidence, include a
+coverage table with these columns:
+
+| Module or explicitly named cohesive group | Owned policy / UI mechanics | I/O and resources | State authority / projections | Callers and proof | Architecture verdict / exception rationale |
+|---|---|---|---|---|---|
+
+Use `none` where a category does not apply; do not silently omit it. Group files only when their
+ownership is genuinely identical, and name every member. Trace both the import graph and the actual
+decisions inside allowed modules. An import rule cannot detect a policy copied into a UI function.
+For each independent rule, identify its plain-value execution evidence; for retained UI mechanics,
+explain why browser/framework execution is the appropriate proof.
+
+Report functionality and architecture separately as `PASS`, `FAIL`, or `INCONCLUSIVE`. Functional
+success must not imply architectural approval. A required module, caller, or evidence category not
+examined makes the corresponding verdict inconclusive; it cannot be counted as a pass. State all
+omissions explicitly. Overall approval requires both verdicts to pass and all significant security
+or correctness findings to be resolved.
+
+This is review coverage of the current implementation, not a prescribed module inventory or a
+checked-in run report. Keep stable ownership contracts in architecture documentation, but put
+revision-specific coverage, observations, and reviewer decisions in the response or ignored evidence.
+Do not add prose-matching tests for these instructions; use dependency checks and executable rule
+and surface tests as complementary evidence.
+
 ## Behavioral preservation
 
 Before a structural change, identify callers and run the existing relevant tests. Preserve

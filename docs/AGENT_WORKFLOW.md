@@ -62,9 +62,31 @@ an unreviewed branch.
    the actual artifact. Checkpoint coherent working changes while the broader review is open.
 4. Use `interrogate` for adversarial review of the current implementation and all affected callers.
    Apply its rubric and code-quality lens. Resolve significant findings and re-review the new
-   revision; do not turn cosmetic preferences into an endless rewrite.
+   revision; do not turn cosmetic preferences into an endless rewrite. Require the module coverage
+   and separate functionality/architecture verdicts in the quality standard, not just a defect list.
 5. Independently run the project's checks and real-surface QA. A skill response or model consensus
    cannot replace those observations, and an intermediate commit is not final approval.
+
+### Independent reviewer request contract
+
+Every review request must supply the exact revision/worktree, the full scope and affected callers,
+the applicable project constraints, and observed verification with its limitations. Direct the
+reviewer to read the current complete implementation and apply
+[the UI/policy distinction and mandatory coverage](QUALITY_STANDARDS.md#ui-mechanics-are-not-independent-policy).
+Do not restrict architectural findings to already-observed runtime failures.
+
+Require this response structure:
+
+1. Revision, examined scope, and explicit omissions.
+2. Module coverage: owned decisions, I/O/resources, state authority/projections, callers, execution
+   evidence, and acceptance or concrete exception rationale.
+3. Significant findings, including architectural defects that do not yet change visible behavior.
+4. Separate functionality and architecture verdicts (`PASS`, `FAIL`, or `INCONCLUSIVE`), plus any
+   security/correctness blockers. Missing required coverage is not a pass.
+
+Keep revision-specific tables and observations in the response or ignored evidence, not tracked
+review reports. Stable ownership documentation may describe intended responsibilities, but the
+reviewer must verify them against code rather than repeat the author's table as proof.
 
 Use only model routes and tools actually available in the harness. If the upstream skill requests
 an unavailable model, document the substitute and do not claim cross-model diversity that was not
