@@ -4,6 +4,42 @@ import { InvalidRepositoryDataError, selectRepositories } from "../domain/projec
 const API_URL = "https://api.github.com/users/mjy9088/repos?per_page=100&sort=updated";
 const GITHUB_REQUEST_TIMEOUT_MS = 8000;
 
+/** @typedef {import("../domain/projects.js").RepositoryCandidate} RepositoryCandidate */
+
+/** @param {unknown} value @returns {RepositoryCandidate | null} */
+function decodeGitHubRecord(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  if (
+    !("name" in value) ||
+    !("html_url" in value) ||
+    !("description" in value) ||
+    !("language" in value) ||
+    !("updated_at" in value) ||
+    !("fork" in value)
+  )
+    return null;
+  const { name, html_url: url, description, language, updated_at: timestamp, fork } = value;
+  if (
+    typeof name !== "string" ||
+    typeof url !== "string" ||
+    typeof timestamp !== "string" ||
+    typeof fork !== "boolean" ||
+    !(description === null || typeof description === "string") ||
+    !(language === null || typeof language === "string")
+  )
+    return null;
+  const updatedAt = Date.parse(timestamp);
+  if (Number.isNaN(updatedAt)) return null;
+  return { name, url, description, language, updatedAt, fork };
+}
+
+/** @param {unknown} payload @returns {Generator<RepositoryCandidate | null, void, unknown>} */
+function* decodeGitHubCandidates(payload) {
+  if (!Array.isArray(payload))
+    throw new InvalidRepositoryDataError("GitHub response was not a repository list");
+  for (const value of payload) yield decodeGitHubRecord(value);
+}
+
 /**
  * Returns decoded repository JSON and honors the supplied signal.
  * Implementations own transport/decoding failure classification; their own errors propagate.
@@ -91,7 +127,7 @@ export async function loadGitHubRepositories(options = {}) {
       throw error;
     }
     try {
-      return selectRepositories(payload);
+      return selectRepositories(decodeGitHubCandidates(payload));
     } catch (error) {
       if (error instanceof InvalidRepositoryDataError) throw new GitHubPayloadError(error);
       throw error;

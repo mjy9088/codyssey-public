@@ -48,10 +48,10 @@ coverage and separate functionality/architecture verdicts under the root quality
 |---|---|---|---|---|
 | `app.js` | Startup and dependency composition; no feature rules | Creates adapters and initializes page-lifetime features | No feature state | Import graph, packaged runtime, browser startup/fault fallback |
 | `domain/contact.js` | Field membership, required text, email acceptance | None | Plain input values and issue codes | Node contact rules and native-input browser comparison |
-| `domain/projects.js` | Repository input validation/normalization, accepted destinations, forks, caps, language selection | None; `URL`/`Date` are local value parsing | Parsed repository selection, not DOM cards | Plain-value Node cases plus malformed/content-safety browser cases |
+| `domain/projects.js` | Neutral candidate acceptance/normalization, destinations, forks, intake budget, recency ranking, display cap, language selection | None; URL and numeric-instant validation only | Plain candidates with epoch-millisecond update times; selected values, not wire records or DOM | Node candidate/shuffled-order cases and browser selection/content-safety cases |
 | `domain/project-load.js` | Shared expected load-failure categories | None | Typed failure contract, no UI state | Adapter classification and browser error/retry scenarios |
 | `domain/theme.js` | Choice parsing, initial precedence, toggle, explicit choice versus system changes | None | Immutable theme/explicit-choice values | Node theme transitions without DOM or storage |
-| `data/github.js` | Fixed request protocol, decoding and expected failure translation | Fetch, body lifetime, timer, abort controller | Request/deadline state, not rendered status | Native streaming, timeout, decoding and injected-error tests |
+| `data/github.js` | Fixed request protocol, JSON/field/timestamp decoding and expected failure translation | Fetch, body lifetime, timer, abort controller; lazy candidate decoder | Request/deadline state and neutral inputs; API sort is acquisition optimization, not ranking authority | Wire mapping/types/budget, native streaming, timeout and injected-error tests |
 | `data/theme-preferences.js` | Stored-value and native media-event adaptation; known storage-failure handling | `localStorage`, media subscription and its disposer | Initial input snapshot and observed external values; no preference precedence | Denied/quota storage and native subscription-disposal browser cases |
 | `ui/theme.js` | Event orchestration, DOM/ARIA/label/metadata projection, readiness and disposal | Injected preference port; DOM and computed style | Holds pure policy state; never derives the next theme from rendered attributes | Full-page theme behavior, metadata, persistence, storage failure and disposal cases |
 | `ui/contact.js` | Validation timing, issue wording, error/status display, focus | DOM fields/events; no message transport | Native field values and validation-display markers, not validation rules | Blur/edit/submit, first-invalid focus, no-network success and accessibility cases |
@@ -94,11 +94,19 @@ that pending state; feature-initialization failures do not globally conceal the 
 
 ## Asynchronous behavior and failure
 
-Because `fetch` does not reject HTTP error status codes, the project checks `response.ok`. It then
-validates that JSON is an array and parses at most its first 100 entries. Each item's strings,
-booleans, URL, and date must have acceptable shapes. Names cannot be blank; destinations must use
-the HTTPS GitHub origin without embedded credentials. Blank optional metadata uses readable
-defaults. Dates are displayed in UTC, so month boundaries do not depend on the visitor's timezone.
+Because `fetch` does not reject HTTP error status codes, the adapter checks `response.ok`. It owns
+the JSON array/field contract, including `html_url`, `updated_at`, primitive/null types, and wire
+timestamp parsing. It supplies neutral candidates with `url` and epoch-millisecond `updatedAt`
+values, or an invalid-record marker. A lazy iterator lets the domain's single 100-input budget stop
+decoding before a later wire record is inspected; the adapter does not duplicate that budget.
+
+The domain owns semantic acceptance and normalization. Names cannot be blank; destinations must use
+the HTTPS GitHub origin without embedded credentials, and numeric update instants must be valid.
+Blank optional metadata uses readable defaults. Accepted non-forks are ranked by update instant,
+newest first, before applying the 12-card cap. Equal update instants retain their input order to
+preserve the existing tie behavior. The API's `sort=updated` helps obtain a recent bounded sample;
+it is not the selection rule's authority. Dates are displayed in UTC, so month boundaries do not
+depend on the visitor's timezone.
 
 Forks are excluded before selecting up to 12 cards. Invalid entries are excluded with a visible
 count rather than silently presenting an incomplete result. A response with no cards and rejected
@@ -108,9 +116,10 @@ and retains the invalid-entry notice.
 
 An `AbortController` enforces the request deadline. Its timer is cleared and its signal aborted in
 `finally`, including non-OK responses whose streaming body has not been consumed. Native fetch and JSON
-decoding classify their own expected failures. The injectable request operation returns decoded JSON,
-not a `Response`; its implementation errors propagate unchanged instead of being guessed from a broad
-`TypeError` catch. Plain-value repository parsing then classifies invalid data separately.
+decoding classify their own expected failures. The injectable request operation returns decoded
+provider JSON, not a `Response`; its implementation errors propagate unchanged instead of being
+guessed from a broad `TypeError` catch. The GitHub boundary decodes the wire representation before
+the plain-value selection rule executes.
 
 Retry focuses the loading status before hiding its trigger. Completion moves focus to the enabled
 filter or the restored retry button only while the status still holds focus; an empty result leaves

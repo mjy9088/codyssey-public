@@ -99,6 +99,9 @@ failure as well.
   to 12 candidates. The language filter applies to those candidates. Loading, empty, error, and retry
   states are distinct; the request times out after eight seconds. Rejected records are counted in the
   status, and unusable data is not presented as an empty account. Repository dates use UTC.
+  Recency ranking is an explicit plain-value rule, not an assumption about response order;
+  equal update instants retain input order. GitHub wire fields and timestamps are decoded in the
+  adapter, with the intake budget limiting lazy record decoding to the first 100 inputs.
 - The contact form validates name, email, and message. **It does not send email.** Its success state
   means local validation succeeded. Submission is disabled when JavaScript is unavailable.
 - Dynamic card markup is developer-owned. API text is inserted with `textContent`, and link URLs are
