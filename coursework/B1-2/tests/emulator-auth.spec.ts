@@ -11,20 +11,21 @@ import {
   getFirestore,
   setDoc,
 } from "firebase/firestore"
+import { authOrigin, emulatorProjectId, firestoreHost, firestorePort } from "./emulator-endpoints"
 
 const firebaseConfig = {
   apiKey: "synthetic-emulator-key",
   appId: "synthetic-emulator-app",
-  authDomain: "benchbook-local.firebaseapp.com",
-  projectId: "benchbook-local",
+  authDomain: `${emulatorProjectId}.firebaseapp.com`,
+  projectId: emulatorProjectId,
 } as const
 
 const createEmulatorClient = () => {
   const app = initializeApp(firebaseConfig, `emulator-contract-${randomUUID()}`)
   const auth = getAuth(app)
   const firestore = getFirestore(app)
-  connectAuthEmulator(auth, "http://firebase:9099", { disableWarnings: true })
-  connectFirestoreEmulator(firestore, "firebase", 8080)
+  connectAuthEmulator(auth, authOrigin, { disableWarnings: true })
+  connectFirestoreEmulator(firestore, firestoreHost, firestorePort)
   return { app, auth, firestore } as const
 }
 

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { type APIRequestContext, expect, test } from "@playwright/test"
+import { resetDocumentsUrl, rulesUrl } from "./emulator-endpoints"
 
-const rulesUrl = "http://firebase:8080/emulator/v1/projects/benchbook-local:securityRules"
 const baselineRules = readFileSync("firestore.rules", "utf8")
 const deniedRules = readFileSync("tests/fixtures/firestore-deny-writes.rules", "utf8")
 const installRules = async (request: APIRequestContext, content: string) => {
@@ -13,9 +13,7 @@ const installRules = async (request: APIRequestContext, content: string) => {
 
 test.beforeEach(async ({ request }) => {
   await installRules(request, baselineRules)
-  const reset = await request.delete(
-    "http://firebase:8080/emulator/v1/projects/benchbook-local/databases/(default)/documents",
-  )
+  const reset = await request.delete(resetDocumentsUrl)
   expect(reset.ok()).toBeTruthy()
 })
 
@@ -57,5 +55,12 @@ for (const operation of ["create", "edit"] as const) {
     await expect(page.getByRole("heading", { level: 1, name: title, exact: true })).toBeVisible()
     await page.reload()
     await expect(page.getByRole("heading", { level: 1, name: title, exact: true })).toBeVisible()
+    await page.goto("/workshops")
+    await expect(
+      page.getByText(operation === "create" ? "1 result" : "5 results", { exact: true }),
+    ).toBeVisible()
+    await page.getByRole("searchbox", { name: "Search workshops" }).fill(title)
+    await expect(page.getByRole("link", { name: title, exact: true })).toHaveCount(1)
+    await expect(page.getByText("1 result", { exact: true })).toBeVisible()
   })
 }

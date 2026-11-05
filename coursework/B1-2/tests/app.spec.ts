@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs"
 import { type APIRequestContext, expect, test } from "@playwright/test"
+import { documentsUrl, resetDocumentsUrl, rulesUrl } from "./emulator-endpoints"
 
-const projectId = "benchbook-local"
-const rulesUrl = `http://firebase:8080/emulator/v1/projects/${projectId}:securityRules`
 const baselineRules = readFileSync("firestore.rules", "utf8")
 const denyWritesRules = readFileSync("tests/fixtures/firestore-deny-writes.rules", "utf8")
 
@@ -18,9 +17,7 @@ const clearWriteFailure = (request: APIRequestContext) => installRules(request, 
 
 test.beforeEach(async ({ request }) => {
   await clearWriteFailure(request)
-  const response = await request.delete(
-    `http://firebase:8080/emulator/v1/projects/${projectId}/databases/(default)/documents`,
-  )
+  const response = await request.delete(resetDocumentsUrl)
   expect(response.ok()).toBeTruthy()
 })
 
@@ -116,18 +113,15 @@ test("shows a concise recovery message when stored workshop data is invalid", as
   request,
 }) => {
   // Given: Firestore contains a document that fails the application's boundary schema.
-  const response = await request.patch(
-    `http://firebase:8080/v1/projects/${projectId}/databases/(default)/documents/workshops/malformed-fixture`,
-    {
-      headers: { Authorization: "Bearer owner" },
-      data: {
-        fields: {
-          startsAt: { stringValue: "2026-12-01T10:00" },
-          title: { stringValue: "Malformed fixture" },
-        },
+  const response = await request.patch(`${documentsUrl}/workshops/malformed-fixture`, {
+    headers: { Authorization: "Bearer owner" },
+    data: {
+      fields: {
+        startsAt: { stringValue: "2026-12-01T10:00" },
+        title: { stringValue: "Malformed fixture" },
       },
     },
-  )
+  })
   expect(response.ok()).toBeTruthy()
 
   // When: the list parses data returned by the real Firestore emulator.
@@ -138,10 +132,9 @@ test("shows a concise recovery message when stored workshop data is invalid", as
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible()
 
   // Given: the invalid fixture is removed through the emulator administration endpoint.
-  const cleanupResponse = await request.delete(
-    `http://firebase:8080/v1/projects/${projectId}/databases/(default)/documents/workshops/malformed-fixture`,
-    { headers: { Authorization: "Bearer owner" } },
-  )
+  const cleanupResponse = await request.delete(`${documentsUrl}/workshops/malformed-fixture`, {
+    headers: { Authorization: "Bearer owner" },
+  })
   expect(cleanupResponse.ok()).toBeTruthy()
 
   // When: the user retries the failed SDK-backed read.

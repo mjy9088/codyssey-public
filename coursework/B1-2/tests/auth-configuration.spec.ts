@@ -1,9 +1,8 @@
 import { expect, test } from "@playwright/test"
+import { resetDocumentsUrl } from "./emulator-endpoints"
 
 test.beforeEach(async ({ request }) => {
-  const reset = await request.delete(
-    "http://firebase:8080/emulator/v1/projects/benchbook-local/databases/(default)/documents",
-  )
+  const reset = await request.delete(resetDocumentsUrl)
   expect(reset.ok()).toBeTruthy()
 })
 

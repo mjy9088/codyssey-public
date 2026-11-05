@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
+import { documentsUrl } from "./emulator-endpoints"
 
-const fixtureUrl =
-  "http://firebase:8080/v1/projects/benchbook-local/databases/(default)/documents/workshops/invalid-detail-fixture"
+const fixtureUrl = `${documentsUrl}/workshops/invalid-detail-fixture`
 
 test.afterEach(async ({ request }) => {
   const removed = await request.delete(fixtureUrl, { headers: { Authorization: "Bearer owner" } })

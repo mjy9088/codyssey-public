@@ -1,7 +1,7 @@
 import { type APIRequestContext, expect, test } from "@playwright/test"
+import { documentsUrl, resetDocumentsUrl } from "./emulator-endpoints"
 
-const documents =
-  "http://firebase:8080/v1/projects/benchbook-local/databases/(default)/documents/workshops"
+const documents = `${documentsUrl}/workshops`
 
 const storeFixture = async (request: APIRequestContext, id: string, title: string) => {
   const response = await request.patch(`${documents}/${encodeURIComponent(id)}`, {
@@ -23,9 +23,7 @@ const storeFixture = async (request: APIRequestContext, id: string, title: strin
 }
 
 test.beforeEach(async ({ request }) => {
-  const reset = await request.delete(
-    "http://firebase:8080/emulator/v1/projects/benchbook-local/databases/(default)/documents",
-  )
+  const reset = await request.delete(resetDocumentsUrl)
   expect(reset.ok()).toBeTruthy()
   await storeFixture(request, "actual-workshop", "Original workshop")
   await storeFixture(request, "other-workshop", "Other workshop")
