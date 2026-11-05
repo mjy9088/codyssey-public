@@ -89,7 +89,11 @@ try {
       "missing",
     ]) {
       await page.goto(`${base}B1-2/#/${route}`)
-      if (["workshops", "workshops/synthetic", "workshops/synthetic/edit"].includes(route)) {
+      if (
+        ["workshops", "workshops/new", "workshops/synthetic", "workshops/synthetic/edit"].includes(
+          route,
+        )
+      ) {
         await expect(page.getByRole("alert")).toContainText("Authentication is unavailable")
       } else {
         await expect(page.getByRole("heading").first()).toBeVisible()
@@ -99,8 +103,8 @@ try {
       assert.equal(new URL(page.url()).hash, `#/${route}`)
       await expect(page.locator("main")).toBeVisible()
       if (route === "workshops/new") {
-        await page.getByRole("button", { name: "Create workshop" }).click()
-        await expect(page.getByText("Use at least 3 characters.")).toBeVisible()
+        await expect(page.getByRole("alert")).toContainText("Authentication is unavailable")
+        await expect(page.getByRole("button", { name: "Create workshop" })).toHaveCount(0)
       }
       await expect
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
@@ -115,10 +119,35 @@ try {
     await expect(page.locator("main")).toBeFocused()
     assert.equal(new URL(page.url()).hash, "#/workshops")
   }
+  await page.setViewportSize({ width: 375, height: 900 })
+  const signUp = "**/identitytoolkit.googleapis.com/v1/accounts:signUp**"
+  for (const [providerCode, message] of [
+    ["CONFIGURATION_NOT_FOUND", "Firebase Authentication is not configured"],
+    ["OPERATION_NOT_ALLOWED", "Anonymous sign-in is disabled"],
+  ]) {
+    await page.route(signUp, (route) =>
+      route.fulfill({
+        status: 400,
+        json: { error: { code: 400, message: providerCode } },
+      }),
+    )
+    for (const route of ["workshops", "workshops/new"]) {
+      await page.goto(`${base}B1-2/#/${route}`)
+      await page.reload()
+      await expect(page.getByRole("alert")).toContainText(message)
+      await expect(page.getByRole("alert")).not.toContainText("Try again to reconnect")
+      await expect(page.getByRole("button", { name: "Create workshop" })).toHaveCount(0)
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        .toBe(true)
+      await capture(`firebase-${providerCode.toLowerCase()}-${route.replaceAll("/", "-")}`)
+    }
+    await page.unroute(signUp)
+  }
   assert.deepEqual(runtimeErrors, [])
   assert.deepEqual(assetFailures, [])
   console.log(
-    "Pages browser checks passed: both project prefixes, hash routes/reloads, validation, skip focus, 3 widths, no runtime/asset errors; external Firebase deliberately blocked",
+    "Pages browser checks passed: both project prefixes, hash routes/reloads, auth gates/configuration failures, skip focus, 3 widths, no runtime/asset errors; external Firebase deliberately blocked",
   )
 } finally {
   await browser?.close()

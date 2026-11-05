@@ -88,8 +88,10 @@ The monorepo [Pages workflow](../../.github/workflows/b1-1-pages.yml) builds thi
 
 Before publishing:
 
-1. Register a Firebase web app in an approved project, create the default Firestore database,
-   and enable **Anonymous** sign-in in Firebase Authentication. Use a dedicated disposable demo
+1. Register a Firebase web app in an approved project and create the default Firestore database.
+   Open **Authentication** in that same Firebase project. If **Get started** is shown, complete
+   that console setup, then enable and save **Anonymous** under **Sign-in method**. Use a dedicated
+   disposable demo
    project with synthetic data, not a project containing personal or important information.
 2. In the GitHub repository's **Settings → Secrets and variables → Actions**, add these three
    **Repository secrets** individually. Use each raw value without quotes or the surrounding
@@ -147,8 +149,33 @@ settings and prefixed assets. It does not prove that production credentials or r
 The workflow also runs `node tests/pages-smoke.mjs SITE_DIR EVIDENCE_DIR` in pinned Chromium
 against the assembled Pages artifact. It serves the static files under `/codyssey-public/`
 without SPA rewrites and blocks all external requests. It checks both project links, hash-route
-refreshes, validation, skip-link focus, asset loading, and 375/768/1280px layouts. Firebase-backed
+refreshes, authentication gates, setup-error messages, skip-link focus, asset loading, and
+375/768/1280px layouts. Form validation and durable CRUD remain real-emulator browser checks. Firebase-backed
 routes deliberately exercise the authentication-unavailable state, not production CRUD.
+
+### Diagnose Firebase Authentication setup errors
+
+The three Actions secrets supply **build-time web configuration**. They do not initialize Firebase
+Authentication, enable providers, create Firestore, publish rules, or grant access. Do not add an
+administrator key or service-account credential to the frontend to perform those operations.
+
+| Auth response / SDK code | What to check |
+| --- | --- |
+| `CONFIGURATION_NOT_FOUND` / `auth/configuration-not-found` | The Auth backend could not find the required configuration. Verify that the API key, `authDomain`, and `projectId` come from the same Firebase web app. In the matching project, finish Authentication console setup (**Get started**, if shown), then enable Anonymous. This code alone does not prove whether setup is missing or the key targets a different project. |
+| `OPERATION_NOT_ALLOWED` / `auth/operation-not-allowed` | Anonymous sign-in is disabled. Enable **Anonymous** in Authentication's sign-in methods and save. |
+| `auth/invalid-api-key`, `auth/app-not-authorized`, or `auth/unauthorized-domain` | Review the web app settings, key restrictions and authorized host. Use `mjy9088.github.io` without a scheme or path where the domain setting requires a hostname. Do not diagnose these as the same failure as missing Auth configuration. |
+| `auth/network-request-failed` | Check connectivity, then retry. This does not establish that the project's server-side setup is correct. |
+
+If the web settings were wrong, replace the affected Actions secrets and run a new Pages build;
+Vite does not read changed secrets from an already deployed bundle. If only the server's Auth
+setup/provider was changed and the web settings are unchanged, retry the existing page; no rebuild
+is needed for that server setting. Calling client `getAuth()` or `initializeAuth()` cannot provision
+the remote Authentication service. See the
+[official anonymous-auth setup](https://firebase.google.com/docs/auth/web/anonymous-auth).
+
+Firestore `permission-denied` after successful authentication is a separate database/rules issue.
+Do not weaken the checked-in rules, switch a public deployment to local emulators, show fake
+workshops, or treat local emulator success as proof that the real Firebase project is repaired.
 
 ## Deployment boundary
 

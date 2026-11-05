@@ -25,6 +25,13 @@ The auth provider owns one observer lifetime and the current anonymous sign-in a
 successful observed authentication, observer errors, and cleanup invalidate obsolete failures.
 Unsubscribing releases the observer; it does not cancel an already-started SDK sign-in operation.
 
+`lib/auth-failure.ts` adapts Firebase SDK error codes into a small failure-reason contract; it owns
+provider-specific code names, not display wording or authentication state. The auth context projects
+those reasons into stable messages. Missing backend configuration, a disabled Anonymous provider,
+and rejected client settings are not presented as an ordinary network reconnect. Unknown/network
+failures keep the existing retry behavior. Classification does not change attempt/subscription
+ownership and never exposes provider diagnostics, keys, tokens, or user identifiers.
+
 Read hooks tag their state with the authenticated user and, for detail reads, the requested ID.
 A render for a new owner returns loading immediately rather than showing another owner's result
 until an effect runs. Request generations exclude older success and rejection handlers after a
@@ -52,6 +59,13 @@ than accidentally selecting a backend. Explicit remote builds require all three 
 settings. The Pages workflow selects remote mode explicitly. Web configuration is public bundle
 data, not an administrator credential or an authorization mechanism.
 
+Supplying the three build settings does not initialize server-side Firebase Authentication. The
+matching project must complete Authentication console setup and enable Anonymous sign-in. A
+`CONFIGURATION_NOT_FOUND` response requires the operator to check that setup and the key's project
+association; client code cannot distinguish every backend misconfiguration or provision the service.
+Changing only server Auth/provider settings does not require a frontend rebuild, while changing web
+settings requires a new build/deployment. The README documents the error-specific checks.
+
 The checked-in Firestore policy is intentionally a shared anonymous demo, not ownership protection
 or server-side field validation. Application parsing does not make that policy safe for an
 untrusted public deployment. The README's separate production review and deployment requirements
@@ -66,6 +80,10 @@ still apply. No rule or cloud configuration is published by local verification.
 - Browser tests use real Auth and Firestore emulators for authorization, durable CRUD, conflicting
   stored IDs, rejected writes, retry recovery, and draft preservation. Emulator administration
   endpoints only arrange synthetic inputs and faults; application requests use the ordinary SDK.
+- Auth setup-error tests inject only failure packets at the SDK's HTTP boundary, then restore the
+  real emulator for successful retry. Offline Pages checks use a synthetic remote-mode build and
+  verify hash-route authentication gates plus configuration/provider failure messages. They do not
+  fake successful login or claim to verify a real project's backend setup.
 - The verifier runs Biome, strict application and test TypeScript, unit tests, deployment-build
   checks, and Chromium. Logs, traces, and screenshots are copied out before its containers are
   removed and remain ignored under `artifacts/docker/` or `artifacts/vm/`.
