@@ -12,5 +12,5 @@
   },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
   "javascript": { "formatter": { "quoteStyle": "double", "semicolons": "asNeeded" } },
-  "files": { "includes": ["src/**", "tests/**", "*.ts", "*.json", "!dist", "!node_modules"] }
+  "files": { "includes": ["src/**", "tests/**", "ops/firebase/*.mjs", "*.ts", "*.json", "!dist", "!node_modules"] }
 }

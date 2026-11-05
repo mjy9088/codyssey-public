@@ -6,6 +6,7 @@ COPY index.html biome.json playwright.config.ts vite.config.ts tsconfig.json tsc
 COPY firestore.rules ./
 COPY tests/ tests/
 COPY scripts/ scripts/
+COPY ops/firebase/ ops/firebase/
 COPY src/ src/
 RUN chmod -R a+rX /work && chown -R pwuser:pwuser /work/artifacts && chown pwuser:pwuser /work
 USER pwuser
