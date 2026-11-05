@@ -1,0 +1,7 @@
+{
+  "name": "benchbook-firebase-operator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": { "firebase-tools": "15.35.0" }
+}
