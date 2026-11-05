@@ -88,6 +88,14 @@ The monorepo [Pages workflow](../../.github/workflows/b1-1-pages.yml) builds thi
 
 Before publishing:
 
+For repeatable server setup rather than console provider/rules clicks, use the
+[optional Firebase operator command](docs/FIREBASE_PROVISIONING.md). It uses the official
+Firebase CLI's Auth provider deployment, can create the default Firestore database in an
+explicit location, and publishes the checked-in rules only after explicit demo-policy consent.
+It requires a separate operator login, never frontend credentials. Its offline plan is not a
+cloud diff, and first-time Auth initialization on Spark remains a live-verification boundary.
+The console instructions below remain an alternative, not an additional mandatory workflow.
+
 1. Register a Firebase web app in an approved project and create the default Firestore database.
    Open **Authentication** in that same Firebase project. If **Get started** is shown, complete
    that console setup, then enable and save **Anonymous** under **Sign-in method**. Use a dedicated

@@ -60,7 +60,9 @@ settings. The Pages workflow selects remote mode explicitly. Web configuration i
 data, not an administrator credential or an authorization mechanism.
 
 Supplying the three build settings does not initialize server-side Firebase Authentication. The
-matching project must complete Authentication console setup and enable Anonymous sign-in. A
+matching project must initialize Authentication and enable Anonymous sign-in through the
+[optional official-CLI operator](FIREBASE_PROVISIONING.md) or the console alternative. First-time
+Spark initialization through the CLI still requires authorized live verification. A
 `CONFIGURATION_NOT_FOUND` response requires the operator to check that setup and the key's project
 association; client code cannot distinguish every backend misconfiguration or provision the service.
 Changing only server Auth/provider settings does not require a frontend rebuild, while changing web
