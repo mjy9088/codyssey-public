@@ -6,10 +6,10 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
-    "test": "vitest run && npm run test:provision",
+    "test": "vitest run && npm run test:provision && node --test tests/native-processes.test.mjs",
     "test:provision": "node --test ops/firebase/*.test.mjs",
     "test:e2e": "playwright test",
-    "check": "biome check src tests ops/firebase/*.mjs && tsc -b && tsc -p tsconfig.tests.json",
+    "check": "biome check src tests scripts/*.mjs ops/firebase/*.mjs && tsc -b && tsc -p tsconfig.tests.json",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
