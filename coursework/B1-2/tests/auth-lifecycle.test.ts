@@ -1,4 +1,5 @@
 import { act, renderHook } from "@testing-library/react"
+import { FirebaseError } from "firebase/app"
 import type { User } from "firebase/auth"
 import { createElement, type PropsWithChildren, StrictMode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -95,6 +96,35 @@ beforeEach(() => {
 })
 
 describe("AuthProvider lifecycle ownership", () => {
+  it.each([
+    [
+      "auth/configuration-not-found",
+      "Firebase Authentication is not configured for this site. The site owner must verify the matching Firebase project and initialize Authentication.",
+    ],
+    [
+      "auth/operation-not-allowed",
+      "Anonymous sign-in is disabled for this site. The site owner must enable the Anonymous provider in Firebase Authentication.",
+    ],
+    [
+      "auth/invalid-api-key",
+      "Firebase rejected this site's web settings. The site owner must check the API key, project settings, and allowed domain.",
+    ],
+    [
+      "auth/unauthorized-domain",
+      "Firebase rejected this site's web settings. The site owner must check the API key, project settings, and allowed domain.",
+    ],
+    ["auth/network-request-failed", "Authentication is unavailable. Try again to reconnect."],
+  ])("classifies %s without exposing provider diagnostics", async (code, message) => {
+    const attempt = new Deferred<void>()
+    authHarness.attempts.push(attempt.promise)
+    const { result } = renderHook(useAuth, { wrapper })
+    const subscription = authHarness.subscriptions[0]
+    expect(subscription).toBeDefined()
+    act(() => subscription?.next(null))
+    await act(async () => attempt.reject(new FirebaseError(code, "private provider diagnostic")))
+    expect(result.current.state).toEqual({ kind: "error", message })
+  })
+
   it("keeps an observed login when an older anonymous attempt rejects", async () => {
     // Given: anonymous authentication is pending for the active subscription.
     const attempt = new Deferred<void>()

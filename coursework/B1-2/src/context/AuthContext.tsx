@@ -8,7 +8,18 @@ import {
   useRef,
   useState,
 } from "react"
+import { type AuthFailureReason, classifyAuthFailure } from "../lib/auth-failure"
 import { auth } from "../lib/firebase"
+
+const FAILURE_MESSAGES = {
+  configuration:
+    "Firebase Authentication is not configured for this site. The site owner must verify the matching Firebase project and initialize Authentication.",
+  "anonymous-disabled":
+    "Anonymous sign-in is disabled for this site. The site owner must enable the Anonymous provider in Firebase Authentication.",
+  "client-settings":
+    "Firebase rejected this site's web settings. The site owner must check the API key, project settings, and allowed domain.",
+  unavailable: "Authentication is unavailable. Try again to reconnect.",
+} satisfies Readonly<Record<AuthFailureReason, string>>
 
 type AuthState =
   | { readonly kind: "loading" }
@@ -30,11 +41,11 @@ export const AuthProvider = ({ children }: { readonly children: ReactNode }) => 
     const lifetimeId = lifetime.current
     const attemptId = ++attempt.current
     setState({ kind: "loading" })
-    void signInAnonymously(auth).catch(() => {
+    void signInAnonymously(auth).catch((error: unknown) => {
       if (lifetime.current !== lifetimeId || attempt.current !== attemptId) return
       setState({
         kind: "error",
-        message: "Authentication is unavailable. Try again to reconnect.",
+        message: FAILURE_MESSAGES[classifyAuthFailure(error)],
       })
     })
   }, [])
@@ -49,12 +60,12 @@ export const AuthProvider = ({ children }: { readonly children: ReactNode }) => 
           setState({ kind: "ready", user })
         } else authenticate()
       },
-      () => {
+      (error) => {
         if (lifetime.current !== lifetimeId) return
         attempt.current += 1
         setState({
           kind: "error",
-          message: "Authentication is unavailable. Try again to reconnect.",
+          message: FAILURE_MESSAGES[classifyAuthFailure(error)],
         })
       },
     )
