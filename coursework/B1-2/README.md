@@ -42,6 +42,10 @@ public internet calls at runtime.
 
 ## Emulator authorization and persistence checks
 
+For the optional real-emulator native fallback and its explicit owner-isolation acceptance
+probe, see [genuine Firebase verification](docs/FIREBASE_VERIFICATION.md). A passing shared-demo
+suite does not establish cross-user denial; the current shared policy intentionally fails that probe.
+
 The Playwright verifier includes direct official Firebase SDK contract tests against the local Auth
 and Firestore emulators. Signed-out SDK reads and writes must receive `permission-denied` under the
 checked-in `firestore.rules`; a synthetic anonymous emulator user can write and read the same
