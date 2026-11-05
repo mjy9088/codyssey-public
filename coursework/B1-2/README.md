@@ -179,11 +179,12 @@ workshops, or treat local emulator success as proof that the real Firebase proje
 
 ## Deployment boundary
 
-There is **no external deployment URL yet**. Local Docker, browser, and QEMU checks are not cloud
-deployment evidence. A real submission deployment still requires an approved public repository,
-Firebase project configuration supplied at build time, reviewed production Firestore
-rules, and a separately approved deployment. After deployment, CRUD must be rerun against that
-actual URL; the emulator result must not be presented as proof of production behavior.
+A served Pages frontend or a successful Pages job does not establish that Firebase authentication
+or cloud CRUD works. Local Docker, browser, and QEMU checks are not cloud deployment evidence.
+Publishing a new revision still requires an approved public repository, Firebase project
+configuration supplied at build time, reviewed production Firestore rules, and a separately approved
+deployment. After server setup and deployment, CRUD must be rerun against that actual URL; emulator
+results must not be presented as proof of production behavior.
 
 QEMU boots an independent x86_64 Linux kernel under TCG and serves the exact production `dist/` from
 inside the guest. It may run substantially slower on ARM hosts because it is an x86_64 guest check,

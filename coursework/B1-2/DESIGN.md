@@ -125,5 +125,5 @@ and a coordinator recovering from an emulator/network failure.
 
 | Item | Location | Why accepted | Owner / Exit |
 |---|---|---|---|
-| No external deployment URL | README | Publishing and real Firebase credentials require separate approval | Project owner deploys and then reruns the same flows |
+| Live Firebase readiness requires operator setup | README | A served frontend and local checks cannot initialize or validate the real Auth/database configuration | Project owner configures the backend and reruns the actual deployed flows |
 | QEMU serves only the built SPA | VM verifier | Browser-accessible emulator stays a Compose service; guest egress is deliberately restricted | Use an all-in-guest emulator only if VM backend parity becomes an explicit goal |
