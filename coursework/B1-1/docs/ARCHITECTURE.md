@@ -18,11 +18,12 @@ app.js (composition)
   └── ui/   ──→ domain/
 ```
 
-`domain/` owns plain-value validation, repository normalization, and selection rules. These modules
+`domain/` owns plain-value validation, repository normalization/selection, and theme preference rules. These modules
 must import without a DOM, storage, network, media query, or feature initialization. Their Node tests
 exercise actual input/output values rather than installing browser globals to make the rules work.
 
-`data/` owns the GitHub transport, deadline, response decoding, and expected request failures. It may
+`data/` owns the GitHub transport, deadline, response decoding, expected request failures, and browser
+preference storage/observation. It may
 call domain parsing, but never imports a view. `ui/` owns authored markup, event binding, rendering,
 focus, ARIA, and observer lifetimes. It receives request operations from `app.js`; a view cannot
 import an HTTP adapter. Known request failures become UI states, while broken authored DOM contracts
@@ -37,6 +38,35 @@ HTML owns the base content and semantic structure. Template strings contain deve
 only; API values enter the document as text. The page needs neither a state-management library nor
 a general component framework.
 
+### Intended module ownership
+
+This is the stable responsibility contract, not a revision-specific review report. Independent
+reviewers must discover the current runtime, examine every module/caller, and produce their own
+coverage and separate functionality/architecture verdicts under the root quality standard.
+
+| Module | Owned decisions / mechanics | I/O and resources | State authority / projection | Expected proof |
+|---|---|---|---|---|
+| `app.js` | Startup and dependency composition; no feature rules | Creates adapters and initializes page-lifetime features | No feature state | Import graph, packaged runtime, browser startup/fault fallback |
+| `domain/contact.js` | Field membership, required text, email acceptance | None | Plain input values and issue codes | Node contact rules and native-input browser comparison |
+| `domain/projects.js` | Neutral candidate acceptance/normalization, destinations, forks, intake budget, recency ranking, display cap, language selection | None; URL and numeric-instant validation only | Plain candidates with epoch-millisecond update times; selected values, not wire records or DOM | Node candidate/shuffled-order cases and browser selection/content-safety cases |
+| `domain/project-load.js` | Shared expected load-failure categories | None | Typed failure contract, no UI state | Adapter classification and browser error/retry scenarios |
+| `domain/theme.js` | Choice parsing, initial precedence, toggle, explicit choice versus system changes | None | Immutable theme/explicit-choice values | Node theme transitions without DOM or storage |
+| `data/github.js` | Fixed request protocol, JSON/field/timestamp decoding and expected failure translation | Fetch, body lifetime, timer, abort controller; lazy candidate decoder | Request/deadline state and neutral inputs; API sort is acquisition optimization, not ranking authority | Wire mapping/types/budget, native streaming, timeout and injected-error tests |
+| `data/theme-preferences.js` | Stored-value and native media-event adaptation; known storage-failure handling | `localStorage`, media subscription and its disposer | Initial input snapshot and observed external values; no preference precedence | Denied/quota storage and native subscription-disposal browser cases |
+| `ui/theme.js` | Event orchestration, DOM/ARIA/label/metadata projection, readiness and disposal | Injected preference port; DOM and computed style | Holds pure policy state; never derives the next theme from rendered attributes | Full-page theme behavior, metadata, persistence, storage failure and disposal cases |
+| `ui/contact.js` | Validation timing, issue wording, error/status display, focus | DOM fields/events; no message transport | Native field values and validation-display markers, not validation rules | Blur/edit/submit, first-invalid focus, no-network success and accessibility cases |
+| `ui/projects.js` | Authored cards, UTC presentation, notices, pending controls, retry focus, reveal lifetime | Injected loader and reveal initializer; DOM | Parsed repositories/rejected count in closure; native filter value and focus | Loading/filter/retry/empty/content-safety and focus/observer cases |
+| `ui/navigation.js` | Menu, destination/escape focus, viewport visibility, motion-aware scrolling | DOM, scroll and layout media events; page lifetime | Native `aria-expanded` menu state; classes/labels project that UI state | Keyboard/mobile/scroll and initialization-fallback cases |
+| `ui/reveals.js` | Enrollment, one-shot reveal threshold and reduced-motion presentation | DOM, intersection observer and disposer | Observed node visibility; no business or preference precedence | Normal/reduced motion, observer cleanup and failure visibility |
+| `ui/elements.js` | Authored DOM element contract | DOM lookup | No feature state | Checked element use and authored-markup/failure scenarios |
+
+The contact form's validation-display flags and navigation's expanded state may remain native UI
+state because they describe that view's own interaction mechanics. Scroll thresholds, responsive
+queries and reveal enrollment similarly belong to a rendering lifecycle, not an independent
+selection policy. Their browser execution is intentional; extracting a pure helper for each
+comparison would not separate a changing responsibility. Theme precedence is different: it remains
+meaningful with another renderer or storage mechanism and therefore has a plain-value owner.
+
 ## CSS ownership
 
 `base.css` is a neutral reset: no project token references, feature classes, or imports. Tokens own
@@ -48,9 +78,13 @@ list. A revealed project card must retain its border transition and four-pixel h
 Reduced motion keeps that card stationary. These combined states are checked through computed
 browser styles, not by searching CSS for a declaration that might lose the cascade.
 
-The theme module keeps an explicit choice in memory as well as attempting to persist it. Until a
-choice exists, system preference changes update the page. A denied storage write must not make a
-later system change override a choice the visitor just made.
+The theme policy keeps the resolved theme and whether the choice is explicit in an immutable value.
+Until a choice exists, system preference changes update that value. The browser adapter supplies
+stored/system inputs and best-effort persistence; a denied or quota-exceeded write must not make a
+later system change override an in-memory choice. The UI projects the policy value into the DOM;
+computed canvas color is read only to update browser theme metadata, not to choose the next theme.
+Theme initialization returns a disposer that releases its native subscription and click handler and
+hides the unavailable control. The composition root retains the normal static page lifetime.
 
 Reveal observers own the nodes passed to them. `initReveals()` returns a disposer, and the project
 list calls it before replacing cards or starting another load. Static sections live for the page's
@@ -60,11 +94,19 @@ that pending state; feature-initialization failures do not globally conceal the 
 
 ## Asynchronous behavior and failure
 
-Because `fetch` does not reject HTTP error status codes, the project checks `response.ok`. It then
-validates that JSON is an array and parses at most its first 100 entries. Each item's strings,
-booleans, URL, and date must have acceptable shapes. Names cannot be blank; destinations must use
-the HTTPS GitHub origin without embedded credentials. Blank optional metadata uses readable
-defaults. Dates are displayed in UTC, so month boundaries do not depend on the visitor's timezone.
+Because `fetch` does not reject HTTP error status codes, the adapter checks `response.ok`. It owns
+the JSON array/field contract, including `html_url`, `updated_at`, primitive/null types, and wire
+timestamp parsing. It supplies neutral candidates with `url` and epoch-millisecond `updatedAt`
+values, or an invalid-record marker. A lazy iterator lets the domain's single 100-input budget stop
+decoding before a later wire record is inspected; the adapter does not duplicate that budget.
+
+The domain owns semantic acceptance and normalization. Names cannot be blank; destinations must use
+the HTTPS GitHub origin without embedded credentials, and numeric update instants must be valid.
+Blank optional metadata uses readable defaults. Accepted non-forks are ranked by update instant,
+newest first, before applying the 12-card cap. Equal update instants retain their input order to
+preserve the existing tie behavior. The API's `sort=updated` helps obtain a recent bounded sample;
+it is not the selection rule's authority. Dates are displayed in UTC, so month boundaries do not
+depend on the visitor's timezone.
 
 Forks are excluded before selecting up to 12 cards. Invalid entries are excluded with a visible
 count rather than silently presenting an incomplete result. A response with no cards and rejected
@@ -74,9 +116,10 @@ and retains the invalid-entry notice.
 
 An `AbortController` enforces the request deadline. Its timer is cleared and its signal aborted in
 `finally`, including non-OK responses whose streaming body has not been consumed. Native fetch and JSON
-decoding classify their own expected failures. The injectable request operation returns decoded JSON,
-not a `Response`; its implementation errors propagate unchanged instead of being guessed from a broad
-`TypeError` catch. Plain-value repository parsing then classifies invalid data separately.
+decoding classify their own expected failures. The injectable request operation returns decoded
+provider JSON, not a `Response`; its implementation errors propagate unchanged instead of being
+guessed from a broad `TypeError` catch. The GitHub boundary decodes the wire representation before
+the plain-value selection rule executes.
 
 Retry focuses the loading status before hiding its trigger. Completion moves focus to the enabled
 filter or the restored retry button only while the status still holds focus; an empty result leaves
@@ -125,7 +168,11 @@ Node and browser suites. Runtime JavaScript remains JavaScript; TypeScript and B
 tools and do not ship with the static site. Import-graph checks enforce the dependency directions
 above without fixing an exact internal module inventory.
 
-Node tests prove rules and the request adapter work independently of the DOM. Browser tests preserve
+Node tests execute contact, repository, and theme rules with ordinary values. A fresh Node process
+also imports every discovered domain module with browser capabilities poisoned. Import checks cover
+static imports, re-exports and literal dynamic imports and reject opaque module edges; global-symbol
+checks distinguish local declarations from environmental I/O. These checks support, but do not
+replace, semantic review of rules hidden inside otherwise allowed UI modules. Browser tests preserve
 the real form, network, keyboard, theme, layout, and content-safety contracts. Normal-motion tests
 separately verify composed entrance/hover/focus behavior; reduced-motion screenshots alone cannot
 establish that it works. Packaging checks compare the complete nested runtime trees so a new module

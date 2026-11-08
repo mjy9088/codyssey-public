@@ -10,6 +10,9 @@ that merely satisfy assessment checks.
   and composition independently owned. Do not split cohesive code just to add layers.
 - Review actual user-facing behavior and affected callers; report unavailable checks
   honestly and resolve architecture/security blockers even when tests pass.
+- Independent reviews must cover every module/caller in scope, distinguish UI mechanics from
+  independent policy, identify state authority, and report functionality and architecture separately
+  as required by `docs/QUALITY_STANDARDS.md`. Missing coverage is inconclusive, not approval.
 - Follow `docs/AGENT_WORKFLOW.md` for the pinned pstack skills. Use their architecture,
   test-first and adversarial-review methods, but never substitute model approval for
   execution evidence or let a playbook bypass publication/privacy restrictions.

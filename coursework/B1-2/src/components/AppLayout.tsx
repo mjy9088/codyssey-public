@@ -31,15 +31,15 @@ export const AppLayout = () => {
             </span>
           </NavLink>
           <nav aria-label="Primary navigation">
-            <NavLink to="/workshops">
+            <NavLink to="/workshops" end>
               <Wrench aria-hidden="true" />
               Workshops
             </NavLink>
-            <NavLink to="/workshops/new">
+            <NavLink to="/workshops/new" end>
               <Plus aria-hidden="true" />
               Add
             </NavLink>
-            <NavLink to="/about">
+            <NavLink to="/about" end>
               <Info aria-hidden="true" />
               About
             </NavLink>

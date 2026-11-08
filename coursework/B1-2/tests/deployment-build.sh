@@ -10,6 +10,13 @@ export VITE_USE_EMULATORS=false VITE_ROUTER_MODE=hash
 export VITE_FIREBASE_API_KEY=synthetic-deployment-key
 export VITE_FIREBASE_AUTH_DOMAIN=synthetic-deployment.firebaseapp.com
 export VITE_FIREBASE_PROJECT_ID=synthetic-deployment
+for flag in invalid TRUE ' false '; do
+  if env VITE_USE_EMULATORS="$flag" node node_modules/vite/bin/vite.js build --outDir "$work/rejected" >"$work/build.log" 2>&1; then
+    printf 'Firebase build accepted invalid emulator flag: %s\n' "$flag" >&2
+    exit 1
+  fi
+  grep -q VITE_USE_EMULATORS "$work/build.log"
+done
 for name in VITE_FIREBASE_API_KEY VITE_FIREBASE_AUTH_DOMAIN VITE_FIREBASE_PROJECT_ID; do
   if env "$name=" node node_modules/vite/bin/vite.js build --outDir "$work/rejected" >"$work/build.log" 2>&1; then
     printf 'Remote Firebase build accepted missing %s\n' "$name" >&2

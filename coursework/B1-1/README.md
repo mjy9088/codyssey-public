@@ -36,6 +36,12 @@ checks enforce the domain/data/UI import direction and a theme-independent CSS r
 an incidental list of internal filenames. Normal-motion browser scenarios verify the actual composed
 card hover/focus effect in addition to reduced-motion visual baselines.
 
+Theme precedence and transitions also execute as plain-value Node rules, separately from native
+preference storage/observation and DOM projection. Domain modules are discovered for a fresh-process
+import check with browser capabilities poisoned. Architecture review still examines each module's
+decisions and state authority: dependency checks alone cannot prove that a UI function contains no
+independent policy. The architecture reference records the intended ownership for the full runtime.
+
 The first build downloads container images, npm packages, and Alpine artifacts. A fully offline first
 build without a prepared cache is not supported. Dependencies use a lockfile, base images use
 digests, and VM artifacts use published checksums. Allow approximately 6 GiB of free disk and 2 GiB
@@ -93,6 +99,9 @@ failure as well.
   to 12 candidates. The language filter applies to those candidates. Loading, empty, error, and retry
   states are distinct; the request times out after eight seconds. Rejected records are counted in the
   status, and unusable data is not presented as an empty account. Repository dates use UTC.
+  Recency ranking is an explicit plain-value rule, not an assumption about response order;
+  equal update instants retain input order. GitHub wire fields and timestamps are decoded in the
+  adapter, with the intake budget limiting lazy record decoding to the first 100 inputs.
 - The contact form validates name, email, and message. **It does not send email.** Its success state
   means local validation succeeded. Submission is disabled when JavaScript is unavailable.
 - Dynamic card markup is developer-owned. API text is inserted with `textContent`, and link URLs are
@@ -109,8 +118,8 @@ index.html                  static page
 css/style.css               style composition entry point
 css/                        neutral reset, themed foundations, components, layout, and motion
 js/app.js                   dependency composition and feature startup
-js/domain/                  browser-independent validation and repository rules
-js/data/                    GitHub request and deadline adapter
+js/domain/                  browser-independent validation, repository, and preference rules
+js/data/                    GitHub transport and browser preference adapters
 js/ui/                      DOM rendering, events, focus, theme, and reveal lifetimes
 images/                     original SVG profile illustration
 Dockerfile                  non-root static server

@@ -12,8 +12,8 @@ const repository = (overrides = {}) => ({
   name: "field-notes",
   description: "A small notebook for useful observations.",
   language: "JavaScript",
-  html_url: "https://github.com/mjy9088/field-notes",
-  updated_at: "2026-02-01T00:00:00Z",
+  url: "https://github.com/mjy9088/field-notes",
+  updatedAt: Date.UTC(2026, 1, 1),
   fork: false,
   ...overrides,
 });
@@ -25,7 +25,7 @@ test("repository selection executes without browser globals and normalizes publi
   const result = selectRepositories([
     repository({ name: ` ${"n".repeat(110)} `, description: " ", language: null }),
     repository({ name: "fork", fork: true }),
-    repository({ name: "bad-url", html_url: "javascript:void(0)" }),
+    repository({ name: "bad-url", url: "javascript:void(0)" }),
   ]);
 
   assert.equal(result.repositories.length, 1);
@@ -60,7 +60,6 @@ test("invalid-only data is an error rather than a false empty account", () => {
     repositories: [],
     rejected: 0,
   });
-  assert.throws(() => selectRepositories({ unexpected: true }), InvalidRepositoryDataError);
 });
 
 test("language listing and filtering operate only on selected candidates", () => {
@@ -80,11 +79,45 @@ test("language listing and filtering operate only on selected candidates", () =>
 
 test("normalization rejects unsafe URLs, credentials, ports, and invalid dates", () => {
   const invalid = [
-    repository({ html_url: "https://example.invalid/repository" }),
-    repository({ html_url: "https://user:password@github.com/repository" }),
-    repository({ html_url: "https://github.com:8443/repository" }),
-    repository({ updated_at: "not-a-date" }),
-    repository({ fork: "false" }),
+    repository({ url: "https://example.invalid/repository" }),
+    repository({ url: "https://user:password@github.com/repository" }),
+    repository({ url: "https://github.com:8443/repository" }),
+    repository({ updatedAt: Number.NaN }),
+    repository({ updatedAt: Number.POSITIVE_INFINITY }),
   ];
   assert.throws(() => selectRepositories(invalid), InvalidRepositoryDataError);
+});
+
+test("selection ranks ordinary candidates by recency before applying the display cap", () => {
+  const candidates = Array.from({ length: 20 }, (_, index) =>
+    repository({ name: `candidate-${index}`, updatedAt: Date.UTC(2026, 0, index + 1) }),
+  );
+  const expected = candidates
+    .slice(8)
+    .reverse()
+    .map(({ name }) => name);
+  const original = candidates.map((entry) => ({ ...entry }));
+  for (const input of [
+    candidates,
+    [...candidates].reverse(),
+    [...candidates.slice(10), ...candidates.slice(0, 10)],
+  ]) {
+    assert.deepEqual(
+      selectRepositories(input).repositories.map(({ name }) => name),
+      expected,
+    );
+  }
+  assert.deepEqual(candidates, original);
+});
+
+test("equal update instants retain their input order and non-forks still own the display slots", () => {
+  const { repositories } = selectRepositories([
+    repository({ name: "new-fork", fork: true, updatedAt: Date.UTC(2026, 2, 1) }),
+    repository({ name: "first-tie" }),
+    repository({ name: "second-tie" }),
+  ]);
+  assert.deepEqual(
+    repositories.map(({ name }) => name),
+    ["first-tie", "second-tie"],
+  );
 });

@@ -7,8 +7,14 @@
 - Keep a neutral CSS reset independent of project tokens and feature selectors.
   Themed document foundations, reusable presentation, page composition, and motion
   must have explicit owners. Verify composed motion and hover/focus in a browser.
-- Keep contact validation and repository normalization/selection executable without
-  the DOM. HTTP/storage/media adapters and DOM presentation must not own those rules.
+- Keep independent feature rules, including contact validation, repository normalization/selection,
+  and theme preference precedence/transitions, executable with plain values without the DOM.
+  HTTP/storage/preference adapters acquire inputs; presentation must not be the only rule owner.
+- Focus, menu state, validation-display timing, reveal enrollment, viewport breakpoints, and motion
+  may remain cohesive UI mechanics. Explain that ownership rather than extracting forwarding helpers.
+  Do not read rendered theme attributes back as the authority for preference decisions.
+- Apply the root standard's module coverage and separate architecture/functionality verdicts to
+  the entire runtime in a full-project review, not just the changed feature or import graph.
 - Use readable formatting and checked JavaScript. Tests should enforce dependency
   direction and observable behavior, not an exact list of internal module filenames.
 - Author documentation in English. Keep instructions/design rationale in Git, not

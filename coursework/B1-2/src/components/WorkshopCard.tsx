@@ -10,7 +10,7 @@ export const WorkshopCard = ({ workshop }: { readonly workshop: Workshop }) => (
       <time dateTime={workshop.startsAt}>{formatDate(workshop.startsAt)}</time>
     </div>
     <h2>
-      <Link to={`/workshops/${workshop.id}`}>{workshop.title}</Link>
+      <Link to={`/workshops/${encodeURIComponent(workshop.id)}`}>{workshop.title}</Link>
     </h2>
     <p>{workshop.summary}</p>
     <div className="workshop-card__meta">
@@ -23,7 +23,7 @@ export const WorkshopCard = ({ workshop }: { readonly workshop: Workshop }) => (
         {workshop.capacity} seats
       </span>
     </div>
-    <Link className="text-action" to={`/workshops/${workshop.id}`}>
+    <Link className="text-action" to={`/workshops/${encodeURIComponent(workshop.id)}`}>
       View workshop <ArrowRight aria-hidden="true" />
     </Link>
   </article>

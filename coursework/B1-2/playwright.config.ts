@@ -9,8 +9,11 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: process.env.BASE_URL ?? "http://127.0.0.1:8088",
-    trace: "retain-on-failure",
+    trace: process.env["B12_NATIVE_VERIFICATION"] === "true" ? "off" : "retain-on-failure",
     screenshot: "only-on-failure",
     video: "off",
+    ...(process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"]
+      ? { launchOptions: { executablePath: process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"] } }
+      : {}),
   },
 })

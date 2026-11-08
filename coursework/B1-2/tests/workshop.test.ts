@@ -23,4 +23,29 @@ describe("parseWorkshopInput", () => {
     expect(result.success).toBe(false)
     if (!result.success) expect(Object.keys(result.errors).sort()).toEqual(["summary", "title"])
   })
+
+  it.each([
+    ["capacity", "0"],
+    ["capacity", "81"],
+    ["capacity", "1.5"],
+    ["capacity", "not-a-number"],
+    ["capacity", ""],
+    ["startsAt", "2026-02-30T10:00"],
+    ["startsAt", "not-a-date"],
+    ["status", "unknown"],
+    ["facilitator", " "],
+    ["location", " "],
+  ] as const)("rejects invalid %s input %s at the form boundary", (field, value) => {
+    const result = parseWorkshopInput({ ...valid, [field]: value })
+    expect(result.success).toBe(false)
+    if (!result.success) expect(result.errors[field]).toBeDefined()
+  })
+
+  it.each(["1", "80"])("accepts capacity boundary %s and trims authored text", (capacity) => {
+    const result = parseWorkshopInput({ ...valid, title: "  Repair a radio  ", capacity })
+    expect(result).toEqual({
+      success: true,
+      data: { ...valid, title: "Repair a radio", capacity: Number(capacity) },
+    })
+  })
 })

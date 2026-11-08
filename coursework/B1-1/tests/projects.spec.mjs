@@ -1,5 +1,20 @@
 import { API, expect, repositories, test } from "./fixtures.mjs";
 
+test("recent project selection ranks shuffled API records before applying the card limit", async ({
+  page,
+}) => {
+  const oldestFirst = Array.from({ length: 20 }, (_, index) => ({
+    ...repositories[0],
+    name: `ranked-${index}`,
+    updated_at: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+  }));
+  await page.route(API, (route) => route.fulfill({ json: oldestFirst }));
+  await page.goto("/");
+  await expect(page.locator(".project-name")).toHaveText(
+    Array.from({ length: 12 }, (_, index) => `ranked-${19 - index}`),
+  );
+});
+
 test("loading transitions to projects and language filtering", async ({ page }) => {
   let release;
   const gate = new Promise((resolve) => {

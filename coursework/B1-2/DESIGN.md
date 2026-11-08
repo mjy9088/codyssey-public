@@ -5,7 +5,7 @@
 A working studio ledger: warm paper, graphite type, cobalt registration marks, and terse operational
 copy. The signature is a slim cobalt "binding" at the left of each workshop card, with status and
 capacity reading like annotations rather than dashboard chrome. The memorable interaction is the
-list reorganizing immediately as filters change while the URL and result count remain in sync.
+list reorganizing immediately as filters change while the result count and pagination remain in sync.
 
 Design read: a task-focused planning SPA for workshop coordinators, with calm editorial productivity
 language inspired by Notion rather than a generic SaaS dashboard. Dials: variance 5, motion 3, density 6.
@@ -71,6 +71,7 @@ System-local fonts avoid network dependency. Display uses `Georgia, Cambria, ser
 - Structure: skip link, sticky header, brand, primary links, signed-in identity, main, footer.
 - States: current route, hover, focus, signed-in/loading. The document owns scrolling.
 - Accessibility: landmarks, current-page semantics, 44px targets.
+- Only an exact primary-navigation destination receives `aria-current="page"`; ancestor sections are not reported as the current page of a create, detail, or edit screen.
 
 ### Button / text action
 - Variants: primary, secondary, quiet, danger. Spacing uses `--space-2` and `--space-4`.
@@ -95,10 +96,12 @@ System-local fonts avoid network dependency. Display uses `Georgia, Cambria, ser
 ### Workshop form
 - Structure: controlled fields, live preview aside, submit/cancel actions, request error.
 - States: pristine, invalid, submitting, request failure. Document scroll.
+- Creation waits for authentication and offers retry on authentication failure. During save, fields and local Cancel are disabled. Leaving through global navigation does not cancel an SDK write, but a completion cannot redirect an obsolete screen.
 
 ### Notice and confirmation panel
 - Variants: informational, success, warning, destructive confirmation.
 - Accessibility: `role=status` or `role=alert`; destructive action requires explicit confirmation.
+- While deletion is pending, Keep, Delete, and Edit cannot contradict the submitted operation. Switching records or leaving the screen ends its UI ownership, not the SDK write itself.
 
 ## 6. Motion & Interaction
 
@@ -122,5 +125,5 @@ and a coordinator recovering from an emulator/network failure.
 
 | Item | Location | Why accepted | Owner / Exit |
 |---|---|---|---|
-| No external deployment URL | README | Publishing and real Firebase credentials require separate approval | Project owner deploys and then reruns the same flows |
+| Live Firebase readiness requires operator setup | README | A served frontend and local checks cannot initialize or validate the real Auth/database configuration | Project owner configures the backend and reruns the actual deployed flows |
 | QEMU serves only the built SPA | VM verifier | Browser-accessible emulator stays a Compose service; guest egress is deliberately restricted | Use an all-in-guest emulator only if VM backend parity becomes an explicit goal |

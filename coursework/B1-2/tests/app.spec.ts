@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs"
 import { type APIRequestContext, expect, test } from "@playwright/test"
+import { documentsUrl, resetDocumentsUrl, rulesUrl } from "./emulator-endpoints"
 
-const projectId = "benchbook-local"
-const rulesUrl = `http://firebase:8080/emulator/v1/projects/${projectId}:securityRules`
 const baselineRules = readFileSync("firestore.rules", "utf8")
 const denyWritesRules = readFileSync("tests/fixtures/firestore-deny-writes.rules", "utf8")
 
@@ -17,11 +16,12 @@ const setWriteFailure = (request: APIRequestContext) => installRules(request, de
 const clearWriteFailure = (request: APIRequestContext) => installRules(request, baselineRules)
 
 test.beforeEach(async ({ request }) => {
-  const response = await request.delete(
-    `http://firebase:8080/emulator/v1/projects/${projectId}/databases/(default)/documents`,
-  )
+  await clearWriteFailure(request)
+  const response = await request.delete(resetDocumentsUrl)
   expect(response.ok()).toBeTruthy()
 })
+
+test.afterEach(async ({ request }) => clearWriteFailure(request))
 
 test("creates, filters, edits, and deletes workshops through the real emulator", async ({
   page,
@@ -39,12 +39,15 @@ test("creates, filters, edits, and deletes workshops through the real emulator",
   await page.getByRole("link", { name: "Edit" }).click()
   await page.getByLabel("Workshop title").fill("Patch a denim jacket")
   await page.getByRole("button", { name: "Save changes" }).click()
-  await expect(page.getByRole("heading", { name: "Patch a denim jacket" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "Patch a denim jacket" })).toBeVisible()
 
   await page.getByRole("button", { name: "Delete" }).click()
   await page.getByRole("button", { name: "Delete permanently" }).click()
   await expect(page.getByRole("heading", { name: "Workshop schedule" })).toBeVisible()
+  await expect(page.getByRole("status").filter({ hasText: "Workshop deleted." })).toBeVisible()
   await expect(page.getByText("4 results")).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole("status")).toHaveCount(0)
 })
 
 test("shows validation and creates a workshop from controlled input", async ({ page }) => {
@@ -110,18 +113,15 @@ test("shows a concise recovery message when stored workshop data is invalid", as
   request,
 }) => {
   // Given: Firestore contains a document that fails the application's boundary schema.
-  const response = await request.patch(
-    `http://firebase:8080/v1/projects/${projectId}/databases/(default)/documents/workshops/malformed-fixture`,
-    {
-      headers: { Authorization: "Bearer owner" },
-      data: {
-        fields: {
-          startsAt: { stringValue: "2026-12-01T10:00" },
-          title: { stringValue: "Malformed fixture" },
-        },
+  const response = await request.patch(`${documentsUrl}/workshops/malformed-fixture`, {
+    headers: { Authorization: "Bearer owner" },
+    data: {
+      fields: {
+        startsAt: { stringValue: "2026-12-01T10:00" },
+        title: { stringValue: "Malformed fixture" },
       },
     },
-  )
+  })
   expect(response.ok()).toBeTruthy()
 
   // When: the list parses data returned by the real Firestore emulator.
@@ -132,10 +132,9 @@ test("shows a concise recovery message when stored workshop data is invalid", as
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible()
 
   // Given: the invalid fixture is removed through the emulator administration endpoint.
-  const cleanupResponse = await request.delete(
-    `http://firebase:8080/v1/projects/${projectId}/databases/(default)/documents/workshops/malformed-fixture`,
-    { headers: { Authorization: "Bearer owner" } },
-  )
+  const cleanupResponse = await request.delete(`${documentsUrl}/workshops/malformed-fixture`, {
+    headers: { Authorization: "Bearer owner" },
+  })
   expect(cleanupResponse.ok()).toBeTruthy()
 
   // When: the user retries the failed SDK-backed read.
@@ -214,9 +213,16 @@ test("recovers when loading the sample schedule initially fails", async ({ page,
 })
 
 test("all primary routes and the recovery route render", async ({ page }) => {
-  for (const route of ["/", "/workshops", "/workshops/new", "/about", "/missing"]) {
+  for (const [route, heading] of [
+    ["/", "Make room for useful work."],
+    ["/workshops", "Workshop schedule"],
+    ["/workshops/new", "Add a workshop"],
+    ["/about", "How Benchbook is put together"],
+    ["/missing", "This bench is empty"],
+  ] as const) {
     await page.goto(route)
     await expect(page.locator("main")).toBeVisible()
+    await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible()
   }
   await expect(page.getByText("This bench is empty")).toBeVisible()
 })

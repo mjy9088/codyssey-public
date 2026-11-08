@@ -16,12 +16,12 @@ const workshops = collection(database, "workshops")
 
 export const listWorkshops = async (): Promise<readonly Workshop[]> => {
   const snapshot = await getDocs(query(workshops, orderBy("startsAt", "asc")))
-  return snapshot.docs.map((entry) => workshopSchema.parse({ id: entry.id, ...entry.data() }))
+  return snapshot.docs.map((entry) => workshopSchema.parse({ ...entry.data(), id: entry.id }))
 }
 
 export const getWorkshop = async (id: string): Promise<Workshop | null> => {
   const snapshot = await getDoc(doc(workshops, id))
-  return snapshot.exists() ? workshopSchema.parse({ id: snapshot.id, ...snapshot.data() }) : null
+  return snapshot.exists() ? workshopSchema.parse({ ...snapshot.data(), id: snapshot.id }) : null
 }
 
 export const createWorkshop = async (input: WorkshopInput): Promise<WorkshopId> => {
