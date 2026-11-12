@@ -10,7 +10,7 @@ die() {
 remote_files=(
   .dockerignore .env.example Dockerfile README.md HANDOFF.md docker-compose.yml init.sh justfile
   macos-setup.sh mise.toml next-script.zsh tailnet.sh verify-macos-setup.py
-  lib/auth.sh lib/logging.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh gost/gost.yaml enable-korean.swift tailscale-entrypoint.sh
+  lib/auth.sh lib/options.sh lib/logging.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh gost/gost.yaml enable-korean.swift tailscale-entrypoint.sh
   chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh
@@ -84,7 +84,7 @@ install_remote_files() {
     curl --fail --location --silent --show-error \
       "https://raw.githubusercontent.com/mjy9088/codyssey-public/main/environment/codyssey-init/$file" -o "$staging/$file"
   done
-  for file in init.sh tailnet.sh lib/auth.sh lib/logging.sh lib/preparation.sh lib/bootstrap-tools.sh macos-setup.sh \
+  for file in init.sh tailnet.sh lib/auth.sh lib/options.sh lib/logging.sh lib/preparation.sh lib/bootstrap-tools.sh macos-setup.sh \
     scripts/prepare-startup.sh; do
     bash -n "$staging/$file"
   done
@@ -135,72 +135,95 @@ init_dir=$(CDPATH= cd -- "$init_dir" && pwd -P)
 
 . "$init_dir/lib/logging.sh"
 init_run_log
+. "$init_dir/lib/options.sh"
 . "$init_dir/lib/bootstrap-tools.sh"
-container_status=0
-if (prepare_docker); then
-  # Repeat in this shell to retain the bundled tools PATH. The engine is now ready.
-  for orb_app in "${CODYSSEY_APPLICATIONS_DIR:-/Applications}/OrbStack.app" "$HOME/Applications/OrbStack.app"; do
-    [[ ! -x $orb_app/Contents/MacOS/xbin/docker ]] || export PATH="$PATH:$orb_app/Contents/MacOS/xbin"
-  done
-  log_event docker ready
-else
-  container_status=1
-  log_event docker failed
-fi
-command -v zsh >/dev/null 2>&1 || die 'zsh is required.'
-export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
-if command -v mise >/dev/null 2>&1 || (install_mise); then
-  log_event tools ready
-else
-  container_status=1
-  log_event tools failed
-fi
-. "$init_dir/lib/preparation.sh"
 . "$init_dir/lib/auth.sh"
 trap finish_startup EXIT
 trap 'interrupt_startup 129' HUP
 trap 'interrupt_startup 130' INT
 trap 'interrupt_startup 143' TERM
-printf 'Preparing environment…\n'
-if [[ $container_status == 0 ]]; then
-  if start_startup_preparation "$init_dir"; then :; else container_status=$?; fi
+setup_has_terminal=0
+if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then setup_has_terminal=1; fi
+tailnet_setup=$(choose_setup_option "${CODYSSEY_TAILNET_SETUP:-}" 'Configure optional Tailscale and GOST services?')
+export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+container_status=0
+tools_ready=0
+ensure_mise() {
+  if command -v mise >/dev/null 2>&1 || (install_mise); then
+    tools_ready=1
+    log_event tools ready
+  else
+    log_event tools failed
+    return 1
+  fi
+}
+if [[ $tailnet_setup == 1 ]]; then
+  if (prepare_docker); then
+    for orb_app in "${CODYSSEY_APPLICATIONS_DIR:-/Applications}/OrbStack.app" "$HOME/Applications/OrbStack.app"; do
+      [[ ! -x $orb_app/Contents/MacOS/xbin/docker ]] || export PATH="$PATH:$orb_app/Contents/MacOS/xbin"
+    done
+    log_event docker ready
+  else
+    container_status=1
+    log_event docker failed
+  fi
+  if ensure_mise; then :; else container_status=1; fi
+  if ! command -v zsh >/dev/null 2>&1; then container_status=1; log_event zsh missing; fi
+  if [[ $container_status == 0 ]]; then
+    printf 'Preparing optional Tailnet environment…\n'
+    if start_startup_preparation "$init_dir"; then :; else container_status=$?; fi
+  fi
+else
+  log_event tailnet skipped
 fi
 
-if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then
-  printf 'Install the global j command in %s? [Y/n] ' "$HOME/.local/bin" >/dev/tty
-  IFS= read -r install_j_answer </dev/tty || install_j_answer=n
-  case $install_j_answer in
-    ''|y|Y|yes|YES) if (install_managed_j "$init_dir"); then log_event j installed; else log_event j failed; fi ;;
-    *) ;;
-  esac
+j_setup=$(choose_setup_option "${CODYSSEY_INSTALL_J:-}" 'Install optional Tailnet j command and Dock launcher?')
+if [[ $j_setup == 1 ]]; then
+  if [[ $tools_ready == 1 ]] || ensure_mise; then
+    if (install_managed_j "$init_dir"); then log_event j installed; else log_event j failed; fi
+  else
+    printf 'j command installation failed; continuing remaining setup.\n' >&2
+  fi
+else
+  log_event j skipped
 fi
-
-if run_quiet_step "Configuring shell" bash "$init_dir/scripts/configure-shell.sh"; then :; else
-  printf 'Shell configuration failed; continuing remaining setup.\n' >&2
-fi
-
-if [[ $(uname -s) == Darwin ]]; then
-  if run_quiet_step "Installing Ghostty" bash "$init_dir/scripts/install-ghostty.sh"; then :; else
-    printf "Ghostty installation failed; continuing remaining setup.\n" >&2
+if [[ $tools_ready == 1 ]]; then
+  if run_quiet_step "Configuring shell" bash "$init_dir/scripts/configure-shell.sh"; then :; else
+    printf 'Shell configuration failed; continuing remaining setup.\n' >&2
   fi
 fi
 
-macos_setup=${CODYSSEY_MACOS_SETUP:-}
-if [[ -z $macos_setup ]]; then
-  if [[ $(uname -s) == Darwin ]]; then macos_setup=1; else macos_setup=0; fi
+macos_setup=0
+if [[ $(uname -s) == Darwin ]]; then
+  macos_setup=$(choose_setup_option "${CODYSSEY_MACOS_SETUP:-}" 'Apply optional macOS keyboard, text and Dock preferences?')
 fi
-[[ $macos_setup == 0 || $macos_setup == 1 ]] || die 'CODYSSEY_MACOS_SETUP must be 0 or 1.'
-if [[ $macos_setup == 1 ]]; then
-  if bash "$init_dir/macos-setup.sh"; then
+if [[ $(uname -s) == Darwin ]]; then
+  if run_quiet_step "Installing Ghostty" bash "$init_dir/scripts/install-ghostty.sh"; then :; else
+    printf 'Ghostty installation failed; continuing remaining setup.\n' >&2
+  fi
+fi
+if [[ $(uname -s) == Darwin && ( $macos_setup == 1 || $j_setup == 1 ) ]]; then
+  preference_mode=
+  dock_cleanup=${CODYSSEY_DOCK_SETUP:-}
+  if [[ $macos_setup == 0 ]]; then preference_mode=--desktop-only; dock_cleanup=${dock_cleanup:-0}; fi
+  # Dock cleanup and launcher installation have separate ownership. Declining j
+  # never creates a launcher; opting into j works without personal preferences.
+  if CODYSSEY_DOCK_LAUNCHER=$j_setup CODYSSEY_DOCK_SETUP=$dock_cleanup \
+    bash "$init_dir/macos-setup.sh" ${preference_mode:+"$preference_mode"}; then
     log_event preferences ready
   else
     preference_status=$?
     log_event preferences "incomplete exit=$preference_status"
-    printf 'codyssey-init: macOS preferences failed (exit %s); continuing container and browser setup.\n' "$preference_status" >&2
+    printf 'codyssey-init: macOS preferences failed (exit %s); continuing remaining setup.\n' "$preference_status" >&2
     printf 'Retry preferences separately: bash "%s/macos-setup.sh"\n' "$init_dir" >&2
   fi
+else
+  log_event preferences skipped
 fi
-
+if [[ $tailnet_setup == 0 ]]; then
+  printf 'Setup finished. Optional Tailnet services were skipped; rerun sh init.sh to opt in later.\n'
+  exit 0
+fi
 cd "$init_dir"
 if [[ $container_status != 0 ]]; then
   printf "Container setup failed; independent workstation settings were still attempted. Rerun sh init.sh to retry.\n" >&2

@@ -17,24 +17,26 @@ system_applications_dir=${CODYSSEY_SYSTEM_APPLICATIONS_DIR:-/System/Applications
 
 input_switch=${CODYSSEY_INPUT_SWITCH:-control-space}
 dock_setup=${CODYSSEY_DOCK_SETUP:-}
+dock_launcher=${CODYSSEY_DOCK_LAUNCHER:-0}
 case ${1:-} in
   '') ;;
   --input-only|--no-dock) dock_setup=0 ;;
-  --desktop-only) dock_setup=${dock_setup:-1} ;;
+  --desktop-only) dock_setup=${dock_setup:-0} ;;
   --shortcuts-only) input_switch=control-space; dock_setup=0 ;;
   *) printf 'Usage: bash macos-setup.sh [--input-only | --no-dock | --shortcuts-only | --desktop-only]\n' >&2; exit 2 ;;
 esac
 # Use the controlling terminal so curl | sh does not consume installer text.
 if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then
   if [[ -z $dock_setup ]]; then
-    printf 'Clean up Dock pins and stacks? The j launcher is added either way. [Y/n] ' >/dev/tty
+    printf 'Clean up Dock pins and stacks? [y/N] ' >/dev/tty
     IFS= read -r answer </dev/tty || answer=n
-    case $answer in ''|y|Y|yes|YES) dock_setup=1 ;; *) dock_setup=0 ;; esac
+    case $answer in y|Y|yes|YES) dock_setup=1 ;; *) dock_setup=0 ;; esac
   fi
 fi
 input_switch=${input_switch:-control-space}
-dock_setup=${dock_setup:-${CODYSSEY_MACOS_SETUP:-0}}
+dock_setup=${dock_setup:-0}
 case $input_switch in control-space|caps-lock) ;; *) printf 'CODYSSEY_INPUT_SWITCH must be control-space or caps-lock.\n' >&2; exit 2 ;; esac
+case $dock_launcher in 0|1) ;; *) printf 'CODYSSEY_DOCK_LAUNCHER must be 0 or 1.\n' >&2; exit 2 ;; esac
 case $dock_setup in 0|1) ;; *) printf 'CODYSSEY_DOCK_SETUP must be 0 or 1.\n' >&2; exit 2 ;; esac
 if [[ $input_switch == caps-lock ]]; then
   # Gureum 1.13.2 lacks TICapsLockLanguageSwitchCapable metadata (upstream #918).
@@ -142,6 +144,7 @@ dock_tile() {
 apply_dock() {
   local terminal_app chrome_app terminal_url chrome_url launcher launcher_url temporary index=0 existing failed=0
   local clean_dock=$dock_setup
+  [[ $clean_dock == 1 || $dock_launcher == 1 ]] || return 0
   backup_domain dock com.apple.dock || return
   terminal_app="$system_applications_dir/Utilities/Terminal.app"
   chrome_app="$applications_dir/Google Chrome.app"
@@ -149,34 +152,40 @@ apply_dock() {
   [[ -d $terminal_app ]] || return
   # Missing Chrome must not prevent the j launcher from being added.
   [[ -d $chrome_app ]] || clean_dock=0
-  launcher="$HOME/Library/Application Support/codyssey-init/Codyssey j.command"
-  mkdir -p "$(dirname -- "$launcher")" || return 1
-  if [[ -e $launcher || -L $launcher ]]; then
-    if [[ -L $launcher ]] || ! grep -qx '# codyssey-init: terminal-launcher-v1' "$launcher"; then
-      warn 'existing unowned terminal launcher preserved'
-      return 1
+  if [[ $dock_launcher == 1 ]]; then
+    launcher="$HOME/Library/Application Support/codyssey-init/Codyssey j.command"
+    mkdir -p "$(dirname -- "$launcher")" || return 1
+    if [[ -e $launcher || -L $launcher ]]; then
+      if [[ -L $launcher ]] || ! grep -qx '# codyssey-init: terminal-launcher-v1' "$launcher"; then
+        warn 'existing unowned terminal launcher preserved'
+        return 1
+      fi
     fi
+    temporary=$(mktemp "$(dirname -- "$launcher")/.terminal.XXXXXX") || return 1
+    {
+      printf '%s\n' '#!/bin/zsh' '# codyssey-init: terminal-launcher-v1' 'set -eu' \
+        'export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"'
+      printf 'cd -- %q\n' "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+      printf '%s\n' 'exec just "$@"'
+    } >"$temporary"
+    chmod 0700 "$temporary" && mv -f "$temporary" "$launcher" || { rm -f "$temporary"; return 1; }
+    launcher_url=$(file_url "$launcher")
   fi
-  temporary=$(mktemp "$(dirname -- "$launcher")/.terminal.XXXXXX") || return 1
-  {
-    printf '%s\n' '#!/bin/zsh' '# codyssey-init: terminal-launcher-v1' 'set -eu' \
-      'export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"'
-    printf 'cd -- %q\n' "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
-    printf '%s\n' 'exec just "$@"'
-  } >"$temporary"
-  chmod 0700 "$temporary" && mv -f "$temporary" "$launcher" || { rm -f "$temporary"; return 1; }
-  launcher_url=$(file_url "$launcher")
   terminal_url=$(file_url "$terminal_app/")
   chrome_url=$(file_url "$chrome_app/")
   if [[ $clean_dock == 1 ]]; then
     "$defaults_bin" write com.apple.dock persistent-apps -array \
       "$(dock_tile "$terminal_url" 'Terminal' 1)" \
       "$(dock_tile "$chrome_url" 'Google Chrome' 1)" >/dev/null 2>&1 || failed=1
-    "$defaults_bin" write com.apple.dock persistent-others -array \
-      "$(dock_tile "$launcher_url" 'Codyssey j' 32)" >/dev/null 2>&1 || failed=1
+    if [[ $dock_launcher == 1 ]]; then
+      "$defaults_bin" write com.apple.dock persistent-others -array \
+        "$(dock_tile "$launcher_url" 'Codyssey j' 32)" >/dev/null 2>&1 || failed=1
+    else
+      "$defaults_bin" write com.apple.dock persistent-others -array >/dev/null 2>&1 || failed=1
+    fi
     "$defaults_bin" write com.apple.dock show-recents -bool false >/dev/null 2>&1 || failed=1
     "$defaults_bin" write com.apple.dock static-only -bool false >/dev/null 2>&1 || failed=1
-  else
+  elif [[ $dock_launcher == 1 ]]; then
     if [[ $BACKUP_KIND == present ]]; then
       while "$plistbuddy_bin" -c "Print :persistent-others:$index" "$BACKUP_PATH" >/dev/null 2>&1; do
         existing=$("$plistbuddy_bin" -c "Print :persistent-others:$index:tile-data:file-data:_CFURLString" "$BACKUP_PATH" 2>/dev/null || true)

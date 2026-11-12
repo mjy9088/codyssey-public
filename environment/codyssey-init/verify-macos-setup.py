@@ -226,7 +226,7 @@ def verify_desktop(root: Path) -> None:
     try:
         baseline = (snapshot("com.apple.dock", directory),)
         for _ in range(2):
-            run(("env", "CODYSSEY_DOCK_SETUP=1", "bash", str(root / "macos-setup.sh"), "--desktop-only"))
+            run(("env", "CODYSSEY_DOCK_SETUP=1", "CODYSSEY_DOCK_LAUNCHER=1", "bash", str(root / "macos-setup.sh"), "--desktop-only"))
             verify_dock(export("com.apple.dock", directory, "desktop"))
             run(("zsh", str(Path.home() / "Library/Application Support/codyssey-init/Codyssey j.command"), "--list"))
     except BaseException:
@@ -260,9 +260,9 @@ def main() -> None:
         baseline = tuple(snapshot(domain, snapshot_root) for domain in DOMAINS)
         preferences_mutated = True
         unrelated_sources, unrelated_hotkeys = prepare_fixture(baseline, snapshot_root)
-        run(("env", "CODYSSEY_DOCK_SETUP=1", "bash", str(root / "macos-setup.sh")))
+        run(("env", "CODYSSEY_DOCK_SETUP=1", "CODYSSEY_DOCK_LAUNCHER=1", "bash", str(root / "macos-setup.sh")))
         first = verify_preferences(snapshot_root, unrelated_sources, unrelated_hotkeys)
-        run(("env", "CODYSSEY_DOCK_SETUP=1", "bash", str(root / "macos-setup.sh")))
+        run(("env", "CODYSSEY_DOCK_SETUP=1", "CODYSSEY_DOCK_LAUNCHER=1", "bash", str(root / "macos-setup.sh")))
         second = verify_preferences(snapshot_root, unrelated_sources, unrelated_hotkeys)
         if first != second:
             raise VerificationError("second application changed preferences")

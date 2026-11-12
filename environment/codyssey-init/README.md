@@ -1,13 +1,48 @@
 # Codyssey macOS tailnet bootstrap
 
-This directory prepares a repeatable Tailscale and GOST environment for a macOS workstation that
-has OrbStack installed or a working Docker Engine and Compose. It builds a pinned Tailscale image with Bash and
-other terminal tools, starts the tailnet and local GOST management services, and optionally applies a
-small set of macOS preferences.
+This is a shared macOS workstation bootstrap for course participants. It installs or reuses
+Ghostty as a basic application. Personal Tailnet services and workstation preferences are
+separate choices, all with **No as the default**. Pressing Enter or running without a terminal
+skips Tailscale/GOST, the `j` command and Dock launcher, and macOS keyboard/text/Dock settings.
+Declining an option preserves an existing installation; it does not uninstall apps, remove
+commands, stop previously running services, or overwrite user configuration.
 
 The bootstrap does not install Docker, authenticate to Tailscale by itself, or prove that a remote
-tailnet is reachable. Those remain explicit user and environment boundaries. It can install a pinned,
-checksum-verified `mise` binary when `mise` is missing.
+tailnet is reachable. A selected Tailnet or `j` setup can install a pinned, checksum-verified
+`mise` binary when it is missing.
+
+## Optional features
+
+Interactive prompts use `[y/N]`: only `y`, `Y`, `yes`, or `YES` opts in. These choices are
+independent; a Tailnet failure does not suppress a separately selected `j` or macOS setup.
+For unattended runs, set an option explicitly to `1` to enable it or `0` to disable it:
+
+| Variable | Choice | Default |
+| --- | --- | --- |
+| `CODYSSEY_TAILNET_SETUP` | Prepare Docker, build/start Tailscale and GOST, configure authentication and open the Tailnet browser | `0` |
+| `CODYSSEY_INSTALL_J` | Install the managed `~/.local/bin/j` command and macOS Dock launcher | `0` |
+| `CODYSSEY_MACOS_SETUP` | Apply personal keyboard, text, and optional Dock preferences | `0` |
+| `CODYSSEY_DOCK_SETUP` | Clean Dock pins/stacks within selected macOS setup | `0` |
+
+For example, from the repository root, explicitly select only the Tailnet services:
+
+```sh
+CODYSSEY_TAILNET_SETUP=1 CODYSSEY_INSTALL_J=0 CODYSSEY_MACOS_SETUP=0 sh init.sh
+```
+
+For all personal features in an unattended run (including destructive Dock cleanup):
+
+```sh
+CODYSSEY_TAILNET_SETUP=1 CODYSSEY_INSTALL_J=1 CODYSSEY_MACOS_SETUP=1 \
+  CODYSSEY_DOCK_SETUP=1 sh init.sh
+```
+
+`TS_AUTHKEY` alone does not opt into Tailnet setup. Without `CODYSSEY_TAILNET_SETUP=1`
+(or an affirmative prompt response), no Docker probe/start, authentication prompt, `.env`
+creation, service creation, or Tailnet browser setup occurs. Shell activation blocks are only
+added for selected Tailnet or `j` tools. Choosing `j` alone adds its launcher without changing
+keyboard, input methods, text settings, or existing Dock pins. Using that launcher later
+requires explicitly configuring a working Tailnet environment.
 
 ## Availability and trusted source
 
@@ -24,7 +59,6 @@ For the shortest remote command:
 curl -fsSL https://raw.githubusercontent.com/mjy9088/codyssey-public/main/init.sh | sh
 ```
 
-The root entry point must be published to GitHub before that new URL is available.
 The remote command downloads the latest public `main` branch. It buffers the bootstrap before
 execution. Revision and mirror overrides are not supported; run `sh init.sh` from a reviewed local
 checkout when a fixed revision is needed. `sh init.sh --help` works without network access.
@@ -44,10 +78,10 @@ place and rejects a different `CODYSSEY_INIT_DIR`, avoiding a partial or ambiguo
 
 ## Prerequisites
 
-- macOS with OrbStack installed in `/Applications` or `~/Applications`, or another running Docker Engine exposing Compose
+- for selected Tailnet setup: macOS with OrbStack installed in `/Applications` or `~/Applications`, or another running Docker Engine exposing Compose
 - `zsh`, `curl`, and ordinary terminal access
-- access to `/dev/net/tun` and permission for Docker to grant `NET_ADMIN` and `NET_RAW`
-- optionally, a Tailscale auth key or permission to complete browser login
+- for selected Tailnet setup: access to `/dev/net/tun` and permission for Docker to grant `NET_ADMIN` and `NET_RAW`
+- for selected Tailnet setup: optionally, a Tailscale auth key or permission to complete browser login
 
 The script reuses `mise` from the current path or `$HOME/.local/bin`. When it is missing, macOS arm64
 and x86_64 use the official `mise` v2026.10.5 release binary with a repository-pinned SHA-256 value.
@@ -61,7 +95,7 @@ Portable-browser preparation is deliberately not part of this worker: `--prepare
 dedicated profile and extension copy, so it stays in the foreground browser path rather than racing
 another profile operation.
 
-`init.sh` reuses a working Docker engine. Otherwise, on macOS with no explicit `DOCKER_HOST` or
+After Tailnet opt-in, `init.sh` reuses a working Docker engine. Otherwise, on macOS with no explicit `DOCKER_HOST` or
 `DOCKER_CONTEXT`, it starts the installed OrbStack through its bundled `orb start` command, bypassing
 the first-run Next button. It adds the bundled Docker tools as a fallback on PATH, registers missing
 Compose and Buildx plugins under `${DOCKER_CONFIG:-$HOME/.docker}/cli-plugins`, and waits up to 60
@@ -70,7 +104,7 @@ The fallback tools path is also added to `.zshrc` for later terminals. OrbStack 
 be installed; the bootstrap does not download it. The CLI is documented in
 [OrbStack commands](https://docs.orbstack.dev/machines/commands).
 
-`init.sh` then starts preparation in the background before any optional `j` or Dock prompt and keeps
+With Tailnet selected, `init.sh` then starts preparation in the background before any optional `j` or Dock prompt and keeps
 ownership of that worker through Tailscale input and preparation completion. It prints concise start,
 wait, and completion status while preparation output stays in a private temporary log, so build output
 cannot interleave with prompts. The log is removed after success, failure, or cancellation. Only after
@@ -81,14 +115,17 @@ state is restored.
 
 When standard output is a terminal and a controlling terminal is available, `init.sh` offers to
 install `~/.local/bin/j`, reading and writing the prompt through `/dev/tty`. This also works when the
-bootstrap script itself arrives through piped standard input. Enter (the `[Y/n]` default), `y`, `Y`, `yes`, and `YES`
-install a directly executable, mode-`0700` POSIX wrapper that changes to the resolved `codyssey-init`
+bootstrap script itself arrives through piped standard input. Enter declines (the `[y/N]` default). An explicit `y`, `Y`, `yes`, or `YES`
+installs a directly executable, mode-`0700` POSIX wrapper that changes to the resolved `codyssey-init`
 directory and runs `just` with the original arguments and exit status. Later accepted runs update that
 target atomically. The wrapper starts with `#!/bin/sh` followed by its ownership marker; the bootstrap
 also recognizes and migrates the earlier marker-first layout. Another existing `j` is preserved with
-a warning. Headless, unreadable-terminal, and declined runs do not create or change the command.
+a warning. Headless and unreadable-terminal runs skip the command unless `CODYSSEY_INSTALL_J=1` is supplied.
+Declined runs do not create or change the command or Dock launcher.
 
 ## Authentication and startup
+
+This section applies only after Tailnet setup is explicitly selected.
 
 An exported `TS_AUTHKEY`, including an intentionally empty value, takes precedence and is passed to
 Compose without creating or changing `.env`. An existing `.env` is also preserved. Otherwise, when a
@@ -173,8 +210,8 @@ hardware, app locations/versions, Docker backends, existing user preferences, pe
 input-method approvals, and managed-device policy can produce different results. Preferences
 may be partially applied; inspect the warnings and verify the actual Dock, shortcuts, Korean
 input, and browser behavior in your environment. Retry the relevant command below after fixing
-the cause. OrbStack startup failure does not prevent the Dock launcher from being attempted,
-and declining Dock cleanup still adds `j`. The launcher requires a working container when used.
+the cause. OrbStack startup failure does not prevent a separately selected Dock launcher from being attempted.
+Declining Dock cleanup adds the launcher only when `j` was explicitly selected. The launcher requires a working container when used.
 Repeated runs cannot bypass system approval or make an incompatible Docker backend compatible.
 A remote install refuses differing runtime files instead of overwriting them; for an upgrade,
 use a fresh reviewed checkout or preserve your configuration and choose a fresh install directory.
@@ -296,17 +333,18 @@ OrbStack installation. Other Docker engines may need port forwarding from their 
 
 ## macOS preferences
 
-This environment disables text automation and configures **Gureum 1.13.2 Hangul 2-set**
+When personal macOS preferences are selected, this environment disables text automation and configures **Gureum 1.13.2 Hangul 2-set**
 with **Control-Space for input switching and Command-Space for Spotlight**.
 Control-Space is applied automatically without a switching-key prompt. Interactive setup
-asks whether to clean up Dock pins and stacks. Enter accepts, keeping Terminal and Chrome plus
-the j terminal launcher; `n` preserves existing pins and stacks and adds only the j launcher.
+asks whether to clean up Dock pins and stacks. Enter declines and preserves existing pins
+and stacks; explicit Yes keeps Terminal and Chrome. The j terminal launcher is added only
+when `j` is separately selected.
 Caps Lock remains unsupported. Independent preference groups continue after a failure and
 report a nonzero summary status; the bootstrap continues container and browser setup.
 To provide choices without prompting:
 
 ```sh
-CODYSSEY_INPUT_SWITCH=control-space CODYSSEY_DOCK_SETUP=1 sh init.sh
+CODYSSEY_MACOS_SETUP=1 CODYSSEY_INPUT_SWITCH=control-space CODYSSEY_DOCK_SETUP=1 sh init.sh
 ```
 
 `macos-setup.sh` refuses non-Darwin systems and never uses `sudo`. Before each independent preference
@@ -315,16 +353,17 @@ group, it creates a private per-run backup under
 
 - disables macOS text automation;
 - when Dock cleanup is accepted and both Terminal and Google Chrome exist, replaces Dock app pins with those two apps,
-  adds a `Codyssey j.command` terminal launcher, hides recent items, and removes folder stacks;
-  when cleanup is declined or Chrome is missing, preserves the existing Dock and adds only the j launcher;
+  hides recent items and removes folder stacks;
+  the `Codyssey j.command` launcher is added only when explicitly selected, and declining cleanup preserves existing pins;
 - preserves unrelated input sources while adding Gureum Hangul 2-set once;
 - configures Control-Space and Control-Shift-Space for input switching, Command-Space for Spotlight,
   and Option-Command-Space for the Spotlight window, and disables Caps Lock switching; and
 - restarts only the current user's Dock process when pins change.
 
 `CODYSSEY_INPUT_SWITCH` accepts `control-space` or `caps-lock`; `CODYSSEY_DOCK_SETUP` accepts `0` or `1`.
-Without a terminal, Control-Space is used and existing Dock pins/stacks are preserved while adding the j launcher once. The legacy
-`CODYSSEY_MACOS_SETUP=1` still opts into Dock cleanup in unattended runs.
+Within selected macOS setup, Control-Space is used and existing Dock pins/stacks are preserved
+unless `CODYSSEY_DOCK_SETUP=1` is supplied. The standalone maintenance script adds the launcher
+only with `CODYSSEY_DOCK_LAUNCHER=1`; the root bootstrap sets that flag from the `j` choice.
 `CODYSSEY_MACOS_SETUP=0` explicitly skips all macOS preferences during bootstrap.
 `macos-setup.sh --input-only` changes input settings only; `--no-dock` also disables text automation.
 `macos-setup.sh --shortcuts-only` applies and verifies the shortcut bindings without changing input sources.
@@ -385,10 +424,10 @@ input-source and shortcut changes may require logging out and back in.
 
 ### Dock launcher
 
-Setup pins `Codyssey j.command` in the document area of the Dock. Clicking it opens
+Opting into `j` pins `Codyssey j.command` in the document area of the Dock. Clicking it opens
 Terminal in this installation and runs `just`, with the user-local mise tools on PATH. It does not
-require the optional global `j` wrapper. An unowned launcher is preserved. Declining Dock cleanup keeps existing pins, stacks and recent-app settings, and adds only the j launcher without duplicates. Run
-`bash macos-setup.sh --desktop-only` to apply only Dock setup.
+require the optional global `j` wrapper. An unowned launcher is preserved. Declining Dock cleanup keeps existing pins, stacks and recent-app settings, and, when explicitly selected, adds only the j launcher without duplicates. Run
+`CODYSSEY_DOCK_LAUNCHER=1 bash macos-setup.sh --desktop-only` to explicitly add the launcher.
 Dock tiles use typed XML plist values: URL type 15 and file types are integers, not OpenStep
 strings. This setup targets fresh installations; it does not migrate malformed tiles from older installs.
 
@@ -634,10 +673,10 @@ step is intentionally mutable and is not a reproducible package snapshot: Homebr
 formula or cask versions on a later run.
 
 Verification first runs `scripts/check.sh --native-python`, then runs the actual `init.sh` twice.
-This mode runs `portable-browser-test.py`, `macos-setup-test.py`, `vm-orchestration-test.py`, `preinstalled-tools-test.py`, and `installer-recovery-test.py` natively on the macOS guest
+This mode runs `portable-browser-test.py`, `macos-setup-test.py`, `vm-orchestration-test.py`, `preinstalled-tools-test.py`, `installer-recovery-test.py`, and `options-test.py` natively on the macOS guest
 with synthetic state and fake commands. The pinned Linux container runs the Bash/zsh bootstrap suites
-and always runs `vm-guest-test.py`, whose fake Homebrew, Colima, and Docker guest boundaries must never
-execute natively on macOS. No checks are omitted; native execution of the five safe Python suites avoids
+and always runs `vm-guest-test.py` (with a bounded 120-second case timeout for emulated subprocess startup), whose fake Homebrew, Colima, and Docker guest boundaries must never
+execute natively on macOS. No checks are omitted; native execution of the six safe Python suites avoids
 expensive process startup under x86 emulation. The default `scripts/check.sh` runs all suites inside
 the isolated container.
 Verification checks the

@@ -80,6 +80,7 @@ def environment(root: Path) -> tuple[dict[str, str], Path]:
         {
             "HOME": str(home),
             "CODYSSEY_DOCK_SETUP": "1",
+            "CODYSSEY_DOCK_LAUNCHER": "1",
             "USER": "test-user",
             "FAKE_DEFAULTS_STATE": str(state),
             "UNAME_BIN": str(fake_bin / "uname"),
@@ -336,7 +337,7 @@ def test_keep_dock_adds_launcher_once_and_rolls_back_failure() -> None:
 
 
 def test_interactive_dock_default_and_decline() -> None:
-    for answer in (b"\n", b"n\n"):
+    for answer in (b"\n", b"n\n", b"y\n"):
         with tempfile.TemporaryDirectory() as temporary:
             env, state = environment(Path(temporary))
             baseline(state)
@@ -358,7 +359,7 @@ def test_interactive_dock_default_and_decline() -> None:
                             chunk = b""
                             time.sleep(0.02)
                         output += chunk
-                        if not answered and b"[Y/n] " in output:
+                        if not answered and b"[y/N] " in output:
                             os.write(terminal, answer)
                             answered = True
                     child, status = os.waitpid(pid, os.WNOHANG)
@@ -375,7 +376,7 @@ def test_interactive_dock_default_and_decline() -> None:
             finally:
                 os.close(terminal)
             dock = read_domain(state, "com.apple.dock")
-            if answer == b"\n":
+            if answer == b"y\n":
                 assert_success_contract(state)
             else:
                 assert dock["persistent-apps"] == original["persistent-apps"]
@@ -399,7 +400,31 @@ def test_verifier_rejects_string_dock_types() -> None:
             assert result.returncode != 0 and "must be plist integers" in result.stderr, result.stderr
 
 
+def test_launcher_requires_explicit_opt_in() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        env, state = environment(Path(temporary))
+        baseline(state)
+        original = read_domain(state, "com.apple.dock")
+        env.pop("CODYSSEY_DOCK_LAUNCHER")
+        env.pop("CODYSSEY_DOCK_SETUP")
+        desktop = subprocess.run(["bash", str(ROOT / "macos-setup.sh"), "--desktop-only"],
+                                 env=env, text=True, capture_output=True)
+        assert desktop.returncode == 0, desktop.stderr
+        assert read_domain(state, "com.apple.dock") == original
+        env["CODYSSEY_DOCK_SETUP"] = "0"
+        launcher = Path(env["HOME"]) / "Library/Application Support/codyssey-init/Codyssey j.command"
+        for _ in range(2):
+            assert apply(env).returncode == 0
+            assert read_domain(state, "com.apple.dock") == original
+            assert not launcher.exists()
+        env["CODYSSEY_DOCK_SETUP"] = "1"
+        assert apply(env).returncode == 0
+        assert read_domain(state, "com.apple.dock")["persistent-others"] == []
+        assert not launcher.exists()
+
+
 def main() -> None:
+    test_launcher_requires_explicit_opt_in()
     test_verifier_rejects_string_dock_types()
     test_interactive_dock_default_and_decline()
     test_keep_dock_adds_launcher_once_and_rolls_back_failure()
@@ -413,7 +438,7 @@ def main() -> None:
     test_verifier_leaves_applied_state_on_success_and_restores_on_failure()
     test_verifier_retains_snapshot_when_restoration_fails()
     test_verifier_restores_after_keyboard_interrupt()
-    print("macOS setup isolated tests: 13 passed")
+    print("macOS setup isolated tests: 14 passed")
 
 
 if __name__ == "__main__":

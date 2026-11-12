@@ -78,8 +78,10 @@ sys.exit(0)
             env.pop("DOCKER_HOST", None)
             env.update(overrides)
             env["PATH"] = str(self.make_tools(work)) + os.pathsep + os.environ["PATH"]
+            # QEMU TCG measured over 25 seconds for full verifier fixtures; keep
+            # every assertion while allowing bounded emulated process startup.
             result = subprocess.run(["/bin/bash", str(ROOT / "scripts" / script), "--disposable"],
-                                    env=env, text=True, capture_output=True, timeout=25)
+                                    env=env, text=True, capture_output=True, timeout=120)
             return result, calls.read_text().splitlines() if calls.exists() else []
 
     def test_prepare_stops_owned_colima_after_readiness_failure(self) -> None:

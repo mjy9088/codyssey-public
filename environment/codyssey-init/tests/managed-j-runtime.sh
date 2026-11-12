@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# These scenarios explicitly exercise the opt-in Tailnet workflow.
+export CODYSSEY_TAILNET_SETUP=1 CODYSSEY_MACOS_SETUP=0
 root=/src
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -68,8 +70,10 @@ run_interactive_init() {
     "HOME='$home' PATH='$fakebin:/usr/bin:/bin' bash \"\$INIT_SOURCE/init.sh\"" /dev/null >"$output" 2>&1
 }
 
-run_interactive_init "$work" '' "$tmp/install.out"
-grep -Fq '[Y/n]' "$tmp/install.out"
+run_interactive_init "$work" '' "$tmp/default-no.out"
+[[ ! -e "$home/.local/bin/j" ]]
+grep -Fq '[y/N]' "$tmp/default-no.out"
+run_interactive_init "$work" yes "$tmp/install.out"
 j="$home/.local/bin/j"
 [[ $(sed -n '1p' "$j") == '#!/bin/sh' ]]
 [[ $(sed -n '2p' "$j") == '# codyssey-init: managed-j-v1' ]]

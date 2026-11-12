@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# These scenarios explicitly exercise the opt-in Tailnet workflow.
+export CODYSSEY_TAILNET_SETUP=1 CODYSSEY_MACOS_SETUP=1
 
 root=${TEST_ROOT:-/src}
 tmp=$(mktemp -d)

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# These scenarios explicitly exercise the opt-in Tailnet workflow.
+export CODYSSEY_TAILNET_SETUP=1 CODYSSEY_MACOS_SETUP=0
 root=/src
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -248,7 +250,7 @@ cat >"$install_bin/zsh" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$*" >>"$INSTALL_LOG"
 EOF
-INSTALL_LOG="$tmp/preference-failure.log" HOME="$install_home" PATH="$install_bin:/usr/bin:/bin" \
+CODYSSEY_MACOS_SETUP=1 INSTALL_LOG="$tmp/preference-failure.log" HOME="$install_home" PATH="$install_bin:/usr/bin:/bin" \
   CODYSSEY_INIT_DIR="$work" bash "$work/init.sh" >"$tmp/preference-failure.out" 2>&1
 grep -q 'macOS preferences failed (exit 17)' "$tmp/preference-failure.out"
 grep -q 'Retry preferences separately:' "$tmp/preference-failure.out"

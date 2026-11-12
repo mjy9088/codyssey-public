@@ -85,7 +85,7 @@ mkdir -p "$work/gost"
 cp "$root/tests/fixtures/gost.yaml" "$work/gost/gost.yaml"
 cd "$work"
 # Never inherit a real key, .env, project, or alternate Compose file from the caller.
-export TS_AUTHKEY='' CODYSSEY_MACOS_SETUP=0 CODYSSEY_OPEN_BROWSER=0
+export TS_AUTHKEY='' CODYSSEY_TAILNET_SETUP=1 CODYSSEY_INSTALL_J=0 CODYSSEY_MACOS_SETUP=0 CODYSSEY_OPEN_BROWSER=0
 export CODYSSEY_DOCK_SETUP=0 CODYSSEY_INTERACTIVE_SHELL=0
 unset CODYSSEY_INIT_DIR CODYSSEY_TTY_PATH ZDOTDIR
 unset UNAME_BIN DEFAULTS_BIN PLISTBUDDY_BIN PLUTIL_BIN KILLALL_BIN

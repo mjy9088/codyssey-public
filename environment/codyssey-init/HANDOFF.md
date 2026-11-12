@@ -99,10 +99,14 @@ additional forwarding; that is a fresh-VM compatibility check, not a proven port
 
 3. Run `sh scripts/check.sh`. Use the container checks on this reference machine; its Python 3.9.6
    cannot run the native suites, which require Python 3.10 or newer.
-4. Run `bash init.sh`. Leave the auth-key prompt blank for browser login. The script installs/reuses
-   the pinned Gureum package, Ghostty, and portable browser, starts the services, and opens authentication.
-   For an initial unattended pass use `CODYSSEY_OPEN_BROWSER=0 bash init.sh`, then `just browser`.
-5. Control-Space is applied automatically; choose Dock behavior at the prompt. Choose Allow in macOS input-source
+4. Run the root `sh init.sh` entry point. Tailscale/GOST, `j`/Dock launcher, and personal
+   macOS preferences all default to No. Select only the features you need; choose Tailnet
+   setup explicitly for the following authentication checks, then leave its auth-key prompt
+   blank for browser login. Ghostty is installed/reused by default. Selected macOS preferences install/reuse Gureum;
+   selected Tailnet setup starts services and opens authentication and the portable browser.
+   For an initial unattended Tailnet pass use `CODYSSEY_TAILNET_SETUP=1 CODYSSEY_OPEN_BROWSER=0 bash init.sh`, then `just browser`.
+5. If macOS preferences were selected, Control-Space is applied automatically;
+   Dock cleanup is a separate default-No choice. Choose Allow in macOS input-source
    activation dialogs while the helper waits. If approval times out, rerun
    `bash macos-setup.sh --input-only` in the same session.
 6. In a text field, use the selected switching key in both directions and verify Hangul composition
@@ -125,7 +129,8 @@ above, and keep any VM execution evidence in ignored storage.
 
 ## Retry and support
 
-Workstation settings are attempted even when Docker setup fails. Rerun the root
+Separately selected workstation settings are attempted even when Docker setup fails.
+Declining an option preserves existing user state and skips its configuration. Rerun the root
 `sh init.sh` entry point after fixing the cause; managed shell configuration,
 authentication files, and app copies are published atomically, and existing user
 configuration is preserved. The terminal prints a private persistent lifecycle log

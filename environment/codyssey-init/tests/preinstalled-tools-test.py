@@ -57,7 +57,7 @@ class ColdStartTests(unittest.TestCase):
                     path = fakebin / name
                     path.write_text(content)
                     path.chmod(0o700)
-                env.update(TS_AUTHKEY='', CODYSSEY_MACOS_SETUP='0', CODYSSEY_OPEN_BROWSER='0')
+                env.update(TS_AUTHKEY='', CODYSSEY_TAILNET_SETUP='1', CODYSSEY_INSTALL_J='0', CODYSSEY_MACOS_SETUP='0', CODYSSEY_OPEN_BROWSER='0')
                 runtime = work / 'runtime'
                 shutil.copytree(ROOT, runtime)
                 (runtime / 'macos-setup.sh').write_text('#!/bin/sh\necho preferences >> "$CALLS"\n')
@@ -91,7 +91,7 @@ class ColdStartTests(unittest.TestCase):
         self.assertTrue(calls.startswith('start\n'))
         self.assertIn('--prepared', calls)
         self.assertIn('docker-compose', plugins)
-        self.assertIn('Preparing environment', result.stdout)
+        self.assertIn('Preparing optional Tailnet environment', result.stdout)
 
     def test_failed_engine_still_applies_independent_steps_on_repeat(self):
         result, calls, _ = self.run_case('start-failure', entrypoint=True)
