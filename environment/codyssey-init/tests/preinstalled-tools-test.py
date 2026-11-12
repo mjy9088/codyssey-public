@@ -61,7 +61,8 @@ class ColdStartTests(unittest.TestCase):
                 runtime = work / 'runtime'
                 shutil.copytree(ROOT, runtime)
                 (runtime / 'macos-setup.sh').write_text('#!/bin/sh\necho preferences >> "$CALLS"\n')
-                (runtime / 'scripts/install-ghostty.sh').write_text('#!/bin/sh\necho ghostty >> "$CALLS"\n')
+                (runtime / 'scripts/install-iterm2.sh').write_text('#!/bin/sh\necho iterm2 >> "$CALLS"\n')
+                (runtime/'scripts/configure-iterm2.sh').write_text('#!/bin/sh\necho iterm2-config >> "$CALLS"\n')
                 env['CODYSSEY_MACOS_SETUP'] = '1'
                 command = ['/bin/bash', str(runtime / 'init.sh')]
             else:
@@ -97,7 +98,7 @@ class ColdStartTests(unittest.TestCase):
         result, calls, _ = self.run_case('start-failure', entrypoint=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(calls.count('preferences\n'), 2)
-        self.assertEqual(calls.count('ghostty\n'), 2)
+        self.assertEqual(calls.count('iterm2\n'), 2)
         self.assertNotIn('--prepared', calls)
         self.assertEqual(self.shell_state.count('# codyssey-init: mise\n'), 1)
         self.assertEqual(self.shell_state.count('# codyssey-init: OrbStack tools\n'), 1)
@@ -188,7 +189,7 @@ class InstalledAppTests(unittest.TestCase):
         apps = home / 'Applications'
         for path, identifier, version in (
             (apps / 'OrbStack.app', 'dev.kdrag0n.MacVirt', '2.2.4'),
-            (apps / 'Ghostty.app', 'com.mitchellh.ghostty', '1.4.0'),
+            (apps / 'iTerm.app', 'com.googlecode.iterm2', '3.7.7'),
             (apps / 'Google Chrome.app', 'com.google.Chrome', '155.0'),
             (home / 'Library/Input Methods/Gureum.app', 'org.youknowone.inputmethod.Gureum', '1.13.2'),
         ):

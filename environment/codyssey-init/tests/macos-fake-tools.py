@@ -177,6 +177,34 @@ def plistbuddy(arguments: list[str]) -> int:
     return 0
 
 
+def plutil(arguments: list[str]) -> int:
+    if arguments[:2] == ['-create', 'xml1']:
+        save(Path(arguments[2]), {})
+        return 0
+    operation, key = arguments[:2]
+    path = Path(arguments[-1])
+    data = load(path)
+    try:
+        parent, name = locate(data, ':' + key.replace('.', ':'))
+        if operation == '-replace':
+            kind, raw = arguments[2:4]
+            value = int(raw) if kind == '-integer' else raw == 'true' if kind == '-bool' else raw
+            if isinstance(parent, list): parent[int(name)] = value
+            else: parent[name] = value
+            save(path, data)
+            return 0
+        value = parent[int(name)] if isinstance(parent, list) else parent[name]
+        if operation == '-type':
+            print('bool' if isinstance(value, bool) else 'integer' if isinstance(value, int)
+                  else 'array' if isinstance(value, list) else 'dictionary' if isinstance(value, dict) else 'string')
+        elif operation == '-extract':
+            print(str(value).lower() if isinstance(value, bool) else len(value) if isinstance(value, (list, dict)) else value)
+        else: return 2
+        return 0
+    except (KeyError, IndexError, ValueError):
+        return 1
+
+
 def main() -> int:
     STATE.mkdir(parents=True, exist_ok=True)
     name = Path(sys.argv[0]).name
@@ -186,9 +214,8 @@ def main() -> int:
         return defaults(sys.argv[1:])
     if name == "PlistBuddy":
         return plistbuddy(sys.argv[1:])
-    if name == "plutil" and sys.argv[1:3] == ["-create", "xml1"]:
-        save(Path(sys.argv[3]), {})
-        return 0
+    if name == "plutil":
+        return plutil(sys.argv[1:])
     if name == "uname":
         print("Darwin")
         return 0

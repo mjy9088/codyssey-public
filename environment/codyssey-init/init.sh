@@ -17,7 +17,7 @@ remote_files=(
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh
   scripts/configure-tailnet-browser.py
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh
-  scripts/prepare-startup.sh scripts/install-ghostty.sh scripts/configure-shell.sh
+  scripts/prepare-startup.sh scripts/install-iterm2.sh scripts/configure-iterm2.sh scripts/configure-shell.sh
 )
 remote_staging=
 
@@ -198,8 +198,11 @@ if [[ $(uname -s) == Darwin ]]; then
   macos_setup=$(choose_setup_option "${CODYSSEY_MACOS_SETUP:-}" 'Apply optional macOS keyboard, text and Dock preferences?')
 fi
 if [[ $(uname -s) == Darwin ]]; then
-  if run_quiet_step "Installing Ghostty" bash "$init_dir/scripts/install-ghostty.sh"; then :; else
-    printf 'Ghostty installation failed; continuing remaining setup.\n' >&2
+  if run_quiet_step "Installing iTerm2" bash "$init_dir/scripts/install-iterm2.sh"; then :; else
+    printf 'iTerm2 installation failed; continuing remaining setup.\n' >&2
+  fi
+  if run_quiet_step "Configuring iTerm2 keyboard" bash "$init_dir/scripts/configure-iterm2.sh"; then :; else
+    printf 'iTerm2 keyboard configuration failed; continuing remaining setup.\n' >&2
   fi
 fi
 if [[ $(uname -s) == Darwin && ( $macos_setup == 1 || $j_setup == 1 ) ]]; then

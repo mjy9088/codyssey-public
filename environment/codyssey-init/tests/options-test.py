@@ -28,7 +28,8 @@ class OptionTests(unittest.TestCase):
             path = tools/name
             path.write_text('#!/bin/sh\n' + content + '\n')
             path.chmod(0o700)
-        (runtime/'scripts/install-ghostty.sh').write_text('#!/bin/sh\necho ghostty >> "$CALLS"\n')
+        (runtime/'scripts/install-iterm2.sh').write_text('#!/bin/sh\necho iterm2 >> "$CALLS"\n')
+        (runtime/'scripts/configure-iterm2.sh').write_text('#!/bin/sh\necho iterm2-config >> "$CALLS"\n')
         (runtime/'macos-setup.sh').write_text(
             '#!/bin/sh\nprintf "preferences:%s:%s:%s\\n" "$CODYSSEY_DOCK_LAUNCHER" "$CODYSSEY_DOCK_SETUP" "$*" >> "$CALLS"\n')
         env = dict(os.environ, HOME=str(home), PATH=str(tools)+':/usr/bin:/bin', CALLS=str(calls))
@@ -38,7 +39,7 @@ class OptionTests(unittest.TestCase):
         return runtime, home, calls, env
 
     def assert_default_skips(self, runtime, home, calls, runs=1):
-        self.assertEqual(calls.read_text().splitlines(), ['ghostty'] * runs)
+        self.assertEqual(calls.read_text().splitlines(), ['iterm2', 'iterm2-config'] * runs)
         self.assertFalse((home/'.local/bin/j').exists())
         self.assertFalse((home/'.zshrc').exists())
         self.assertFalse((runtime/'.env').exists())
@@ -70,7 +71,7 @@ class OptionTests(unittest.TestCase):
             self.assertEqual(len(list((home/'Library/Logs/codyssey-init').glob('run.*'))), 2)
             for path, text in existing.items():
                 self.assertEqual(path.read_text(), text)
-            self.assertEqual(calls.read_text().splitlines(), ['ghostty', 'ghostty'])
+            self.assertEqual(calls.read_text().splitlines(), ['iterm2', 'iterm2-config', 'iterm2', 'iterm2-config'])
 
     def test_enter_declines_all_three_prompts(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -109,7 +110,7 @@ class OptionTests(unittest.TestCase):
                             path.parent.mkdir(parents=True, exist_ok=True)
                             path.write_text(text)
                     else:
-                        self.assertEqual(calls.read_text().splitlines(), ['ghostty', 'ghostty'])
+                        self.assertEqual(calls.read_text().splitlines(), ['iterm2', 'iterm2-config', 'iterm2', 'iterm2-config'])
                         for path, text in existing.items():
                             self.assertEqual(path.read_text(), text)
                 finally:
@@ -125,6 +126,23 @@ class OptionTests(unittest.TestCase):
             self.assertTrue((home/'.local/bin/j').is_file())
             self.assertIn('preferences:1:0:--desktop-only', calls.read_text())
             self.assertNotIn('docker', calls.read_text())
+
+    def test_app_failures_do_not_suppress_launcher_or_preferences_on_repeat(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime, home, calls, env = self.fixture(Path(directory))
+            env.update(CODYSSEY_TAILNET_SETUP='0', CODYSSEY_INSTALL_J='1', CODYSSEY_MACOS_SETUP='1')
+            for name, status in [('install-iterm2.sh', 22), ('configure-iterm2.sh', 29)]:
+                (runtime/'scripts'/name).write_text(f'#!/bin/sh\nexit {status}\n')
+            for _ in range(2):
+                result = subprocess.run(['/bin/bash', str(runtime/'init.sh')], env=env,
+                                        stdin=subprocess.DEVNULL, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue((home/'.local/bin/j').is_file())
+            self.assertEqual(calls.read_text().count('preferences:1::'), 2)
+            logs = list((home/'Library/Logs/codyssey-init').glob('run.*'))
+            text = '\n'.join(path.read_text() for path in logs)
+            self.assertIn('exit=22', text)
+            self.assertIn('exit=29', text)
 
     def test_preferences_opt_in_does_not_install_j(self):
         with tempfile.TemporaryDirectory() as directory:

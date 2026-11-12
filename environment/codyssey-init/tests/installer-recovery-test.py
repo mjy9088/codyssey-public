@@ -18,8 +18,8 @@ def executable(path, body):
 
 
 class InstallerRecoveryTests(unittest.TestCase):
-    def test_ghostty_failure_then_retry_and_existing_app_preservation(self):
-        for failure in ('download', 'checksum', 'copy'):
+    def test_iterm2_failure_then_retry_and_existing_app_preservation(self):
+        for failure in ('download', 'checksum', 'extract', 'copy'):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
                 work = Path(directory)
                 home, tools = work/'home', work/'bin'
@@ -28,44 +28,40 @@ class InstallerRecoveryTests(unittest.TestCase):
                 executable(tools/'uname', 'echo Darwin')
                 executable(tools/'curl', '''[ "$FAILURE" != download ] || exit 22
 while [ "$#" -gt 0 ]; do
-  if [ "$1" = -o ]; then echo dmg > "$2"; exit 0; fi
+  if [ "$1" = -o ]; then echo zip > "$2"; exit 0; fi
   shift
 done
 exit 1''')
                 executable(tools/'shasum', '''if [ "$FAILURE" = checksum ]; then echo invalid; else
-  echo '3a02075dbd24318d778426af41dee5507d53ecc4578ede96912ec9ce6d18d3e8  file'
+  echo '549eb2b21464d7f4606165e51c36a6b1a252ac9a79958228a240152412759da2  file'
 fi''')
                 executable(tools/'plistbuddy', '''case "$2" in
-  *Identifier) echo com.mitchellh.ghostty ;;
-  *VersionString) echo 1.4.0 ;;
+  *Identifier) echo com.googlecode.iterm2 ;;
+  *VersionString) echo 3.7.7 ;;
   *) exit 1 ;;
 esac''')
-                executable(tools/'hdiutil', '''[ "$1" = attach ] || exit 0
-while [ "$#" -gt 0 ]; do
-  if [ "$1" = -mountpoint ]; then
-    mkdir -p "$2/Ghostty.app/Contents/MacOS"
-    echo ghostty > "$2/Ghostty.app/Contents/MacOS/ghostty"
-    chmod 700 "$2/Ghostty.app/Contents/MacOS/ghostty"
-    exit 0
-  fi
-  shift
-done
-exit 1''')
-                executable(tools/'ditto', '''cp -R "$1" "$2"
-[ "$FAILURE" != copy ] || exit 29''')
+                executable(tools/'ditto', '''if [ "$1" = -x ]; then
+  mkdir -p "$4/iTerm.app/Contents/MacOS"
+  echo iterm2 > "$4/iTerm.app/Contents/MacOS/iTerm2"
+  chmod 700 "$4/iTerm.app/Contents/MacOS/iTerm2"
+  [ "$FAILURE" != extract ] || exit 28
+else
+  cp -R "$1" "$2"
+  [ "$FAILURE" != copy ] || exit 29
+fi''')
                 env = dict(os.environ, HOME=str(home), PATH=str(tools)+':/usr/bin:/bin',
                            FAILURE=failure, PLISTBUDDY_BIN=str(tools/'plistbuddy'),
                            CODYSSEY_APPLICATIONS_DIR=str(work/'Applications'))
-                command = ['/bin/bash', str(ROOT/'scripts/install-ghostty.sh')]
+                command = ['/bin/bash', str(ROOT/'scripts/install-iterm2.sh')]
                 result = subprocess.run(command, env=env, capture_output=True, text=True)
                 self.assertNotEqual(result.returncode, 0, result.stdout)
-                target = home/'Applications/Ghostty.app'
+                target = home/'Applications/iTerm.app'
                 self.assertFalse(target.exists())
-                self.assertEqual(list(home.glob('Applications/.codyssey-ghostty.*')), [])
+                self.assertEqual(list(home.glob('Applications/.codyssey-iterm2.*')), [])
                 env['FAILURE'] = ''
                 result = subprocess.run(command, env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                binary = target/'Contents/MacOS/ghostty'
+                binary = target/'Contents/MacOS/iTerm2'
                 before = binary.read_bytes()
                 env['FAILURE'] = 'download'
                 again = subprocess.run(command, env=env, capture_output=True, text=True)

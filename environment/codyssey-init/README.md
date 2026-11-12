@@ -1,7 +1,7 @@
 # Codyssey macOS tailnet bootstrap
 
 This is a shared macOS workstation bootstrap for course participants. It installs or reuses
-Ghostty as a basic application. Personal Tailnet services and workstation preferences are
+iTerm2 as a basic application. Personal Tailnet services and workstation preferences are
 separate choices, all with **No as the default**. Pressing Enter or running without a terminal
 skips Tailscale/GOST, the `j` command and Dock launcher, and macOS keyboard/text/Dock settings.
 Declining an option preserves an existing installation; it does not uninstall apps, remove
@@ -198,12 +198,16 @@ Run `sh init.sh` again after correcting a failed prerequisite. Completed work is
 managed `j` is replaced atomically, shell activation blocks are written atomically and added once, existing `.env`
 and GOST configuration are preserved. A running Tailscale process keeps its session; a restart
 or recreation deliberately starts a new ephemeral identity.
-Ghostty is part of the default macOS application setup. A valid existing system or per-user
-Ghostty is reused without replacement; otherwise the checksum-pinned universal Ghostty 1.4.0
-DMG is installed under `~/Applications` without sudo or launching it. The complete bundle is
-staged before publication, so a failed copy can be retried. See the
-[official binary installation guide](https://ghostty.org/docs/install/binary) and the
-[checksum source](https://github.com/Homebrew/homebrew-cask/blob/main/Casks/g/ghostty.rb).
+iTerm2 is part of the default macOS application setup. A valid existing system or per-user
+iTerm2 is reused; otherwise the checksum-pinned universal iTerm2 3.7.7 ZIP is installed
+under `~/Applications` without sudo or launching it. The complete bundle is staged before
+publication, so failed installs can be retried. See the [checksum source](https://formulae.brew.sh/api/cask/iterm2.json).
+The default profile sets **Left Option = Esc+** and enables **Apps can change how keys are reported**,
+using user preferences without Accessibility or Automation permission. Other profiles and
+Right Option remain unchanged. Existing preferences are backed up privately under
+`~/Library/Application Support/codyssey-init/iterm2-backups`. Quit a running iTerm2 and rerun
+the same init command from Terminal to apply the settings; custom preference-folder configurations are
+preserved and reported for manual setup. See [iTerm2 keyboard settings](https://iterm2.com/documentation-preferences-profiles-keys.html).
 OrbStack windows are left under the user's control; the bootstrap does not hide them.
 
 Each runtime invocation prints its private diagnostic log path under
@@ -593,7 +597,7 @@ bash scripts/create-preinstalled-macos-image.sh \
 ```
 
 The builder clones the source and changes only that new VM. It installs checksum-pinned OrbStack
-2.2.4 and Ghostty 1.4.0 in `~/Applications`, and Gureum 1.13.2 in `~/Library/Input Methods` without launching onboarding,
+2.2.4 and iTerm2 3.7.7 in `~/Applications`, and Gureum 1.13.2 in `~/Library/Input Methods` without launching onboarding,
 activating input sources, sudo, or a Homebrew installation. The OrbStack archive pins come from the
 [official Homebrew cask](https://github.com/Homebrew/homebrew-cask/blob/master/Casks/o/orbstack.rb).
 The reference diagnostic used OrbStack 2.2.3 on Intel macOS 15.7.4; this newer pinned app and an ARM
@@ -612,7 +616,7 @@ Use the base for the complete pre-deployment check:
 bash scripts/create-macos-vm.sh --image codyssey-preinstalled --preinstalled
 ```
 
-This mode first inspects the real OrbStack/Gureum/Chrome/Ghostty bundles, checks Gureum's version, executes
+This mode first inspects the real OrbStack/Gureum/Chrome/iTerm2 bundles, checks Gureum's version, executes
 bundled Docker/Compose/Buildx version queries, checks Swift, and confirms that Docker is absent from
 the login PATH. It never starts OrbStack. The cold-start suite then exercises the production startup
 helper and full `init.sh` against temporary synthetic homes and fake engine commands, covering missing
@@ -692,7 +696,7 @@ Verification first runs `scripts/check.sh --native-python`, then runs the actual
 This mode runs `portable-browser-test.py`, `macos-setup-test.py`, `vm-orchestration-test.py`, `preinstalled-tools-test.py`, `installer-recovery-test.py`, `options-test.py`, and `browser-configuration-test.py` natively on the macOS guest
 with synthetic state and fake commands. The pinned Linux container runs the Bash/zsh bootstrap suites
 and always runs `vm-guest-test.py` (with a bounded 120-second case timeout for emulated subprocess startup), whose fake Homebrew, Colima, and Docker guest boundaries must never
-execute natively on macOS. No checks are omitted; native execution of the seven safe Python suites avoids
+execute natively on macOS. No checks are omitted; native execution of the eight safe Python suites avoids
 expensive process startup under x86 emulation. The default `scripts/check.sh` runs all suites inside
 the isolated container.
 Verification checks the

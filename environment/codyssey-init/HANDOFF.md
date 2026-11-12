@@ -102,7 +102,7 @@ additional forwarding; that is a fresh-VM compatibility check, not a proven port
 4. Run the root `sh init.sh` entry point. Tailscale/GOST, `j`/Dock launcher, and personal
    macOS preferences all default to No. Select only the features you need; choose Tailnet
    setup explicitly for the following authentication checks, then leave its auth-key prompt
-   blank for browser login. Ghostty is installed/reused by default. Selected macOS preferences install/reuse Gureum;
+   blank for browser login. iTerm2 is installed/reused by default. Selected macOS preferences install/reuse Gureum;
    selected Tailnet setup starts services and opens authentication and the portable browser.
    For an initial unattended Tailnet pass use `CODYSSEY_TAILNET_SETUP=1 CODYSSEY_OPEN_BROWSER=0 bash init.sh`, then `just browser`.
 5. If macOS preferences were selected, Control-Space is applied automatically;
