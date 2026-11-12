@@ -7,7 +7,7 @@ work="$tmp/local source's"
 cp -R "$root/." "$work"
 fakebin="$tmp/bin"
 home="$tmp/home"
-mkdir -p "$fakebin" "$home"
+mkdir -p "$fakebin" "$home/.local/bin"
 python=$(command -v python3)
 
 cat >"$fakebin/docker" <<'EOF'
@@ -32,6 +32,14 @@ cat >"$fakebin/mise" <<'EOF'
 #!/bin/sh
 exit 0
 EOF
+cat >"$home/.local/bin/mise" <<'EOF'
+#!/bin/sh
+case "$1" in trust|install) exit 0 ;; esac
+[ "$1" = exec ] && [ "$2" = -- ] && [ "$3" = just ] || exit 91
+shift 3
+exec "$MANAGED_JUST" "$@"
+EOF
+chmod 0755 "$home/.local/bin/mise"
 cat >"$fakebin/just" <<'EOF'
 #!/bin/sh
 printf 'cwd=<%s>\n' "$PWD" >"$JUST_LOG"
@@ -69,7 +77,7 @@ j="$home/.local/bin/j"
 
 just_log="$tmp/just.log"
 set +e
-(cd "$tmp" && JUST_LOG="$just_log" JUST_STATUS=29 PATH="$fakebin:/usr/bin:/bin" \
+(cd "$tmp" && HOME="$home" MANAGED_JUST="$fakebin/just" JUST_LOG="$just_log" JUST_STATUS=29 PATH="$fakebin:/usr/bin:/bin" \
   "$python" -c 'import subprocess, sys; raise SystemExit(subprocess.run([sys.argv[1], "two words", "*"]).returncode)' "$j")
 status=$?
 set -e
@@ -91,14 +99,27 @@ run_interactive_init "$work" YES "$tmp/migrate.out"
 ref=0123456789abcdef0123456789abcdef01234567
 pipe_home="$tmp/pipe-home"
 pipe_target="$tmp/remote target"
-mkdir -p "$pipe_home"
+mkdir -p "$pipe_home/.local/bin"
+cp "$home/.local/bin/mise" "$pipe_home/.local/bin/mise"
 printf 'yes\n' | INIT_SOURCE="$work/init.sh" script -q -e -c \
   "cat \"\$INIT_SOURCE\" | HOME='$pipe_home' PATH='$fakebin:/usr/bin:/bin' REMOTE_SOURCE='$root' CODYSSEY_INIT_DIR='$pipe_target' bash" \
   /dev/null >"$tmp/pipe.out" 2>&1
 pipe_j="$pipe_home/.local/bin/j"
 [[ -x $pipe_j ]]
-JUST_LOG="$just_log" PATH="$fakebin:/usr/bin:/bin" "$pipe_j"
+HOME="$pipe_home" MANAGED_JUST="$fakebin/just" JUST_LOG="$just_log" PATH="/usr/bin:/bin" "$pipe_j"
 grep -Fx "cwd=<$pipe_target>" "$just_log"
+
+# Reuse a mise installation outside ~/.local/bin, including quoted paths.
+external_bin="$tmp/external mise's bin"
+external_home="$tmp/external-home"
+mkdir -p "$external_bin" "$external_home"
+cp "$home/.local/bin/mise" "$external_bin/mise"
+printf 'yes\n' | EXTERNAL_BIN="$external_bin" INIT_SOURCE="$work" script -q -e -c \
+  "HOME='$external_home' PATH=\"\$EXTERNAL_BIN:$fakebin:/usr/bin:/bin\" bash \"\$INIT_SOURCE/init.sh\"" \
+  /dev/null >"$tmp/external.out" 2>&1
+HOME="$external_home" MANAGED_JUST="$fakebin/just" JUST_LOG="$just_log" PATH="/usr/bin:/bin" \
+  "$external_home/.local/bin/j"
+grep -Fx "cwd=<$work>" "$just_log"
 
 headless_home="$tmp/headless-home"
 headless_target="$tmp/headless-target"

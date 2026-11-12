@@ -6,7 +6,7 @@ RUN apk add --no-cache \
       curl=8.14.1-r2 \
       git=2.43.7-r0 \
       jq=1.7.1-r0 \
-      openssh-client-default=9.6_p1-r2 \
+      openssh-client-default=9.6_p1-r3 \
   && mkdir -p /host
 
 ENV MISE_DATA_DIR=/opt/mise \

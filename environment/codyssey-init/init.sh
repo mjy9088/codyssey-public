@@ -36,7 +36,7 @@ write_shell_quoted() {
 }
 
 install_managed_j() {
-  local target=$1 bin command_path first_line second_line temporary
+  local target=$1 bin command_path first_line second_line temporary mise_path
   bin="$HOME/.local/bin"
   command_path="$bin/j"
   if [[ -e $command_path || -L $command_path ]]; then
@@ -53,12 +53,16 @@ install_managed_j() {
     fi
   fi
   mkdir -p "$bin"
+  mise_path=$(command -v mise) || die 'mise is required to install the j wrapper.'
+  [[ $mise_path == /* ]] || mise_path="$PWD/$mise_path"
   temporary=$(mktemp "$bin/.j.XXXXXX") || die 'could not create a temporary j wrapper.'
   if ! {
     printf '%s\n' '#!/bin/sh' '# codyssey-init: managed-j-v1' 'set -eu'
     printf 'cd -- '
     write_shell_quoted "$target"
-    printf '\nexec just "$@"\n'
+    printf '\nexec '
+    write_shell_quoted "$mise_path"
+    printf ' exec -- just "$@"\n'
   } >"$temporary"; then
     rm -f "$temporary"
     die 'could not write the j wrapper.'
