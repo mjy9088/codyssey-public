@@ -59,8 +59,15 @@ class OptionTests(unittest.TestCase):
             for path, text in existing.items():
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(text)
+            prior_log = next((home/'Library/Logs/codyssey-init').glob('run.*'))
+            prior_content = prior_log.read_bytes()
+            # An interactive shell can inherit the previous run's internal log
+            # variable. A new public init invocation must still get its own log.
+            env['CODYSSEY_RUN_LOG'] = str(prior_log)
             again = subprocess.run(command, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True)
             self.assertEqual(again.returncode, 0, again.stderr)
+            self.assertEqual(prior_log.read_bytes(), prior_content)
+            self.assertEqual(len(list((home/'Library/Logs/codyssey-init').glob('run.*'))), 2)
             for path, text in existing.items():
                 self.assertEqual(path.read_text(), text)
             self.assertEqual(calls.read_text().splitlines(), ['ghostty', 'ghostty'])

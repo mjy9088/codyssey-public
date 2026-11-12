@@ -134,7 +134,7 @@ fi
 init_dir=$(CDPATH= cd -- "$init_dir" && pwd -P)
 
 . "$init_dir/lib/logging.sh"
-init_run_log
+init_run_log new
 . "$init_dir/lib/options.sh"
 . "$init_dir/lib/bootstrap-tools.sh"
 . "$init_dir/lib/auth.sh"

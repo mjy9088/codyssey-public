@@ -3,7 +3,8 @@
 # input, environment variables, login URLs, or container logs into a shareable log.
 init_run_log() {
   local directory
-  [ -z "${CODYSSEY_RUN_LOG:-}" ] || return 0
+  if [ "${1:-}" != new ] && [ -n "${CODYSSEY_RUN_LOG:-}" ]; then return 0; fi
+  CODYSSEY_RUN_LOG=
   directory="$HOME/Library/Logs/codyssey-init"
   if ! (umask 077; mkdir -p "$directory" && chmod 0700 "$directory"); then
     printf 'codyssey-init: could not create diagnostic log directory.\n' >&2
