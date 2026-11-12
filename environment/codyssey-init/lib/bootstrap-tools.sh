@@ -2,8 +2,10 @@
 # Shared by the installer and disposable-VM cold-start verification.
 . "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/preparation.sh"
 mise_download=
+mise_staging=
 cleanup_mise_download() {
   [[ -z $mise_download ]] || rm -f "$mise_download"
+  [[ -z $mise_staging ]] || rm -f "$mise_staging"
 }
 
 
@@ -18,16 +20,16 @@ prepare_docker() {
     return
   fi
   if [[ $(uname -s) == Darwin && -z ${DOCKER_HOST:-} && -z ${DOCKER_CONTEXT:-} ]]; then
-    for app in /Applications/OrbStack.app "$HOME/Applications/OrbStack.app"; do
+    for app in "${CODYSSEY_APPLICATIONS_DIR:-/Applications}/OrbStack.app" "$HOME/Applications/OrbStack.app"; do
       tools="$app/Contents/MacOS/xbin"
       [[ -x $app/Contents/MacOS/bin/orb && -x $tools/docker ]] || continue
       # Keep an existing Docker CLI ahead of the bundled fallback.
       export PATH="$PATH:$tools"
       plugin_dir="${DOCKER_CONFIG:-$HOME/.docker}/cli-plugins"
-      mkdir -p "$plugin_dir"
+      mkdir -p "$plugin_dir" || die 'could not create Docker plugin directory.'
       for plugin in docker-compose docker-buildx; do
         if [[ ! -e $plugin_dir/$plugin && ! -L $plugin_dir/$plugin && -x $tools/$plugin ]]; then
-          ln -s "$tools/$plugin" "$plugin_dir/$plugin"
+          ln -s "$tools/$plugin" "$plugin_dir/$plugin" || die 'could not register Docker plugin.'
         fi
       done
       printf 'Starting OrbStack through its bundled CLI.\n'
@@ -65,11 +67,14 @@ install_mise() {
   mise_download=$download
   trap cleanup_mise_download EXIT
   curl --fail --location --silent --show-error \
-    "https://github.com/jdx/mise/releases/download/$MISE_VERSION/$asset" -o "$download"
+    "https://github.com/jdx/mise/releases/download/$MISE_VERSION/$asset" -o "$download" || return $?
   [[ $(shasum -a 256 "$download" | cut -d ' ' -f 1) == "$checksum" ]] \
     || die "mise $MISE_VERSION checksum verification failed."
-  mkdir -p "$HOME/.local/bin"
-  install -m 0755 "$download" "$HOME/.local/bin/mise"
+  mkdir -p "$HOME/.local/bin" || return $?
+  mise_staging=$(mktemp "$HOME/.local/bin/.mise.XXXXXX") || return $?
+  install -m 0755 "$download" "$mise_staging" || return $?
+  mv -f "$mise_staging" "$HOME/.local/bin/mise" || return $?
+  mise_staging=
   rm -f "$download"
   mise_download=
   trap - EXIT

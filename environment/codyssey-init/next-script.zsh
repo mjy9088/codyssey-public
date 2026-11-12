@@ -4,6 +4,8 @@ setopt pipe_fail
 
 root=${0:A:h}
 cd "$root"
+. "$root/lib/logging.sh"
+init_run_log
 . "$root/lib/auth.sh"
 . "$root/lib/preparation.sh"
 . "$root/lib/readiness.zsh"
@@ -17,11 +19,12 @@ elif (( $# != 0 )); then
   exit 2
 fi
 
+trap finish_startup EXIT
+trap 'interrupt_startup 129' HUP
+trap 'interrupt_startup 130' INT
+trap 'interrupt_startup 143' TERM
+
 if (( prepared == 0 )); then
-  trap finish_startup EXIT
-  trap 'interrupt_startup 129' HUP
-  trap 'interrupt_startup 130' INT
-  trap 'interrupt_startup 143' TERM
   printf 'Preparing environment…\n'
   start_startup_preparation "$root"
 fi
@@ -42,25 +45,40 @@ if (( prepared == 0 )); then
   wait_startup_preparation
 fi
 eval "$(mise env -s zsh)"
-run_quiet_step "Starting services" docker compose up -d --no-build
-wait_for_tailnet
+service_status=0
+if run_quiet_step "Starting services" docker compose up -d --no-build; then :; else
+  service_status=1
+fi
+if wait_for_tailnet; then log_event tailscale ready; else
+  service_status=1
+  log_event tailscale failed
+fi
 
 if [[ $tailnet_state == needs-login ]]; then
-  find_tailscale_auth_url
-  printf 'Tailscale is not connected yet. Authenticate at: %s\n' "$auth_url"
-  if [[ ${CODYSSEY_OPEN_BROWSER:-1} != 0 ]] && command -v open >/dev/null 2>&1; then
-    open_browser "$auth_url" || printf 'Could not launch the browser; use the printed login URL.\n' >&2
+  if find_tailscale_auth_url; then
+    printf 'Tailscale is not connected yet. Authenticate at: %s\n' "$auth_url"
+    if [[ ${CODYSSEY_OPEN_BROWSER:-1} != 0 ]] && command -v open >/dev/null 2>&1; then
+      open_browser "$auth_url" || printf 'Could not launch the browser; use the printed login URL.\n' >&2
+    fi
+  else
+    service_status=1
+    log_event authentication-url unavailable
   fi
 fi
 
 ui_url='http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080'
-wait_for_gost_ui
-
-printf 'GOST UI: %s\n' "$ui_url"
-if [[ ${CODYSSEY_OPEN_BROWSER:-1} != 0 ]] && command -v open >/dev/null 2>&1; then
-  open_browser "$ui_url" || printf 'Could not launch the browser; use the printed GOST URL.\n' >&2
+if wait_for_gost_ui; then
+  log_event gost ready
+  printf 'GOST UI: %s\n' "$ui_url"
+  if [[ ${CODYSSEY_OPEN_BROWSER:-1} != 0 ]] && command -v open >/dev/null 2>&1; then
+    open_browser "$ui_url" || printf 'Could not launch the browser; use the printed GOST URL.\n' >&2
+  fi
+else
+  service_status=1
+  log_event gost failed
 fi
-
+(( service_status == 0 )) || exit 1
+log_event services ready
 printf 'Environment ready. Use j or the Dock launcher to open the Tailnet terminal.\n'
 if [[ -t 0 && -t 1 && ${CODYSSEY_INTERACTIVE_SHELL:-1} != 0 ]]; then
   exec zsh -i

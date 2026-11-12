@@ -3,20 +3,21 @@ set -euo pipefail
 
 die() {
   printf 'codyssey-init: %s\n' "$*" >&2
+  if command -v log_event >/dev/null 2>&1; then log_event run failed; fi
   exit 1
 }
 
 remote_files=(
   .dockerignore .env.example Dockerfile README.md HANDOFF.md docker-compose.yml init.sh justfile
   macos-setup.sh mise.toml next-script.zsh tailnet.sh verify-macos-setup.py
-  lib/auth.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh gost/gost.yaml enable-korean.swift tailscale-entrypoint.sh
+  lib/auth.sh lib/logging.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh gost/gost.yaml enable-korean.swift tailscale-entrypoint.sh
   chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh
   scripts/configure-tailnet-browser.py
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh
-  scripts/prepare-startup.sh scripts/quiet-desktop.swift
+  scripts/prepare-startup.sh scripts/install-ghostty.sh scripts/configure-shell.sh
 )
 remote_staging=
 
@@ -52,7 +53,7 @@ install_managed_j() {
       return 0
     fi
   fi
-  mkdir -p "$bin"
+  mkdir -p "$bin" || die 'could not create j command directory.'
   mise_path=$(command -v mise) || die 'mise is required to install the j wrapper.'
   [[ $mise_path == /* ]] || mise_path="$PWD/$mise_path"
   temporary=$(mktemp "$bin/.j.XXXXXX") || die 'could not create a temporary j wrapper.'
@@ -83,7 +84,7 @@ install_remote_files() {
     curl --fail --location --silent --show-error \
       "https://raw.githubusercontent.com/mjy9088/codyssey-public/main/environment/codyssey-init/$file" -o "$staging/$file"
   done
-  for file in init.sh tailnet.sh lib/auth.sh lib/preparation.sh lib/bootstrap-tools.sh macos-setup.sh \
+  for file in init.sh tailnet.sh lib/auth.sh lib/logging.sh lib/preparation.sh lib/bootstrap-tools.sh macos-setup.sh \
     scripts/prepare-startup.sh; do
     bash -n "$staging/$file"
   done
@@ -132,11 +133,28 @@ else
 fi
 init_dir=$(CDPATH= cd -- "$init_dir" && pwd -P)
 
+. "$init_dir/lib/logging.sh"
+init_run_log
 . "$init_dir/lib/bootstrap-tools.sh"
-prepare_docker
+container_status=0
+if (prepare_docker); then
+  # Repeat in this shell to retain the bundled tools PATH. The engine is now ready.
+  for orb_app in "${CODYSSEY_APPLICATIONS_DIR:-/Applications}/OrbStack.app" "$HOME/Applications/OrbStack.app"; do
+    [[ ! -x $orb_app/Contents/MacOS/xbin/docker ]] || export PATH="$PATH:$orb_app/Contents/MacOS/xbin"
+  done
+  log_event docker ready
+else
+  container_status=1
+  log_event docker failed
+fi
 command -v zsh >/dev/null 2>&1 || die 'zsh is required.'
 export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
-command -v mise >/dev/null 2>&1 || install_mise
+if command -v mise >/dev/null 2>&1 || (install_mise); then
+  log_event tools ready
+else
+  container_status=1
+  log_event tools failed
+fi
 . "$init_dir/lib/preparation.sh"
 . "$init_dir/lib/auth.sh"
 trap finish_startup EXIT
@@ -144,41 +162,27 @@ trap 'interrupt_startup 129' HUP
 trap 'interrupt_startup 130' INT
 trap 'interrupt_startup 143' TERM
 printf 'Preparing environment…\n'
-start_startup_preparation "$init_dir"
+if [[ $container_status == 0 ]]; then
+  if start_startup_preparation "$init_dir"; then :; else container_status=$?; fi
+fi
 
 if [[ -t 1 ]] && { true </dev/tty && true >/dev/tty; } 2>/dev/null; then
   printf 'Install the global j command in %s? [Y/n] ' "$HOME/.local/bin" >/dev/tty
   IFS= read -r install_j_answer </dev/tty || install_j_answer=n
   case $install_j_answer in
-    ''|y|Y|yes|YES) install_managed_j "$init_dir" ;;
+    ''|y|Y|yes|YES) if (install_managed_j "$init_dir"); then log_event j installed; else log_event j failed; fi ;;
     *) ;;
   esac
 fi
 
-zsh_dir=${ZDOTDIR:-$HOME}
-zshrc="$zsh_dir/.zshrc"
-mkdir -p "$zsh_dir"
-touch "$zshrc"
-if ! grep -q '^# codyssey-init: OrbStack tools$' "$zshrc"; then
-  cat >>"$zshrc" <<'EOF'
-
-# codyssey-init: OrbStack tools
-for codyssey_orb_app in /Applications/OrbStack.app "$HOME/Applications/OrbStack.app"; do
-  if [ -x "$codyssey_orb_app/Contents/MacOS/xbin/docker" ]; then
-    export PATH="$PATH:$codyssey_orb_app/Contents/MacOS/xbin"
-    break
-  fi
-done
-unset codyssey_orb_app
-EOF
+if run_quiet_step "Configuring shell" bash "$init_dir/scripts/configure-shell.sh"; then :; else
+  printf 'Shell configuration failed; continuing remaining setup.\n' >&2
 fi
-if ! grep -q '^# codyssey-init: mise$' "$zshrc"; then
-  cat >>"$zshrc" <<'EOF'
 
-# codyssey-init: mise
-export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
-eval "$(mise activate zsh)"
-EOF
+if [[ $(uname -s) == Darwin ]]; then
+  if run_quiet_step "Installing Ghostty" bash "$init_dir/scripts/install-ghostty.sh"; then :; else
+    printf "Ghostty installation failed; continuing remaining setup.\n" >&2
+  fi
 fi
 
 macos_setup=${CODYSSEY_MACOS_SETUP:-}
@@ -188,15 +192,20 @@ fi
 [[ $macos_setup == 0 || $macos_setup == 1 ]] || die 'CODYSSEY_MACOS_SETUP must be 0 or 1.'
 if [[ $macos_setup == 1 ]]; then
   if bash "$init_dir/macos-setup.sh"; then
-    :
+    log_event preferences ready
   else
     preference_status=$?
+    log_event preferences "incomplete exit=$preference_status"
     printf 'codyssey-init: macOS preferences failed (exit %s); continuing container and browser setup.\n' "$preference_status" >&2
     printf 'Retry preferences separately: bash "%s/macos-setup.sh"\n' "$init_dir" >&2
   fi
 fi
 
 cd "$init_dir"
+if [[ $container_status != 0 ]]; then
+  printf "Container setup failed; independent workstation settings were still attempted. Rerun sh init.sh to retry.\n" >&2
+  exit "$container_status"
+fi
 configure_tailscale_auth
 wait_startup_preparation
 if [[ -t 0 ]]; then

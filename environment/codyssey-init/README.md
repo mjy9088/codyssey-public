@@ -138,8 +138,46 @@ browser is launched. VM verification uses this mode to avoid first-launch browse
 the bootstrap.
 
 macOS preference failures print a warning and a command to retry them separately.
-They do not prevent container startup or browser setup. Docker, tool installation,
-and service readiness failures still stop the bootstrap.
+They do not prevent container startup or browser setup. Docker, tool installation, and service readiness failures return a nonzero status.
+Independent workstation settings are attempted even when Docker or tool preparation fails;
+steps that require those prerequisites are skipped. Tailscale readiness and GOST UI readiness
+are checked independently, so one failing service does not suppress the other result.
+
+## Repeated runs, diagnostics, and environment differences
+
+Run `sh init.sh` again after correcting a failed prerequisite. Completed work is reused:
+managed `j` is replaced atomically, shell activation blocks are written atomically and added once, existing `.env`
+and GOST configuration are preserved, and Compose retains the Tailscale identity volume.
+Ghostty is part of the default macOS application setup. A valid existing system or per-user
+Ghostty is reused without replacement; otherwise the checksum-pinned universal Ghostty 1.4.0
+DMG is installed under `~/Applications` without sudo or launching it. The complete bundle is
+staged before publication, so a failed copy can be retried. See the
+[official binary installation guide](https://ghostty.org/docs/install/binary) and the
+[checksum source](https://github.com/Homebrew/homebrew-cask/blob/main/Casks/g/ghostty.rb).
+OrbStack windows are left under the user's control; the bootstrap does not hide them.
+
+Each runtime invocation prints its private diagnostic log path under
+`~/Library/Logs/codyssey-init/run.*` (directory mode `0700`, files `0600`). Logs survive
+success, failure, and cancellation. Attach that file to a problem report, together with the
+command you ran, the repository revision (`git rev-parse HEAD` for a checkout), and the
+visible error. The shareable log records UTC timestamps, macOS/architecture, stage outcomes,
+and exit codes. It deliberately excludes command output, environment dumps, auth input,
+Tailscale login URLs, and container logs. Detailed tool diagnostics still appear in the
+terminal on failure. Review any extra terminal output before sharing it. Delete old log files
+manually when no longer needed; no automatic upload occurs. If logging is unavailable, a
+warning is printed and setup continues. Remote download/preflight failures occur before the
+runtime log exists, so include their terminal error separately.
+
+A successful command does not guarantee every macOS setting took effect. OS versions,
+hardware, app locations/versions, Docker backends, existing user preferences, permissions,
+input-method approvals, and managed-device policy can produce different results. Preferences
+may be partially applied; inspect the warnings and verify the actual Dock, shortcuts, Korean
+input, and browser behavior in your environment. Retry the relevant command below after fixing
+the cause. OrbStack startup failure does not prevent the Dock launcher from being attempted,
+and declining Dock cleanup still adds `j`. The launcher requires a working container when used.
+Repeated runs cannot bypass system approval or make an incompatible Docker backend compatible.
+A remote install refuses differing runtime files instead of overwriting them; for an upgrade,
+use a fresh reviewed checkout or preserve your configuration and choose a fresh install directory.
 
 ## Container privilege and mount boundary
 
@@ -345,17 +383,15 @@ classified as absent.
 Restoring a whole domain also reverts later changes in that domain. Restart affected applications;
 input-source and shortcut changes may require logging out and back in.
 
-### A quieter desktop
+### Dock launcher
 
 Setup pins `Codyssey j.command` in the document area of the Dock. Clicking it opens
 Terminal in this installation and runs `just`, with the user-local mise tools on PATH. It does not
 require the optional global `j` wrapper. An unowned launcher is preserved. Declining Dock cleanup keeps existing pins, stacks and recent-app settings, and adds only the j launcher without duplicates. Run
-`bash macos-setup.sh --desktop-only` to apply only Dock and desktop cleanup.
+`bash macos-setup.sh --desktop-only` to apply only Dock setup.
 Dock tiles use typed XML plist values: URL type 15 and file types are integers, not OpenStep
 strings. This setup targets fresh installations; it does not migrate malformed tiles from older installs.
 
-The desktop helper hides OrbStack's GUI without stopping Docker or requiring Accessibility access.
-`just quiet-desktop` hides it again; the window may be reopened from its menu bar icon.
 Notification dismissal is not automated: controlling Notification Center requires separate
 Accessibility permission, which may already be granted to a VM's Guest Agent but is not assumed
 for a classroom terminal. Clear existing notifications manually. To suppress future banners,
@@ -502,7 +538,7 @@ bash scripts/create-preinstalled-macos-image.sh \
 ```
 
 The builder clones the source and changes only that new VM. It installs checksum-pinned OrbStack
-2.2.4 in `~/Applications` and Gureum 1.13.2 in `~/Library/Input Methods` without launching onboarding,
+2.2.4 and Ghostty 1.4.0 in `~/Applications`, and Gureum 1.13.2 in `~/Library/Input Methods` without launching onboarding,
 activating input sources, sudo, or a Homebrew installation. The OrbStack archive pins come from the
 [official Homebrew cask](https://github.com/Homebrew/homebrew-cask/blob/master/Casks/o/orbstack.rb).
 The reference diagnostic used OrbStack 2.2.3 on Intel macOS 15.7.4; this newer pinned app and an ARM
@@ -521,7 +557,7 @@ Use the base for the complete pre-deployment check:
 bash scripts/create-macos-vm.sh --image codyssey-preinstalled --preinstalled
 ```
 
-This mode first inspects the real OrbStack/Gureum/Chrome bundles, checks Gureum's version, executes
+This mode first inspects the real OrbStack/Gureum/Chrome/Ghostty bundles, checks Gureum's version, executes
 bundled Docker/Compose/Buildx version queries, checks Swift, and confirms that Docker is absent from
 the login PATH. It never starts OrbStack. The cold-start suite then exercises the production startup
 helper and full `init.sh` against temporary synthetic homes and fake engine commands, covering missing
@@ -598,10 +634,10 @@ step is intentionally mutable and is not a reproducible package snapshot: Homebr
 formula or cask versions on a later run.
 
 Verification first runs `scripts/check.sh --native-python`, then runs the actual `init.sh` twice.
-This mode runs `portable-browser-test.py`, `macos-setup-test.py`, `vm-orchestration-test.py`, and `preinstalled-tools-test.py` natively on the macOS guest
+This mode runs `portable-browser-test.py`, `macos-setup-test.py`, `vm-orchestration-test.py`, `preinstalled-tools-test.py`, and `installer-recovery-test.py` natively on the macOS guest
 with synthetic state and fake commands. The pinned Linux container runs the Bash/zsh bootstrap suites
 and always runs `vm-guest-test.py`, whose fake Homebrew, Colima, and Docker guest boundaries must never
-execute natively on macOS. No checks are omitted; native execution of the four safe Python suites avoids
+execute natively on macOS. No checks are omitted; native execution of the five safe Python suites avoids
 expensive process startup under x86 emulation. The default `scripts/check.sh` runs all suites inside
 the isolated container.
 Verification checks the

@@ -5,9 +5,7 @@ wait_for_tailnet() {
   tailnet_state=
   for _ in {1..90}; do
     running=$(docker compose ps --status running --services 2>/dev/null || true)
-    if print -r -- "$running" | grep -qx tailscale \
-      && print -r -- "$running" | grep -qx gost \
-      && print -r -- "$running" | grep -qx gost-ui; then
+    if print -r -- "$running" | grep -qx tailscale; then
       tailscale_status=$(docker compose exec -T tailscale tailscale status --json 2>/dev/null || true)
       if print -r -- "$tailscale_status" | grep -q '"BackendState"[[:space:]]*:[[:space:]]*"Running"'; then
         tailnet_state=running
@@ -41,12 +39,17 @@ find_tailscale_auth_url() {
 }
 
 wait_for_gost_ui() {
+  local running
   for _ in {1..60}; do
-    if curl --silent --fail --output /dev/null "$ui_url"; then
+    running=$(docker compose ps --status running --services 2>/dev/null || true)
+    if print -r -- "$running" | grep -qx gost \
+      && print -r -- "$running" | grep -qx gost-ui \
+      && curl --silent --fail --output /dev/null 'http://localhost:18080/config' \
+      && curl --silent --fail --output /dev/null "$ui_url"; then
       return 0
     fi
     sleep 1
   done
-  printf 'GOST UI did not become ready: %s\n' "$ui_url" >&2
+  printf 'GOST API/UI did not become ready: %s\n' "$ui_url" >&2
   return 1
 }

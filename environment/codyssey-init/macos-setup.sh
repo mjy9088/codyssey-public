@@ -46,9 +46,9 @@ if [[ $input_switch == caps-lock ]]; then
 fi
 
 backup_parent="$HOME/Library/Application Support/codyssey-init/macos-backups"
-mkdir -p "$backup_parent" || exit 0
-chmod 0700 "$backup_parent" || exit 0
-backup_root=$(mktemp -d "$backup_parent/run.XXXXXX") || exit 0
+mkdir -p "$backup_parent" || exit 1
+chmod 0700 "$backup_parent" || exit 1
+backup_root=$(mktemp -d "$backup_parent/run.XXXXXX") || exit 1
 chmod 0700 "$backup_root"
 
 warn() {
@@ -116,6 +116,7 @@ apply_text() {
   if [[ $failed -eq 1 ]]; then
     restore_domain NSGlobalDomain || warn 'text rollback failed; backup retained'
     warn 'text write failed'
+    return 1
   fi
 }
 
@@ -198,12 +199,12 @@ apply_input_sources() {
   [[ $input_switch != caps-lock ]] || return 0
   local work index=0 kind bundle mode failed=0
   backup_domain input-sources com.apple.HIToolbox || return
-  [[ $BACKUP_KIND == present ]] || { warn 'input source list is unreadable'; return; }
+  [[ $BACKUP_KIND == present ]] || { warn 'input source list is unreadable'; return 1; }
   work=$(mktemp "$backup_root/input-sources.work.XXXXXX") || return
   cp "$BACKUP_PATH" "$work"
   "$plistbuddy_bin" -c 'Print :AppleEnabledInputSources' "$work" >/dev/null 2>&1 || {
     warn 'input source list is unreadable'
-    return
+    return 1
   }
   while "$plistbuddy_bin" -c "Print :AppleEnabledInputSources:$index" "$work" >/dev/null 2>&1; do
     kind=$("$plistbuddy_bin" -c "Print :AppleEnabledInputSources:$index:InputSourceKind" "$work" 2>/dev/null || true)
@@ -218,10 +219,11 @@ apply_input_sources() {
   "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index:InputSourceKind string 'Input Mode'" "$work" || failed=1
   "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index:'Bundle ID' string 'org.youknowone.inputmethod.Gureum'" "$work" || failed=1
   "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index:'Input Mode' string 'org.youknowone.inputmethod.Gureum.han2'" "$work" || failed=1
-  [[ $failed -eq 0 ]] || { warn 'input source update could not be prepared'; return; }
+  [[ $failed -eq 0 ]] || { warn 'input source update could not be prepared'; return 1; }
   if ! "$defaults_bin" import com.apple.HIToolbox "$work" >/dev/null 2>&1; then
     restore_domain com.apple.HIToolbox || warn 'input source rollback failed; backup retained'
     warn 'input source write failed'
+    return 1
   fi
 }
 
@@ -303,18 +305,12 @@ run_group() {
 
 if [[ ${1:-} == --desktop-only ]]; then
   run_group dock apply_dock
-  if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then
-    run_group desktop /usr/bin/swift "$(dirname -- "$0")/scripts/quiet-desktop.swift"
-  fi
   exit "$preference_status"
 fi
 
 if [[ ${1:-} != --input-only && ${1:-} != --shortcuts-only ]]; then
   run_group text apply_text
   if [[ ${1:-} != --no-dock ]]; then run_group dock apply_dock; fi
-  if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then
-    run_group desktop /usr/bin/swift "$(dirname -- "$0")/scripts/quiet-desktop.swift"
-  fi
 fi
 if [[ ${1:-} != --shortcuts-only ]]; then
   run_group input-sources apply_input_sources

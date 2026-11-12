@@ -81,6 +81,7 @@ app="$HOME/Applications/OrbStack.app"
 ditto "$mount/OrbStack.app" "$app"
 [[ $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist") == 2.2.4 ]]
 [[ -x $app/Contents/MacOS/bin/orb && -x $app/Contents/MacOS/xbin/docker ]]
+run_quiet_step 'Installing Ghostty' bash "$root/scripts/install-ghostty.sh"
 run_quiet_step 'Installing Gureum' bash "$root/scripts/install-gureum.sh"
 [[ -d '/Applications/Google Chrome.app' || -d "$HOME/Applications/Google Chrome.app" ]] || {
   printf 'Use a base with Chrome preinstalled.\n' >&2; exit 1;
@@ -90,4 +91,4 @@ if /bin/zsh -ic 'command -v docker' >/dev/null 2>&1; then
   printf 'Docker is still on the login PATH. Choose a clean base or remove its Docker PATH customization in this clone.\n' >&2
   exit 1
 fi
-printf 'READY: OrbStack 2.2.4 and Gureum 1.13.2 installed; Docker CLI unavailable; input activation untouched.\n'
+printf 'READY: OrbStack 2.2.4, Gureum 1.13.2 and Ghostty installed; Docker CLI unavailable; input activation untouched.\n'

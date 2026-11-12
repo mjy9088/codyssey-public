@@ -17,6 +17,7 @@ case ${1:-} in
     python3 "$root/tests/macos-setup-test.py"
     python3 "$root/tests/vm-orchestration-test.py"
     python3 "$root/tests/preinstalled-tools-test.py"
+    python3 "$root/tests/installer-recovery-test.py"
     native_python=1
     ;;
   *) printf 'Usage: sh scripts/check.sh [--native-python]\n' >&2; exit 1 ;;
@@ -29,19 +30,19 @@ trap 'rm -rf "$context"' EXIT HUP INT TERM
 tar -C "$root" -cf "$context/payload.tar" \
   Dockerfile docker-compose.yml init.sh next-script.zsh tailnet.sh justfile mise.toml mise.vm.toml \
   README.md HANDOFF.md verify-macos-setup.py macos-setup.sh enable-korean.swift tailscale-entrypoint.sh .env.example \
-  lib/auth.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh \
+  lib/auth.sh lib/logging.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh \
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh \
   tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/managed-j-runtime.sh tests/startup-overlap-test.sh \
   tests/preparation-safety-test.sh tests/auth-prompt-test.sh tests/fixtures/dockerignore \
   tests/macos-fake-tools.py tests/macos-setup-test.py tests/fixtures/gost.yaml \
-  tests/vm-orchestration-test.py tests/vm-guest-test.py tests/preinstalled-tools-test.py scripts/check.sh scripts/create-macos-vm.sh scripts/prepare-macos-vm.sh \
+  tests/vm-orchestration-test.py tests/vm-guest-test.py tests/preinstalled-tools-test.py tests/installer-recovery-test.py scripts/check.sh scripts/create-macos-vm.sh scripts/prepare-macos-vm.sh \
   scripts/verify-macos-vm.sh scripts/install-preinstalled-apps.sh scripts/create-preinstalled-macos-image.sh scripts/check-preinstalled-apps.py scripts/verify-portable-browser.py scripts/vm-files.sh \
   chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs \
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs \
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh tests/chrome-extension-test.mjs \
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh tests/portable-browser-test.py \
   scripts/configure-tailnet-browser.py \
-  scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh scripts/prepare-startup.sh scripts/quiet-desktop.swift scripts/verify-tailnet-runtime.py scripts/verify-dock-ui.swift \
+  scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh scripts/prepare-startup.sh scripts/install-ghostty.sh scripts/configure-shell.sh scripts/verify-tailnet-runtime.py scripts/verify-dock-ui.swift \
   tests/tailnet-dns-test.sh
 tar -C "$context" -xf "$context/payload.tar"
 rm "$context/payload.tar"

@@ -52,6 +52,7 @@ wait_startup_preparation() {
     printf 'codyssey-init: startup preparation failed (exit %s).\n' "$preparation_result" >&2
     [ ! -f "$startup_preparation_log" ] || tail -n 12 "$startup_preparation_log" >&2
   fi
+  if command -v log_event >/dev/null 2>&1; then log_event preparation "exit=$preparation_result"; fi
   clear_startup_preparation
   return "$preparation_result"
 }
@@ -85,11 +86,13 @@ restore_startup_terminal() {
   if command -v restore_tty >/dev/null 2>&1; then
     restore_tty
   fi
+  if command -v cleanup_auth_file >/dev/null 2>&1; then cleanup_auth_file; fi
 }
 
 finish_startup() {
   local startup_result=$?
   trap - EXIT
+  if command -v log_event >/dev/null 2>&1; then log_event run "exit=$startup_result"; fi
   restore_startup_terminal
   cancel_startup_preparation
   exit "$startup_result"
@@ -98,6 +101,7 @@ finish_startup() {
 interrupt_startup() {
   local startup_result=$1
   trap - HUP INT TERM
+  if command -v log_event >/dev/null 2>&1; then log_event run "interrupted=$startup_result"; fi
   restore_startup_terminal
   cancel_startup_preparation
   exit "$startup_result"
@@ -119,6 +123,7 @@ run_quiet_step() (
     printf '%s failed (exit %s).\n' "$label" "$result" >&2
     tail -n 12 "$log" | cut -c 1-240 >&2
   fi
+  if command -v log_event >/dev/null 2>&1; then log_event "$label" "exit=$result"; fi
   rm -f "$log"
   return "$result"
 )

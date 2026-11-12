@@ -26,6 +26,7 @@ def inspect(home, applications=Path("/Applications"), input_methods=Path("/Libra
     if gureum.get("CFBundleShortVersionString") != "1.13.2":
         raise RuntimeError("Gureum 1.13.2 is required")
     bundle([applications / "Google Chrome.app", home / "Applications/Google Chrome.app"], {"com.google.Chrome"})
+    bundle([applications / "Ghostty.app", home / "Applications/Ghostty.app"], {"com.mitchellh.ghostty"})
     if not (system / "Utilities/Terminal.app").is_dir():
         raise RuntimeError("Terminal is missing")
     binaries = [orb / "Contents/MacOS/bin/orb"]

@@ -6,6 +6,7 @@ import plistlib
 from pathlib import Path
 import subprocess
 import tempfile
+import shutil
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,7 +44,7 @@ class ColdStartTests(unittest.TestCase):
                 (fakebin / 'docker').write_text('#!/bin/sh\nexit 0\n')
                 (fakebin / 'docker').chmod(0o700)
             env = dict(os.environ, HOME=str(home), PATH=str(fakebin)+':/usr/bin:/bin',
-                       CALLS=str(work/'calls'), READY=str(work/'ready'), SCENARIO=scenario)
+                       CODYSSEY_APPLICATIONS_DIR=str(work/'Applications'), CALLS=str(work/'calls'), READY=str(work/'ready'), SCENARIO=scenario)
             for key in ('DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG'):
                 env.pop(key, None)
             env.update(overrides)
@@ -57,11 +58,22 @@ class ColdStartTests(unittest.TestCase):
                     path.write_text(content)
                     path.chmod(0o700)
                 env.update(TS_AUTHKEY='', CODYSSEY_MACOS_SETUP='0', CODYSSEY_OPEN_BROWSER='0')
-                command = ['/bin/bash', str(ROOT / 'init.sh')]
+                runtime = work / 'runtime'
+                shutil.copytree(ROOT, runtime)
+                (runtime / 'macos-setup.sh').write_text('#!/bin/sh\necho preferences >> "$CALLS"\n')
+                (runtime / 'scripts/install-ghostty.sh').write_text('#!/bin/sh\necho ghostty >> "$CALLS"\n')
+                env['CODYSSEY_MACOS_SETUP'] = '1'
+                command = ['/bin/bash', str(runtime / 'init.sh')]
             else:
                 command = ['/bin/bash', '-c', script, 'test', str(ROOT)]
             result = subprocess.run(command, env=env,
                                     text=True, capture_output=True, timeout=10)
+            if entrypoint:
+                # Exercise the same failed/successful install twice in one home.
+                again = subprocess.run(command, env=env, text=True, capture_output=True, timeout=10)
+                self.assertEqual(again.returncode, result.returncode, again.stderr)
+                self.shell_state = (home / '.zshrc').read_text()
+                self.logs = [(p.stat().st_mode & 0o777, p.read_text()) for p in (home / 'Library/Logs/codyssey-init').glob('run.*')]
             calls = (work/'calls').read_text() if (work/'calls').exists() else ''
             plugins = {p.name: str(p.readlink()) if p.is_symlink() else p.read_text() for p in plugin_dir.iterdir()}
             return result, calls, plugins
@@ -80,6 +92,22 @@ class ColdStartTests(unittest.TestCase):
         self.assertIn('--prepared', calls)
         self.assertIn('docker-compose', plugins)
         self.assertIn('Preparing environment', result.stdout)
+
+    def test_failed_engine_still_applies_independent_steps_on_repeat(self):
+        result, calls, _ = self.run_case('start-failure', entrypoint=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(calls.count('preferences\n'), 2)
+        self.assertEqual(calls.count('ghostty\n'), 2)
+        self.assertNotIn('--prepared', calls)
+        self.assertEqual(self.shell_state.count('# codyssey-init: mise\n'), 1)
+        self.assertEqual(self.shell_state.count('# codyssey-init: OrbStack tools\n'), 1)
+        self.assertEqual(len(self.logs), 2)
+        for mode, log in self.logs:
+            self.assertEqual(mode, 0o600)
+            self.assertIn('docker failed', log)
+            self.assertIn('preferences ready', log)
+            self.assertIn('run exit=1', log)
+            self.assertNotIn('tskey-auth-', log)
 
     def test_existing_plugin_is_preserved(self):
         result, _, plugins = self.run_case('existing-plugin')
@@ -108,6 +136,47 @@ class ColdStartTests(unittest.TestCase):
                 self.assertEqual(calls, 'start\n')
 
 
+class ServiceRecoveryTests(unittest.TestCase):
+    def test_service_failure_keeps_gost_check_and_secret_free_log_on_repeat(self):
+        for failure in ('start', 'tailscale'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                work = Path(directory)
+                runtime = work / 'runtime'
+                shutil.copytree(ROOT, runtime)
+                home = work / 'home'
+                home.mkdir()
+                fakebin = work / 'bin'
+                fakebin.mkdir()
+                (runtime / 'lib/readiness.zsh').write_text(
+                    'wait_for_tailnet() { tailnet_state=; return 23; }\n'
+                    'wait_for_gost_ui() { echo gost >> "$CALLS"; return 0; }\n')
+                for name, body in {
+                    'mise': 'exit 0',
+                    'docker': 'echo compose >> "$CALLS"; [ "$FAILURE" != start ]',
+                }.items():
+                    path = fakebin / name
+                    path.write_text('#!/bin/sh\n' + body + '\n')
+                    path.chmod(0o700)
+                env = dict(os.environ, HOME=str(home), PATH=str(fakebin)+':/usr/bin:/bin',
+                           CALLS=str(work/'calls'), FAILURE=failure, TS_AUTHKEY='tskey-auth-SYNTHETIC_SECRET',
+                           CODYSSEY_OPEN_BROWSER='0', CODYSSEY_INTERACTIVE_SHELL='0')
+                env.pop('CODYSSEY_RUN_LOG', None)
+                for _ in range(2):
+                    result = subprocess.run(['/bin/zsh', '-f', str(runtime/'next-script.zsh'), '--prepared'],
+                                            env=env, text=True, capture_output=True, timeout=10)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn('GOST UI:', result.stdout)
+                self.assertEqual((work/'calls').read_text().count('gost\n'), 2)
+                logs = list((home/'Library/Logs/codyssey-init').glob('run.*'))
+                self.assertEqual(len(logs), 2)
+                for log in logs:
+                    text = log.read_text()
+                    self.assertIn('tailscale failed', text)
+                    self.assertIn('gost ready', text)
+                    self.assertIn('run exit=1', text)
+                    self.assertNotIn('SYNTHETIC_SECRET', text)
+
+
 class InstalledAppTests(unittest.TestCase):
     def fixture(self, work):
         spec = importlib.util.spec_from_file_location('image_check', ROOT / 'scripts/check-preinstalled-apps.py')
@@ -117,6 +186,7 @@ class InstalledAppTests(unittest.TestCase):
         apps = home / 'Applications'
         for path, identifier, version in (
             (apps / 'OrbStack.app', 'dev.kdrag0n.MacVirt', '2.2.4'),
+            (apps / 'Ghostty.app', 'com.mitchellh.ghostty', '1.4.0'),
             (apps / 'Google Chrome.app', 'com.google.Chrome', '155.0'),
             (home / 'Library/Input Methods/Gureum.app', 'org.youknowone.inputmethod.Gureum', '1.13.2'),
         ):

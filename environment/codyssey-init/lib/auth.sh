@@ -16,7 +16,7 @@ restore_tty() {
 
 configure_tailscale_auth() {
   local auth_input auth_key
-  if [[ -n ${TS_AUTHKEY+x} || -e .env ]]; then
+  if [[ -n ${TS_AUTHKEY+x} || -e .env || -L .env ]]; then
     return 0
   fi
   tty_path=${CODYSSEY_TTY_PATH:-/dev/tty}
@@ -40,6 +40,24 @@ configure_tailscale_auth() {
     auth_key=
   fi
   umask 077
-  printf 'TS_AUTHKEY=%s\n' "$auth_key" >.env
-  chmod 0600 .env
+  auth_env_temporary=$(mktemp .env.codyssey.XXXXXX) || return 1
+  if ! printf 'TS_AUTHKEY=%s\n' "$auth_key" >"$auth_env_temporary"; then
+    cleanup_auth_file
+    return 1
+  fi
+  # Hard-link publication is atomic and refuses to overwrite a concurrent file.
+  if ln "$auth_env_temporary" .env; then
+    cleanup_auth_file
+  else
+    cleanup_auth_file
+    [[ -e .env || -L .env ]] || return 1
+  fi
+}
+
+
+cleanup_auth_file() {
+  if [[ -n ${auth_env_temporary:-} ]]; then
+    rm -f "$auth_env_temporary"
+    auth_env_temporary=
+  fi
 }
