@@ -187,6 +187,13 @@ def test_export_and_write_failures_are_isolated_and_rolled_back() -> None:
         assert read_domain(state, "com.apple.dock")["show-recents"] is False
         hotkeys = read_domain(state, "com.apple.symbolichotkeys")["AppleSymbolicHotKeys"]
         assert hotkeys["60"]["value"]["parameters"] == [65535, 49, 262144]
+        # A text failure alone must report incomplete work too, without relying
+        # on an unrelated input-source failure to make the exit status nonzero.
+        env.pop("FAKE_EXPORT")
+        repeated = apply(env)
+        assert repeated.returncode == 1
+        assert "text failed" in repeated.stderr
+        assert read_domain(state, "com.apple.dock")["show-recents"] is False
 
 
 def test_absent_domain_is_created_only_after_confirmed_absent() -> None:

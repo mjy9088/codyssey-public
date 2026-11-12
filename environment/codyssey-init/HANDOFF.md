@@ -100,7 +100,7 @@ additional forwarding; that is a fresh-VM compatibility check, not a proven port
 3. Run `sh scripts/check.sh`. Use the container checks on this reference machine; its Python 3.9.6
    cannot run the native suites, which require Python 3.10 or newer.
 4. Run `bash init.sh`. Leave the auth-key prompt blank for browser login. The script installs/reuses
-   the pinned Gureum package and portable browser, starts the services, and opens authentication.
+   the pinned Gureum package, Ghostty, and portable browser, starts the services, and opens authentication.
    For an initial unattended pass use `CODYSSEY_OPEN_BROWSER=0 bash init.sh`, then `just browser`.
 5. Control-Space is applied automatically; choose Dock behavior at the prompt. Choose Allow in macOS input-source
    activation dialogs while the helper waits. If approval times out, rerun
@@ -122,6 +122,22 @@ preference/VM verification, but it does not test a physical Control-Space event 
 Tailnet browsing. A successful automated VM preference check does not establish physical keyboard
 handling or resolve input-method selection in every login session. Follow the interactive steps
 above, and keep any VM execution evidence in ignored storage.
+
+## Retry and support
+
+Workstation settings are attempted even when Docker setup fails. Rerun the root
+`sh init.sh` entry point after fixing the cause; managed shell configuration,
+authentication files, and app copies are published atomically, and existing user
+configuration is preserved. The terminal prints a private persistent lifecycle log
+under `~/Library/Logs/codyssey-init/`. Attach that file and the visible error when
+requesting help; review any extra terminal or container output before sharing it.
+The log excludes credentials, auth input, login URLs, and raw command output.
+
+Different macOS versions, app locations, permissions, device policies, input-method
+approval, and Docker backends can leave individual settings unapplied. Verify the
+actual behavior in each environment rather than assuming a preference write proves
+success. OrbStack windows remain under user control. See the README's diagnostics
+and environment-differences section for the complete boundaries and retry commands.
 
 ## Verification and delivery boundaries
 
