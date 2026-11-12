@@ -41,7 +41,10 @@ for file in tailscale-entrypoint.sh init.sh lib/auth.sh lib/preparation.sh \
   scripts/prepare-startup.sh tests/startup-overlap-test.sh tests/preparation-safety-test.sh tests/auth-prompt-test.sh; do
   bash -n "$root/$file"
 done
-grep -q -- 'tailscaled.state' "$root/tailscale-entrypoint.sh"
-grep -q 'tailscale-state:/var/lib/tailscale' "$root/docker-compose.yml"
+grep -q -- '--state=mem:' "$root/tailscale-entrypoint.sh"
+if grep -q 'tailscale-state' "$root/docker-compose.yml"; then
+  fail 'ephemeral nodes must not mount a persistent identity volume'
+fi
+grep -q '/var/run/tailscale:mode=0700' "$root/docker-compose.yml"
 grep -q '100.100.100.100' "$root/scripts/tailnet-dns.sh"
 grep -q 'codyssey-tailscale' "$root/Dockerfile"

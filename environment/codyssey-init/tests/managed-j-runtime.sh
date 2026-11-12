@@ -66,7 +66,7 @@ chmod 0755 "$fakebin"/*
 
 run_interactive_init() {
   local source=$1 answer=$2 output=$3
-  printf '%s\n' "$answer" | INIT_SOURCE="$source" script -q -e -c \
+  printf '%s\n\n' "$answer" | INIT_SOURCE="$source" script -q -e -c \
     "HOME='$home' PATH='$fakebin:/usr/bin:/bin' bash \"\$INIT_SOURCE/init.sh\"" /dev/null >"$output" 2>&1
 }
 
@@ -105,7 +105,7 @@ pipe_home="$tmp/pipe-home"
 pipe_target="$tmp/remote target"
 mkdir -p "$pipe_home/.local/bin"
 cp "$home/.local/bin/mise" "$pipe_home/.local/bin/mise"
-printf 'yes\n' | INIT_SOURCE="$work/init.sh" script -q -e -c \
+printf 'yes\n\n' | INIT_SOURCE="$work/init.sh" script -q -e -c \
   "cat \"\$INIT_SOURCE\" | HOME='$pipe_home' PATH='$fakebin:/usr/bin:/bin' REMOTE_SOURCE='$root' CODYSSEY_INIT_DIR='$pipe_target' bash" \
   /dev/null >"$tmp/pipe.out" 2>&1
 pipe_j="$pipe_home/.local/bin/j"
@@ -118,7 +118,7 @@ external_bin="$tmp/external mise's bin"
 external_home="$tmp/external-home"
 mkdir -p "$external_bin" "$external_home"
 cp "$home/.local/bin/mise" "$external_bin/mise"
-printf 'yes\n' | EXTERNAL_BIN="$external_bin" INIT_SOURCE="$work" script -q -e -c \
+printf 'yes\n\n' | EXTERNAL_BIN="$external_bin" INIT_SOURCE="$work" script -q -e -c \
   "HOME='$external_home' PATH=\"\$EXTERNAL_BIN:$fakebin:/usr/bin:/bin\" bash \"\$INIT_SOURCE/init.sh\"" \
   /dev/null >"$tmp/external.out" 2>&1
 HOME="$external_home" MANAGED_JUST="$fakebin/just" JUST_LOG="$just_log" PATH="/usr/bin:/bin" \
@@ -135,7 +135,7 @@ cat "$work/init.sh" | HOME="$headless_home" PATH="$fakebin:/usr/bin:/bin" REMOTE
 
 negative_home="$tmp/negative-home"
 mkdir -p "$negative_home"
-printf 'n\n' | INIT_SOURCE="$work" script -q -e -c \
+printf 'n\n\n' | INIT_SOURCE="$work" script -q -e -c \
   "HOME='$negative_home' PATH='$fakebin:/usr/bin:/bin' bash \"\$INIT_SOURCE/init.sh\"" /dev/null >"$tmp/negative.out" 2>&1
 [[ ! -e "$negative_home/.local/bin/j" ]]
 
@@ -144,7 +144,7 @@ mkdir -p "$conflict_home/.local/bin"
 printf '#!/bin/sh\nprintf user-owned\\n\n' >"$conflict_home/.local/bin/j"
 chmod 0755 "$conflict_home/.local/bin/j"
 conflict_before=$(sha256sum "$conflict_home/.local/bin/j")
-printf 'y\n' | INIT_SOURCE="$work" script -q -e -c \
+printf 'y\n\n' | INIT_SOURCE="$work" script -q -e -c \
   "HOME='$conflict_home' PATH='$fakebin:/usr/bin:/bin' bash \"\$INIT_SOURCE/init.sh\"" /dev/null >"$tmp/conflict.out" 2>&1
 [[ $(sha256sum "$conflict_home/.local/bin/j") == "$conflict_before" ]]
 grep -Fq "preserving existing unowned command at $conflict_home/.local/bin/j" "$tmp/conflict.out"

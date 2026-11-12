@@ -16,8 +16,11 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 0' TERM INT
 
-mkdir -p /var/run/tailscale
-resolver_base=/var/run/tailscale/resolv.conf.base
+umask 077
+mkdir -p /var/run/tailscale /var/lib/codyssey-init
+# Docker may keep its edited resolver mount after an unclean restart. Retain
+# only this DNS baseline in the container layer, outside the runtime tmpfs.
+resolver_base=/var/lib/codyssey-init/resolv.conf.base
 # Docker may preserve a container's edited resolver across a plain restart.
 # Restore bootstrap DNS before the daemon needs to resolve its control server.
 if [[ -f $resolver_base ]] && grep -Eq '^nameserver[[:space:]]+100\.100\.100\.100([[:space:]]|$)' /etc/resolv.conf; then
@@ -25,11 +28,13 @@ if [[ -f $resolver_base ]] && grep -Eq '^nameserver[[:space:]]+100\.100\.100\.10
 else
   cp /etc/resolv.conf "$resolver_base"
 fi
-state_dir=${TS_STATE_DIR:-/var/lib/tailscale}
+# Memory state registers an ephemeral node for auth keys AND browser login.
+# Ignore legacy TS_STATE_DIR overrides so no previous identity can be restored.
+state_dir=/var/run/tailscale
 umask 077
 mkdir -p "$state_dir"
 chmod 0700 "$state_dir"
-tailscaled --state="$state_dir/tailscaled.state" --statedir="$state_dir" --tun=tailscale0 \
+tailscaled --state=mem: --statedir="$state_dir" --tun=tailscale0 \
   --socket=/var/run/tailscale/tailscaled.sock \
   --socks5-server=127.0.0.1:1055 &
 daemon_pid=$!
@@ -55,16 +60,8 @@ done
 ) &
 dns_pid=$!
 settings=(--accept-routes=true --accept-dns=true --shields-up=true)
-state=$(tailscale status --json | jq -r '.BackendState')
-args=()
-case $state in
-  Running|Starting|Stopped|NeedsMachineAuth)
-    # set changes only these preferences; bare up preserves saved hostname,
-    # control server, and other user settings when reconnecting this identity.
-    tailscale set "${settings[@]}"
-    ;;
-  *) args=("${settings[@]}") ;;
-esac
+# Every daemon starts a new in-memory identity, including browser login.
+args=("${settings[@]}")
 if (( ${#args[@]} )) && [[ -n ${TS_AUTHKEY:-} ]]; then
   umask 077
   key_file=$(mktemp /var/run/tailscale/auth.XXXXXX)

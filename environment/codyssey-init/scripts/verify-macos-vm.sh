@@ -74,11 +74,6 @@ done
 work=$(mktemp -d "$HOME/codyssey-vm-test.XXXXXX")
 project_suffix=$(basename "$work" | tr '[:upper:].' '[:lower:]-' | tr -cd 'a-z0-9_-')
 export COMPOSE_PROJECT_NAME="codyssey-vm-verify-$project_suffix"
-state_volume="${COMPOSE_PROJECT_NAME}_tailscale-state"
-if docker volume inspect "$state_volume" >/dev/null 2>&1; then
-  printf 'Refusing pre-existing verifier state volume: %s\n' "$state_volume" >&2
-  exit 1
-fi
 docker compose version >/dev/null
 tar -C "$root" -cf - "${vm_files[@]}" | tar -C "$work" -xf -
 mkdir -p "$work/gost"
@@ -113,7 +108,7 @@ for pass in 1 2; do
   done
 done
 [[ $(grep -c '^# codyssey-init: mise$' "$HOME/.zshrc") == 1 ]]
-# Exercise persistent state and local DNS using a private control plane, never a real tailnet.
+# Exercise ephemeral lifecycle and local DNS using a private control plane, never a real tailnet.
 python3 scripts/verify-tailnet-runtime.py --disposable
 python3 scripts/verify-portable-browser.py --disposable
 # Use the retained source tree, so Dock never points into the removed test copy.

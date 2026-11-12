@@ -3,7 +3,7 @@
 set -euo pipefail
 status=$(tailscale status --json) || exit 0
 conf=${CODYSSEY_RESOLV_CONF:-/etc/resolv.conf}
-base=${CODYSSEY_RESOLV_BASE:-/var/run/tailscale/resolv.conf.base}
+base=${CODYSSEY_RESOLV_BASE:-/var/lib/codyssey-init/resolv.conf.base}
 if [[ $(jq -er '.BackendState' <<< "$status") != Running ]]; then
   if [[ -f $base ]] && ! cmp -s "$base" "$conf"; then cat "$base" > "$conf"; fi
   exit 0

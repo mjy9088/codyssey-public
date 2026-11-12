@@ -34,7 +34,7 @@ def wait_for(action, description, seconds=90):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--disposable', action='store_true', required=True)
-    parser.add_argument('--image', default='codyssey-tailscale:1.88.3')
+    parser.add_argument('--image', default='codyssey-tailscale:1.88.3-ephemeral')
     args = parser.parse_args()
     assert not os.environ.get('DOCKER_HOST'), 'Use a local disposable Docker context'
     context = os.environ.get('DOCKER_CONTEXT') or docker('context', 'show').stdout.strip()
@@ -136,10 +136,10 @@ log:
             user = json.loads(hs('users', 'create', 'vm-lab').stdout)
             user_id = str(user['id'])
 
-            def start_node(container, hostname, volume):
+            def start_node(container, hostname):
                 docker('run', '-d', '--name', container, '--hostname', hostname, '--network', lab,
                        '--device', '/dev/net/tun:/dev/net/tun', '--cap-add', 'NET_ADMIN', '--cap-add', 'NET_RAW',
-                       '--mount', f'type=volume,src={volume},dst=/var/lib/tailscale', '-e', 'TS_AUTHKEY=', args.image)
+                       '--tmpfs', '/var/run/tailscale:mode=0700', '-e', 'TS_AUTHKEY=', args.image)
                 containers.append(container)
 
             def status(container):
@@ -149,23 +149,42 @@ log:
                 value = status(container)
                 return value if value.get('BackendState') == 'Running' else None
 
-            for container, hostname in ((alpha, 'alpha'), (bravo, 'bravo')):
-                volume = container + '-state'
-                docker('volume', 'create', volume)
-                volumes.append(volume)
-                start_node(container, hostname, volume)
-                wait_for(lambda: status(container), 'Tailscale daemon readiness')
-                key = json.loads(hs('preauthkeys', 'create', '--user', user_id, '--expiration', '1h').stdout)['key']
+            def registered_nodes():
+                value = json.loads(hs('nodes', 'list').stdout)
+                return value if isinstance(value, list) else value.get('nodes', [])
+
+            def login_node(container, hostname):
+                # Headscale 0.26.1 classifies ephemerality from the key, unlike
+                # hosted Tailscale's support for memory-state browser logins.
+                key = json.loads(hs('preauthkeys', 'create', '--user', user_id,
+                                    '--expiration', '1h', '--ephemeral').stdout)['key']
                 docker('exec', '-i', container, 'sh', '-c', 'umask 077; cat > /var/run/tailscale/lab-auth.key', input=key)
                 docker('exec', container, 'tailscale', 'up', '--reset', '--login-server', f'http://{ip}:8080',
                        '--auth-key', 'file:/var/run/tailscale/lab-auth.key', '--hostname', hostname,
                        '--accept-routes=true', '--accept-dns=true', '--shields-up=true', timeout=90)
                 docker('exec', container, 'rm', '/var/run/tailscale/lab-auth.key')
-                wait_for(lambda: running(container), 'local node login')
+                value = wait_for(lambda: running(container), 'local node login')
+                argv = docker('exec', container, 'sh', '-c',
+                    'for d in /proc/[0-9]*; do [ "$(cat "$d/comm" 2>/dev/null)" = tailscaled ] || continue; tr "\\000" "\\n" < "$d/cmdline"; done').stdout.splitlines()
+                assert '--state=mem:' in argv, 'Daemon must use memory-only ephemeral state'
+                docker('exec', container, 'sh', '-c',
+                       'test ! -e /var/lib/tailscale/tailscaled.state && test ! -e /var/run/tailscale/tailscaled.state')
+                record = next(node for node in registered_nodes() if str(node['id']) == str(value['Self']['ID']))
+                auth = record.get('pre_auth_key') or record.get('preAuthKey') or {}
+                assert auth.get('ephemeral') is True, 'Lab control plane must mark the node ephemeral'
+                return value
+
+            def removed(identity):
+                return all(str(node['id']) != str(identity) for node in registered_nodes())
+
+            for container, hostname in ((alpha, 'alpha'), (bravo, 'bravo')):
+                start_node(container, hostname)
+                wait_for(lambda: status(container), 'Tailscale daemon readiness')
+                login_node(container, hostname)
 
             before = running(alpha)
             print('Local lab nodes authenticated; checking MagicDNS and terminal tools.', flush=True)
-            resolver_before = docker('exec', alpha, 'cat', '/var/run/tailscale/resolv.conf.base').stdout
+            resolver_before = docker('exec', alpha, 'cat', '/var/lib/codyssey-init/resolv.conf.base').stdout
             peer_ip = running(bravo)['TailscaleIPs'][0]
             def resolves_peer():
                 # Docker can resolve the same bare hostname to a bridge IP;
@@ -176,23 +195,27 @@ log:
             docker('exec', alpha, 'getent', 'hosts', 'bravo.tailnet.vm.invalid')
             docker('exec', alpha, 'bash', '-ic', 'mise --version; mise exec -- zellij --version; zellij --version')
             for recreate in (False, True):
-                print('Checking ' + ('container recreation' if recreate else 'container restart'), flush=True)
+                print('Checking ephemeral ' + ('recreation' if recreate else 'restart'), flush=True)
+                old_identity = before['Self']['ID']
                 if recreate:
-                    docker('rm', '-f', alpha)
+                    docker('stop', '-t', '30', alpha)
+                    docker('rm', alpha)
                     containers.remove(alpha)
-                    start_node(alpha, 'alpha', alpha + '-state')
+                    start_node(alpha, 'alpha')
                 else:
-                    docker('restart', alpha)
-                after = wait_for(lambda: running(alpha), 'authenticated reconnect without an auth key')
-                assert after['Self']['ID'] == before['Self']['ID']
-                assert after['TailscaleIPs'] == before['TailscaleIPs']
-                assert docker('exec', alpha, 'cat', '/var/run/tailscale/resolv.conf.base').stdout == resolver_before
-                wait_for(resolves_peer, 'MagicDNS after restart/recreation')
+                    docker('restart', '-t', '30', alpha)
+                wait_for(lambda: removed(old_identity), 'old ephemeral node removed after shutdown')
+                wait_for(lambda: status(alpha).get('BackendState') == 'NeedsLogin', 'fresh login required after restart')
+                after = login_node(alpha, 'alpha')
+                assert after['Self']['ID'] != old_identity, 'Restart must not restore the previous identity'
+                assert docker('exec', alpha, 'cat', '/var/lib/codyssey-init/resolv.conf.base').stdout == resolver_before
+                wait_for(resolves_peer, 'MagicDNS after ephemeral restart/recreation')
+                before = after
             docker('exec', alpha, 'tailscale', 'down')
             def restored():
-                return docker('exec', alpha, 'cmp', '-s', '/etc/resolv.conf', '/var/run/tailscale/resolv.conf.base', check=False).returncode == 0
+                return docker('exec', alpha, 'cmp', '-s', '/etc/resolv.conf', '/var/lib/codyssey-init/resolv.conf.base', check=False).returncode == 0
             wait_for(restored, 'base resolver restoration after disconnect')
-            print('PASS: local real authentication, identity/IP persistence after restart and recreation, short/FQDN MagicDNS, resolver restoration, mise and zellij.')
+            print('PASS: ephemeral authentication, old-node removal, fresh identities after restart/recreation, short/FQDN MagicDNS, resolver restoration, mise and zellij.')
         except Exception:
             for container in containers:
                 result = docker('logs', '--tail', '30', container, check=False)

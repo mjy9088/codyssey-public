@@ -134,12 +134,18 @@ Declined runs do not create or change the command or Dock launcher.
 This section applies only after Tailnet setup is explicitly selected.
 
 An exported `TS_AUTHKEY`, including an intentionally empty value, takes precedence and is passed to
-Compose without creating or changing `.env`. An existing `.env` is also preserved. Otherwise, when a
-terminal is available, the bootstrap asks for either:
+Compose without creating or changing `.env`. Otherwise an interactive run asks for either:
 
 - a Tailscale auth key;
 - a pasted Tailscale install/up command containing an auth key; or
-- a blank line to use the browser-login path.
+- a blank line to use browser login.
+
+The prompt also appears when `.env` already exists, allowing an expired or consumed key to be
+replaced for this run. The choice is exported in memory and the saved file remains unchanged.
+Unattended runs preserve and reuse existing `.env` configuration; reusable keys are appropriate
+for unattended ephemeral restarts. If no file exists, the initial choice is published atomically
+as a mode-`0600` `.env` file. An ephemeral restart needs browser login or a valid new/reusable key;
+one-use keys cannot authenticate a second new identity.
 
 Pasted text is never executed. A complete `tskey-auth-` token using the documented alphanumeric,
 underscore, and hyphen alphabet is extracted; a malformed token is rejected rather than partially
@@ -190,7 +196,8 @@ are checked independently, so one failing service does not suppress the other re
 
 Run `sh init.sh` again after correcting a failed prerequisite. Completed work is reused:
 managed `j` is replaced atomically, shell activation blocks are written atomically and added once, existing `.env`
-and GOST configuration are preserved, and Compose retains the Tailscale identity volume.
+and GOST configuration are preserved. A running Tailscale process keeps its session; a restart
+or recreation deliberately starts a new ephemeral identity.
 Ghostty is part of the default macOS application setup. A valid existing system or per-user
 Ghostty is reused without replacement; otherwise the checksum-pinned universal Ghostty 1.4.0
 DMG is installed under `~/Applications` without sudo or launching it. The complete bundle is
@@ -235,11 +242,18 @@ On OrbStack, host networking refers to its Linux VM, not the macOS host network.
 at `127.0.0.1:1055` and the GOST chain remain available alongside kernel networking; The entry point configures that listener alongside the TUN device. See the
 [Tailscale Docker parameters](https://tailscale.com/docs/features/containers/docker/docker-params).
 
-Tailscale stores its identity and login state in the `tailscale-state` named volume at
-`/var/lib/tailscale`. Restarting or recreating the container reuses that state without requiring
-another login. The previous memory-only node needs one login after migration; an existing state
-volume is reused. Key expiry, explicit logout, and deliberately ephemeral auth keys can still require
-authentication. The GOST API listens only on
+Tailscale runs with `tailscaled --state=mem:` and a private tmpfs at `/var/run/tailscale`.
+Both browser and auth-key logins create ephemeral nodes; no identity volume is mounted or restored.
+Graceful daemon shutdown logs out the ephemeral node, removing it from Machines. After a crash,
+forced kill, network loss, or abrupt workstation reset, removal waits for the coordination server's
+inactivity timeout. Running nodes still appear in Machines with the ephemeral badge; this prevents
+abandoned permanent entries, rather than hiding active devices. See the
+[official ephemeral-node documentation](https://tailscale.com/docs/features/ephemeral-nodes) and
+[shutdown behavior](https://tailscale.com/blog/ephemeral-logout).
+
+Repeating init while the same container is running reuses that live session. Restarting, stopping
+and starting, or recreating it loses the identity and requires authentication again.
+The GOST API listens only on
 `127.0.0.1:18080`, and the UI is published only on `127.0.0.1:18081`. No forwarding service is enabled
 by default. Add services with loopback listener addresses unless deliberate external exposure is
 required.
@@ -254,7 +268,7 @@ opens the multiplexer. Those are optional shortcuts; they are not additional set
 The internal terminal helper preserves arguments and command exit status, retains a TTY for
 interactive use, and uses Compose's non-TTY mode for redirected calls. Bash and zellij probe
 for their required tools and rebuild an older image only when those tools are missing.
-The persistent state volume is retained.
+Rebuilding the terminal image recreates the ephemeral node and may require login again.
 
 The image includes checksum-verified mise 2026.10.5 and zellij 0.45.1 installed through mise.
 Interactive Bash activates mise automatically, and its shims are also available to direct commands.
@@ -520,9 +534,10 @@ docker compose logs -f
 docker compose down
 ```
 
-`docker compose down` stops services while retaining login state. `docker compose restart tailscale`
-reconnects the same node. Removing the `tailscale-state` volume (including `down --volumes`) discards
-that identity and requires a fresh login.
+`docker compose down` gracefully stops services and logs out the ephemeral node.
+`docker compose restart tailscale` starts a fresh identity and requires authentication again.
+A one-use auth key may already be consumed; run the same init command and choose browser login
+or a new/reusable key. There is no client identity volume to retain or remove.
 
 For an isolated real authentication, restart/recreation, and MagicDNS test in a disposable Docker
 environment, build the image and run from a source checkout:
@@ -533,8 +548,10 @@ python3 scripts/verify-tailnet-runtime.py --disposable
 ```
 
 This uses a checksum-pinned Headscale 0.26.1 binary, an internal Docker network, and two local
-Tailscale nodes with one-use lab auth keys. It verifies identity/IP persistence without reusing an
-auth key, short and fully qualified MagicDNS names, resolver restoration, and mise/zellij commands.
+Tailscale nodes with one-use lab auth keys. It verifies removal of old ephemeral nodes, fresh identities and required login after restart
+and recreation, short and fully qualified MagicDNS names, resolver restoration, and mise/zellij commands.
+The pinned Headscale 0.26.1 lab uses ephemeral one-use keys because that server classifies ephemerality
+from the pre-auth key; hosted Tailscale additionally supports memory-state browser login.
 It removes only its randomized lab containers, volumes, and network. This establishes local
 control-plane behavior, not external tailnet ACLs, expiry policy, or remote peer reachability.
 
@@ -599,7 +616,7 @@ helper and full `init.sh` against temporary synthetic homes and fake engine comm
 CLI/plugins, preserved plugins and Docker targets, startup failures, timeout, and preparation handoff.
 
 After those checks, it prepares the dedicated QEMU-TCG Colima profile and runs the real Docker,
-local DNS/identity persistence, Dock/shortcuts, and fresh portable-browser verification. The original
+local DNS/ephemeral lifecycle, Dock/shortcuts, and fresh portable-browser verification. The original
 preinstalled base stays stopped and unchanged. `brew install` may leave existing Docker packages
 unlinked, so preparation explicitly links the Docker CLI when needed.
 Provisioning and service cleanup suppress routine tool output; failures show bounded diagnostics.
@@ -677,7 +694,7 @@ expensive process startup under x86 emulation. The default `scripts/check.sh` ru
 the isolated container.
 Verification checks the
 unauthenticated state, Bash/client tools, TUN device and home mount, GOST API and UI HTTP readiness,
-and the single shell activation block. It then runs the private local Headscale lab for identity persistence, short-name DNS and terminal tools, verifies a fresh portable browser profile and relaunch, and verifies the real Dock launcher twice plus live shortcut registration. Input-method approval and physical Hangul typing remain an interactive check; the unattended VM does not wait for or bypass macOS approval dialogs. Run the full live preference verifier separately in an approved desktop session. GOST API readiness also checks whether this Docker environment makes
+and the single shell activation block. It then runs the private local Headscale lab for ephemeral lifecycle, short-name DNS and terminal tools, verifies a fresh portable browser profile and relaunch, and verifies the real Dock launcher twice plus live shortcut registration. Input-method approval and physical Hangul typing remain an interactive check; the unattended VM does not wait for or bypass macOS approval dialogs. Run the full live preference verifier separately in an approved desktop session. GOST API readiness also checks whether this Docker environment makes
 the Linux host's loopback listener accessible from the macOS guest; failure is a real incompatibility,
 not a simulated success. UI HTTP readiness does not prove browser rendering or API interaction.
 
@@ -685,9 +702,8 @@ The verifier uses an allowlisted temporary copy under the guest home, a syntheti
 an explicitly empty exported key, and a randomized Compose project. Before Docker workload use, it
 rejects `DOCKER_HOST`, resolves and freezes `DOCKER_CONTEXT`, and accepts only an absolute local
 Unix-socket endpoint. It clears caller Compose-file and environment-file overrides. It refuses
-existing production container names, occupied management ports, or a pre-existing state volume for
-its randomized project; rejected resources are not cleaned up because the verifier does not own them.
-It removes only its own containers and state volume on exit. Cleanup failure retains the private
+existing production container names or occupied management ports; rejected resources are not cleaned up because the verifier does not own them.
+It removes only its own containers on exit. Cleanup failure retains the private
 working directory, reports its location, returns nonzero, and suppresses terminal PASS. Docker's
 built images and check image remain cached. Guest preferences and `.zshrc` remain modified. The Dock launcher targets the retained source tree, and the verifier checks its `--list` command before removing the temporary workload. To stop
 or remove the prepared Docker VM afterward:

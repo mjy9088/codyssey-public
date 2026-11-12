@@ -16,11 +16,15 @@ restore_tty() {
 
 configure_tailscale_auth() {
   local auth_input auth_key
-  if [[ -n ${TS_AUTHKEY+x} || -e .env || -L .env ]]; then
+  if [[ -n ${TS_AUTHKEY+x} ]]; then
     return 0
   fi
   tty_path=${CODYSSEY_TTY_PATH:-/dev/tty}
   tty_state=
+  # A stopped ephemeral node needs a new login. In a terminal let the user
+  # choose a fresh key or browser login without modifying saved credentials.
+  # Unattended callers retain their existing .env precedence.
+  if [[ -e .env || -L .env ]] && ! { true <"$tty_path"; } 2>/dev/null; then return 0; fi
   if { true <"$tty_path"; } 2>/dev/null; then
     tty_state=$(stty -g <"$tty_path")
     stty -echo <"$tty_path"
@@ -38,6 +42,10 @@ configure_tailscale_auth() {
   else
     printf 'No terminal is available; continuing with Tailscale browser login.\n' >&2
     auth_key=
+  fi
+  if [[ -e .env || -L .env ]]; then
+    export TS_AUTHKEY=$auth_key
+    return 0
   fi
   umask 077
   auth_env_temporary=$(mktemp .env.codyssey.XXXXXX) || return 1

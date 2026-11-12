@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Exercise interrupted writes, failed app installs, and actual service readiness."""
 import os
+import pty
+import select
+import time
 from pathlib import Path
 import subprocess
 import tempfile
@@ -112,6 +115,48 @@ if configure_tailscale_auth; then exit 9; fi
             path = Path(directory)/'.env'
             self.assertEqual(path.read_text(), 'TS_AUTHKEY=\n')
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_saved_auth_can_retry_with_browser_or_new_key_without_overwrite(self):
+        for replacement in ('', 'tskey'+'-auth-synthetic_retry_value'):
+            with self.subTest(browser=not replacement), tempfile.TemporaryDirectory() as directory:
+                work = Path(directory)
+                saved = 'TS_AUTHKEY=preserve-saved-credential\n'
+                (work/'.env').write_text(saved)
+                env = dict(os.environ, EXPECTED_AUTH=replacement)
+                env.pop('TS_AUTHKEY', None)
+                env.pop('CODYSSEY_TTY_PATH', None)
+                driver = '. "$1/lib/auth.sh"; configure_tailscale_auth || exit; [ "${TS_AUTHKEY+x}" = x ] && [ "$TS_AUTHKEY" = "$EXPECTED_AUTH" ] || exit 2; echo RETRY_CONFIRMED'
+                pid, terminal = pty.fork()
+                if pid == 0:
+                    os.chdir(work)
+                    os.execvpe('/bin/bash', ['bash', '-c', driver, 'test', str(ROOT)], env)
+                output, answered, status = b'', False, None
+                try:
+                    deadline = time.monotonic()+20
+                    while time.monotonic() < deadline:
+                        if select.select([terminal], [], [], 0.1)[0]:
+                            try:
+                                output += os.read(terminal, 65536)
+                            except OSError:
+                                pass
+                            if not answered and b'blank for browser login' in output:
+                                os.write(terminal, (replacement+'\n').encode())
+                                answered = True
+                        child, status = os.waitpid(pid, os.WNOHANG)
+                        if child:
+                            break
+                        status = None
+                    if status is None:
+                        os.kill(pid, 9)
+                        os.waitpid(pid, 0)
+                        self.fail('Saved-auth retry prompt did not complete')
+                    self.assertTrue(answered, output)
+                    self.assertEqual(os.waitstatus_to_exitcode(status), 0, output)
+                    self.assertEqual((work/'.env').read_text(), saved)
+                    if replacement:
+                        self.assertNotIn(replacement.encode(), output)
+                finally:
+                    os.close(terminal)
 
     def test_actual_readiness_rejects_missing_gost_or_failed_api(self):
         for failure in ('missing-gost', 'api'):

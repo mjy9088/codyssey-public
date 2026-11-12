@@ -104,11 +104,11 @@ sys.exit(0)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(calls, [])
 
-    def test_verifier_refuses_preexisting_state_volume_without_cleanup(self) -> None:
+    def test_verifier_never_uses_legacy_state_volume(self) -> None:
         result, calls = self.run_script("verify-macos-vm.sh", "existing-volume")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(any("compose" in call for call in calls))
-        self.assertFalse(any("volume rm" in call for call in calls))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(call.startswith("docker volume ") for call in calls))
+        self.assertIn("docker compose down --volumes", calls)
 
     def test_verifier_cleans_work_after_compose_version_failure_without_down(self) -> None:
         result, calls = self.run_script("verify-macos-vm.sh", "compose-version-failure")
