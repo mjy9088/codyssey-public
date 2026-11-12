@@ -79,7 +79,7 @@ else
 fi
 (( service_status == 0 )) || exit 1
 log_event services ready
-printf 'Environment ready. Open the Tailnet terminal: bash %q\n' "$root/tailnet.sh"
+printf 'Environment ready. Run the same init command again to choose setup options.\n'
 if [[ -t 0 && -t 1 && ${CODYSSEY_INTERACTIVE_SHELL:-1} != 0 ]]; then
   exec zsh -i
 fi

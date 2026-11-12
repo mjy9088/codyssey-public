@@ -37,8 +37,8 @@ class OptionTests(unittest.TestCase):
             env.pop(name, None)
         return runtime, home, calls, env
 
-    def assert_default_skips(self, runtime, home, calls):
-        self.assertEqual(calls.read_text().splitlines(), ['ghostty'])
+    def assert_default_skips(self, runtime, home, calls, runs=1):
+        self.assertEqual(calls.read_text().splitlines(), ['ghostty'] * runs)
         self.assertFalse((home/'.local/bin/j').exists())
         self.assertFalse((home/'.zshrc').exists())
         self.assertFalse((runtime/'.env').exists())
@@ -68,34 +68,45 @@ class OptionTests(unittest.TestCase):
     def test_enter_declines_all_three_prompts(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime, home, calls, env = self.fixture(Path(directory))
-            pid, terminal = pty.fork()
-            if pid == 0:
-                os.execvpe('/bin/bash', ['bash', str(runtime/'init.sh')], env)
-            output, answered, status = b'', 0, None
-            try:
-                deadline = time.monotonic()+20
-                while time.monotonic() < deadline:
-                    if select.select([terminal], [], [], 0.1)[0]:
-                        try:
-                            output += os.read(terminal, 65536)
-                        except OSError:
-                            pass
-                        while output.count(b'[y/N] ') > answered:
-                            os.write(terminal, b'\n')
-                            answered += 1
-                    child, status = os.waitpid(pid, os.WNOHANG)
-                    if child:
-                        break
-                    status = None
-                if status is None:
-                    os.kill(pid, 9)
-                    os.waitpid(pid, 0)
-                    self.fail('Optional prompts did not finish: '+output.decode(errors='replace'))
-                self.assertEqual(os.waitstatus_to_exitcode(status), 0, output)
-                self.assertEqual(answered, 3, output)
-                self.assert_default_skips(runtime, home, calls)
-            finally:
-                os.close(terminal)
+            for run_number in (1, 2):
+                pid, terminal = pty.fork()
+                if pid == 0:
+                    os.execvpe('/bin/bash', ['bash', str(runtime/'init.sh')], env)
+                output, answered, status = b'', 0, None
+                try:
+                    deadline = time.monotonic()+20
+                    while time.monotonic() < deadline:
+                        if select.select([terminal], [], [], 0.1)[0]:
+                            try:
+                                output += os.read(terminal, 65536)
+                            except OSError:
+                                pass
+                            while output.count(b'[y/N] ') > answered:
+                                os.write(terminal, b'\n')
+                                answered += 1
+                        child, status = os.waitpid(pid, os.WNOHANG)
+                        if child:
+                            break
+                        status = None
+                    if status is None:
+                        os.kill(pid, 9)
+                        os.waitpid(pid, 0)
+                        self.fail('Optional prompts did not finish: '+output.decode(errors='replace'))
+                    self.assertEqual(os.waitstatus_to_exitcode(status), 0, output)
+                    self.assertEqual(answered, 3, output)
+                    if run_number == 1:
+                        self.assert_default_skips(runtime, home, calls)
+                        existing = {home/'.local/bin/j': 'keep command\n', home/'.zshrc': '# keep shell\n',
+                                    runtime/'.env': 'TS_AUTHKEY=keep-existing\n'}
+                        for path, text in existing.items():
+                            path.parent.mkdir(parents=True, exist_ok=True)
+                            path.write_text(text)
+                    else:
+                        self.assertEqual(calls.read_text().splitlines(), ['ghostty', 'ghostty'])
+                        for path, text in existing.items():
+                            self.assertEqual(path.read_text(), text)
+                finally:
+                    os.close(terminal)
 
     def test_j_opt_in_without_tailnet_requests_only_launcher_preferences(self):
         with tempfile.TemporaryDirectory() as directory:

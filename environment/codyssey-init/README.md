@@ -13,6 +13,12 @@ tailnet is reachable. A selected Tailnet or `j` setup can install a pinned, chec
 
 ## Optional features
 
+Run the same root `sh init.sh` command again whenever you want to choose features.
+If you started with the remote one-line command, repeat that same command. The questions
+are asked on every interactive run, even when an earlier run created `.env`, installed `j`,
+or started services. No separate `tailnet.sh` command is needed to configure or retry setup.
+Declining this time preserves earlier work; selecting Yes reuses or retries that feature.
+
 Interactive prompts use `[y/N]`: only `y`, `Y`, `yes`, or `YES` opts in. These choices are
 independent; a Tailnet failure does not suppress a separately selected `j` or macOS setup.
 For unattended runs, set an option explicitly to `1` to enable it or `0` to disable it:
@@ -240,25 +246,15 @@ required.
 
 ## Tailnet shell and `just`
 
-Open Bash in the Tailscale container with either command:
+Use the same init command again to select or retry Tailnet setup. If you also opted into
+`j`, open the configured terminal from its Dock launcher or run `j`. From the installation
+directory, `just` (or `just bash`) opens Bash in the Tailscale container, and `just zellij`
+opens the multiplexer. Those are optional shortcuts; they are not additional setup entry points.
 
-```sh
-bash tailnet.sh
-just
-just bash
-```
-
-With arguments, `tailnet.sh` executes those exact arguments instead of prepending Bash:
-
-```sh
-bash tailnet.sh ssh user@100.64.0.10
-bash tailnet.sh bash -lc 'command-one | command-two'
-```
-
-Arguments, spaces, and the command exit status are preserved. Interactive terminals retain a TTY;
-redirected calls use Compose's non-TTY mode. Bash and zellij commands probe for the image's Bash,
-mise, and zellij tools, rebuilding an older image only when those tools are missing. Arbitrary
-commands are never probed, prefixed, or rebuilt. The persistent state volume is retained.
+The internal terminal helper preserves arguments and command exit status, retains a TTY for
+interactive use, and uses Compose's non-TTY mode for redirected calls. Bash and zellij probe
+for their required tools and rebuild an older image only when those tools are missing.
+The persistent state volume is retained.
 
 The image includes checksum-verified mise 2026.10.5 and zellij 0.45.1 installed through mise.
 Interactive Bash activates mise automatically, and its shims are also available to direct commands.

@@ -221,12 +221,12 @@ else
   log_event preferences skipped
 fi
 if [[ $tailnet_setup == 0 ]]; then
-  printf 'Setup finished. Optional Tailnet services were skipped; rerun sh init.sh to opt in later.\n'
+  printf 'Setup finished. Optional Tailnet services were skipped; run the same init command again to choose options.\n'
   exit 0
 fi
 cd "$init_dir"
 if [[ $container_status != 0 ]]; then
-  printf "Container setup failed; independent workstation settings were still attempted. Rerun sh init.sh to retry.\n" >&2
+  printf "Container setup failed; independent workstation settings were still attempted. Run the same init command again to retry.\n" >&2
   exit "$container_status"
 fi
 configure_tailscale_auth
