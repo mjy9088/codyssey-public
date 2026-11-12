@@ -183,7 +183,7 @@ if grep -q 'buffered preparation output' "$tmp/interactive.out"; then
   printf 'background preparation output interleaved with terminal prompts\n' >&2
   exit 1
 fi
-grep -q 'Preparing environment…' "$tmp/interactive.out"
+grep -q 'Preparing optional Tailnet environment…' "$tmp/interactive.out"
 assert_no_preparation_artifacts
 
 # A completed worker remains owned by init while the j and Dock prompts are unanswered.
