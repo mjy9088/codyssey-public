@@ -138,7 +138,7 @@ class ColdStartTests(unittest.TestCase):
 
 class ServiceRecoveryTests(unittest.TestCase):
     def test_service_failure_keeps_gost_check_and_secret_free_log_on_repeat(self):
-        for failure in ('start', 'tailscale'):
+        for failure in ('start', 'tailscale', 'browser'):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
                 work = Path(directory)
                 runtime = work / 'runtime'
@@ -148,32 +148,34 @@ class ServiceRecoveryTests(unittest.TestCase):
                 fakebin = work / 'bin'
                 fakebin.mkdir()
                 (runtime / 'lib/readiness.zsh').write_text(
-                    'wait_for_tailnet() { tailnet_state=; return 23; }\n'
+                    'wait_for_tailnet() { tailnet_state=; if [[ $FAILURE == browser ]]; then tailnet_state=running; return 0; fi; return 23; }\n'
                     'wait_for_gost_ui() { echo gost >> "$CALLS"; return 0; }\n')
                 for name, body in {
                     'mise': 'exit 0',
                     'docker': 'echo compose >> "$CALLS"; [ "$FAILURE" != start ]',
+                    'open': 'exit 29',
                 }.items():
                     path = fakebin / name
                     path.write_text('#!/bin/sh\n' + body + '\n')
                     path.chmod(0o700)
                 env = dict(os.environ, HOME=str(home), PATH=str(fakebin)+':/usr/bin:/bin',
                            CALLS=str(work/'calls'), FAILURE=failure, TS_AUTHKEY='tskey-auth-SYNTHETIC_SECRET',
-                           CODYSSEY_OPEN_BROWSER='0', CODYSSEY_INTERACTIVE_SHELL='0')
+                           CODYSSEY_OPEN_BROWSER='1', CODYSSEY_BROWSER='system', CODYSSEY_INTERACTIVE_SHELL='0')
                 env.pop('CODYSSEY_RUN_LOG', None)
                 for _ in range(2):
                     result = subprocess.run(['/bin/zsh', '-f', str(runtime/'next-script.zsh'), '--prepared'],
                                             env=env, text=True, capture_output=True, timeout=10)
-                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertEqual(result.returncode, 0 if failure == 'browser' else 1, result.stderr)
                     self.assertIn('GOST UI:', result.stdout)
                 self.assertEqual((work/'calls').read_text().count('gost\n'), 2)
                 logs = list((home/'Library/Logs/codyssey-init').glob('run.*'))
                 self.assertEqual(len(logs), 2)
                 for log in logs:
                     text = log.read_text()
-                    self.assertIn('tailscale failed', text)
+                    self.assertIn('tailscale ready' if failure == 'browser' else 'tailscale failed', text)
                     self.assertIn('gost ready', text)
-                    self.assertIn('run exit=1', text)
+                    self.assertIn('gost-browser exit=29', text)
+                    self.assertIn('run exit=0' if failure == 'browser' else 'run exit=1', text)
                     self.assertNotIn('SYNTHETIC_SECRET', text)
 
 

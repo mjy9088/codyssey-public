@@ -218,6 +218,9 @@ manually when no longer needed; no automatic upload occurs. If logging is unavai
 warning is printed and setup continues. Remote download/preflight failures occur before the
 runtime log exists, so include their terminal error separately.
 
+A transient browser-control socket timeout is retried once after its setup browser closes.
+Repeated timeouts and policy/ownership errors are reported; the latter are never retried.
+
 A successful command does not guarantee every macOS setting took effect. OS versions,
 hardware, app locations/versions, Docker backends, existing user preferences, permissions,
 input-method approvals, and managed-device policy can produce different results. Preferences
@@ -686,10 +689,10 @@ step is intentionally mutable and is not a reproducible package snapshot: Homebr
 formula or cask versions on a later run.
 
 Verification first runs `scripts/check.sh --native-python`, then runs the actual `init.sh` twice.
-This mode runs `portable-browser-test.py`, `macos-setup-test.py`, `vm-orchestration-test.py`, `preinstalled-tools-test.py`, `installer-recovery-test.py`, and `options-test.py` natively on the macOS guest
+This mode runs `portable-browser-test.py`, `macos-setup-test.py`, `vm-orchestration-test.py`, `preinstalled-tools-test.py`, `installer-recovery-test.py`, `options-test.py`, and `browser-configuration-test.py` natively on the macOS guest
 with synthetic state and fake commands. The pinned Linux container runs the Bash/zsh bootstrap suites
 and always runs `vm-guest-test.py` (with a bounded 120-second case timeout for emulated subprocess startup), whose fake Homebrew, Colima, and Docker guest boundaries must never
-execute natively on macOS. No checks are omitted; native execution of the six safe Python suites avoids
+execute natively on macOS. No checks are omitted; native execution of the seven safe Python suites avoids
 expensive process startup under x86 emulation. The default `scripts/check.sh` runs all suites inside
 the isolated container.
 Verification checks the

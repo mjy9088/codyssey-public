@@ -18,6 +18,7 @@ if [[ ${CODYSSEY_NATIVE_PYTHON_CHECKS:-0} != 1 ]]; then
   python3 /src/tests/preinstalled-tools-test.py
   python3 /src/tests/installer-recovery-test.py
   python3 /src/tests/options-test.py
+  python3 /src/tests/browser-configuration-test.py
 fi
 python3 /src/tests/vm-guest-test.py
 printf 'PASS: isolated bootstrap checks completed\n'

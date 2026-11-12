@@ -15,6 +15,10 @@ import urllib.parse
 import urllib.request
 
 
+class BrowserCleanupError(RuntimeError):
+    pass
+
+
 class CDP:
     def __init__(self, url):
         address = urllib.parse.urlparse(url)
@@ -110,6 +114,8 @@ def configure(binary, profile, extension, extensions):
                                 "--restore-last-session", "--no-first-run", "--no-default-browser-check",
                                 "about:blank"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     clients = []
+    targets = []
+    phase = "waiting for Chrome setup endpoint"
     try:
         deadline = time.monotonic() + 30
         while not endpoint.exists():
@@ -123,7 +129,10 @@ def configure(binary, profile, extension, extensions):
             with urllib.request.urlopen(urllib.request.Request(base + path, method=method), timeout=15) as response:
                 return json.load(response)
 
+        phase = "opening extension settings"
         manager = request("/json/new?" + urllib.parse.quote("chrome://extensions/", safe=""), "PUT")
+        targets.append(manager)
+        phase = "connecting to extension settings"
         client = CDP(manager["webSocketDebuggerUrl"])
         clients.append(client)
         deadline = time.monotonic() + 15
@@ -133,6 +142,7 @@ def configure(binary, profile, extension, extensions):
             time.sleep(0.1)
         # This is Chrome's own per-profile Developer mode, not macOS Accessibility
         # or Screen Recording permission. Managed policy is respected by the API.
+        phase = "enabling Chrome Developer mode"
         result = client.evaluate("""new Promise(resolve => chrome.developerPrivate.updateProfileConfiguration(
           {inDeveloperMode:true}, () => resolve({error:chrome.runtime.lastError?.message || null})))""")
         if result.get("error"):
@@ -140,6 +150,7 @@ def configure(binary, profile, extension, extensions):
         identifier = hashlib.sha256(str(extension).encode()).hexdigest()[:32].translate(
             str.maketrans("0123456789abcdef", "abcdefghijklmnop"))
         item = json.dumps(identifier)
+        phase = "locating the Tailnet extension"
         result = client.evaluate(f"""new Promise(resolve => chrome.developerPrivate.getExtensionsInfo(
           {{includeDisabled:true,includeTerminated:true}}, rows => resolve(rows.find(x=>x.id==={item}))))""")
         if not result or result.get("name") != "Codyssey Tailnet":
@@ -151,6 +162,7 @@ def configure(binary, profile, extension, extensions):
               ()=>resolve({{error:chrome.runtime.lastError?.message || null}})))""")
             if outcome.get("error"):
                 raise RuntimeError(outcome["error"])
+        phase = "reloading the Tailnet extension"
         outcome = client.evaluate(f"""new Promise(resolve => chrome.developerPrivate.reload({item},
           {{failQuietly:true}}, ()=>resolve({{error:chrome.runtime.lastError?.message || null}})))""")
         if outcome.get("error"):
@@ -162,10 +174,14 @@ def configure(binary, profile, extension, extensions):
           ()=>resolve({{error:chrome.runtime.lastError?.message || null}})))""")
         if outcome.get("error"):
             raise RuntimeError(outcome["error"])
+        phase = "opening the Tailnet extension popup"
         popup = request("/json/new?" + urllib.parse.quote(f"chrome-extension://{identifier}/popup.html", safe=""), "PUT")
+        targets.append(popup)
+        phase = "connecting to the Tailnet extension popup"
         popup_client = CDP(popup["webSocketDebuggerUrl"])
         clients.append(popup_client)
         deadline = time.monotonic() + 15
+        phase = "waiting for the Tailnet extension worker"
         while True:
             if not popup_client.evaluate("typeof chrome !== 'undefined' && !!chrome.runtime?.sendMessage"):
                 if time.monotonic() > deadline:
@@ -182,12 +198,18 @@ def configure(binary, profile, extension, extensions):
             if time.monotonic() > deadline:
                 raise RuntimeError("Tailnet extension did not become ready")
             time.sleep(0.2)
-        for target in (popup, manager):
-            # Close only the two setup tabs, retaining the user's restored tabs.
-            with urllib.request.urlopen(base + "/json/close/" + target["id"], timeout=10):
-                pass
-        print("Portable Chrome Developer mode and Tailnet extension configured.")
+    except (OSError, ValueError, RuntimeError, StopIteration) as error:
+        raise RuntimeError(f"{phase}: {error or type(error).__name__}") from error
     finally:
+        tab_error = None
+        # Close only targets created by this attempt, including failure paths.
+        # Otherwise --restore-last-session would preserve failed setup tabs.
+        for target in reversed(targets):
+            try:
+                with urllib.request.urlopen(base + "/json/close/" + target["id"], timeout=5):
+                    pass
+            except (OSError, ValueError) as error:
+                tab_error = error
         for client in clients:
             client.socket.close()
         if browser.poll() is None:
@@ -197,13 +219,35 @@ def configure(binary, profile, extension, extensions):
             except subprocess.TimeoutExpired:
                 raise RuntimeError("Chrome setup is still closing; stop it normally before retrying")
         endpoint.unlink(missing_ok=True)
+        if tab_error is not None:
+            raise BrowserCleanupError(f"Chrome setup tabs did not close: {tab_error}") from tab_error
+    print("Portable Chrome Developer mode and Tailnet extension configured.")
+
+
+def configure_with_retry(*arguments):
+    for attempt in range(2):
+        try:
+            return configure(*arguments)
+        except (OSError, ValueError, RuntimeError, StopIteration) as error:
+            cause = error
+            transient = False
+            while cause is not None:
+                if isinstance(cause, TimeoutError) or isinstance(getattr(cause, "reason", None), TimeoutError):
+                    transient = True
+                    break
+                cause = cause.__cause__
+            # configure's finally has closed this attempt's owned browser and
+            # endpoint. Never retry policy/ownership failures or a stuck close.
+            if attempt or not transient or isinstance(error, BrowserCleanupError):
+                raise
+            print(f"tailnet-browser setup: {error}; retrying once.", file=sys.stderr)
 
 
 if __name__ == "__main__":
     try:
         if len(sys.argv) != 5:
             raise RuntimeError("usage: configure-tailnet-browser.py BINARY PROFILE EXTENSION EXTENSION_LIST")
-        configure(Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), sys.argv[4])
+        configure_with_retry(Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), sys.argv[4])
     except (OSError, ValueError, RuntimeError, StopIteration) as error:
         print(f"tailnet-browser setup: {error or type(error).__name__}", file=sys.stderr)
         sys.exit(1)

@@ -58,7 +58,11 @@ if [[ $tailnet_state == needs-login ]]; then
   if find_tailscale_auth_url; then
     printf 'Tailscale is not connected yet. Authenticate at: %s\n' "$auth_url"
     if [[ ${CODYSSEY_OPEN_BROWSER:-1} != 0 ]] && command -v open >/dev/null 2>&1; then
-      open_browser "$auth_url" || printf 'Could not launch the browser; use the printed login URL.\n' >&2
+      if open_browser "$auth_url"; then log_event authentication-browser exit=0; else
+      browser_status=$?
+      log_event authentication-browser "exit=$browser_status"
+      printf 'Could not launch the browser; use the printed login URL.\n' >&2
+    fi
     fi
   else
     service_status=1
@@ -71,7 +75,11 @@ if wait_for_gost_ui; then
   log_event gost ready
   printf 'GOST UI: %s\n' "$ui_url"
   if [[ ${CODYSSEY_OPEN_BROWSER:-1} != 0 ]] && command -v open >/dev/null 2>&1; then
-    open_browser "$ui_url" || printf 'Could not launch the browser; use the printed GOST URL.\n' >&2
+    if open_browser "$ui_url"; then log_event gost-browser exit=0; else
+      browser_status=$?
+      log_event gost-browser "exit=$browser_status"
+      printf 'Could not launch the browser; use the printed GOST URL.\n' >&2
+    fi
   fi
 else
   service_status=1
