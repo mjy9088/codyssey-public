@@ -7,14 +7,11 @@ case "$mode" in
     printf '%s\n' 'Usage: sh scripts/verify.sh [docker|vm|all]' \
       'Requires Docker Engine, Compose v2, and a POSIX shell.'
     exit 0 ;;
-  all)
-    sh "$0" docker
-    exec sh "$0" vm ;;
-  docker|vm) ;;
+  docker|vm|all) ;;
   *) printf 'Unknown verification mode: %s\n' "$mode" >&2; exit 2 ;;
 esac
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
-project="mini-redis-$mode-$$"
+project=
 temporary=$(mktemp -d)
 child=
 
@@ -29,8 +26,14 @@ run_compose() {
   child=
   return "$status"
 } 3<&0
+cleanup_project() {
+  if [ -n "$project" ]; then
+    (compose down --volumes --remove-orphans --rmi local) >/dev/null 2>&1 || true
+    project=
+  fi
+}
 cleanup() {
-  (compose down --volumes --remove-orphans --rmi local) >/dev/null 2>&1 || true
+  cleanup_project
   rm -rf -- "$temporary"
 }
 stop() {
@@ -44,10 +47,9 @@ stop() {
 trap cleanup EXIT
 trap 'stop 130' INT
 trap 'stop 143' TERM
-docker version >/dev/null
-docker compose version
-run_compose config --quiet
-if [ "$mode" = docker ]; then
+verify_docker() {
+  project="mini-redis-docker-$$"
+  run_compose config --quiet
   run_compose build test mini-redis
   run_compose run --rm -T test
   printf '%s\n' 'CONFIG SET maxmemory 30' 'SET user:1 "Alice Example"' \
@@ -57,7 +59,10 @@ if [ "$mode" = docker ]; then
   grep -Fxq '"Alice Example"' "$temporary/transcript"
   grep -Fxq 'used_memory:19' "$temporary/transcript"
   printf 'DOCKER-VERIFY-SUCCESS\n'
-else
+}
+verify_vm() {
+  project="mini-redis-vm-$$"
+  run_compose config --quiet
   run_compose build vm
   vm_status=0
   run_compose run --rm -T vm >"$temporary/vm" 2>&1 || vm_status=$?
@@ -67,4 +72,16 @@ else
   grep -Fxq 'VM-TEST-SUCCESS' "$temporary/transcript"
   if grep -q '^VM-TEST-FAILURE:' "$temporary/transcript"; then exit 1; fi
   printf 'VM-VERIFY-SUCCESS\n'
-fi
+}
+
+docker version >/dev/null
+docker compose version
+case "$mode" in
+  docker) verify_docker ;;
+  vm) verify_vm ;;
+  all)
+    verify_docker
+    cleanup_project
+    verify_vm
+    ;;
+esac

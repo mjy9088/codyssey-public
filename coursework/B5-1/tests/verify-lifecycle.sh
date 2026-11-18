@@ -16,9 +16,9 @@ case " $* " in
     if test -n "${VERIFY_SIGNAL:-}" && test ! -e "$VERIFY_SIGNAL_MARKER"; then
       : >"$VERIFY_SIGNAL_MARKER"
       trap 'printf "%s\n" "build terminated" >>"$VERIFY_CALLS"; exit 143' TERM
-      kill -s "$VERIFY_SIGNAL" "$PPID"
+      kill -s "$VERIFY_SIGNAL" "${VERIFY_TARGET_PID:-$PPID}"
       if test "${VERIFY_BLOCK_BUILD:-0}" -eq 1; then
-        while :; do sleep 1; done
+        for second in 1 2 3 4 5; do sleep 1; done
       fi
     fi
     ;;
@@ -33,8 +33,13 @@ EOF
 chmod +x "$temporary/bin/docker"
 
 run_verify() {
+  mode=$1
+  shift
   env PATH="$temporary/bin:$PATH" VERIFY_CALLS="$calls" \
-    VERIFY_SIGNAL_MARKER="$signal_marker" "$@" sh "$root/scripts/verify.sh" docker
+    VERIFY_SIGNAL_MARKER="$signal_marker" "$@" sh -c "
+      export VERIFY_TARGET_PID=\$\$
+      exec sh \"\$0\" \"\$1\"
+    " "$root/scripts/verify.sh" "$mode"
 }
 
 : >"$calls"
@@ -51,7 +56,7 @@ for signal in INT TERM; do
   : >"$calls"
   rm -f "$signal_marker"
   set +e
-  run_verify VERIFY_SIGNAL="$signal" >/dev/null 2>&1
+  run_verify docker VERIFY_SIGNAL="$signal" >/dev/null 2>&1
   status=$?
   set -e
   case "$signal:$status" in INT:130|TERM:143) ;; *) exit 1 ;; esac
@@ -69,15 +74,17 @@ for signal in INT TERM; do
   test "$calls_after_build" -ge 1
 done
 
-: >"$calls"
-rm -f "$signal_marker"
-set +e
-run_verify VERIFY_SIGNAL=TERM VERIFY_BLOCK_BUILD=1 >/dev/null 2>&1
-status=$?
-set -e
-test "$status" -eq 143
-grep -Fxq 'build terminated' "$calls"
-test "$(grep -c ' down ' "$calls")" -eq 1
+for mode in docker all; do
+  : >"$calls"
+  rm -f "$signal_marker"
+  set +e
+  run_verify "$mode" VERIFY_SIGNAL=TERM VERIFY_BLOCK_BUILD=1 >/dev/null 2>&1
+  status=$?
+  set -e
+  test "$status" -eq 143
+  grep -Fxq 'build terminated' "$calls"
+  test "$(grep -c ' down ' "$calls")" -eq 1
+done
 
 set +e
 output=$(env PATH="$temporary/bin:$PATH" VERIFY_CALLS="$calls" VERIFY_VM_STATUS=42 \
