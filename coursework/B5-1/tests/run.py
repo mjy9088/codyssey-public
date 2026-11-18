@@ -1,22 +1,33 @@
-from test_cli import test_execute_supports_quoted_values_and_safe_parse_errors
-from test_cli import test_execute_enforces_documented_command_allowlist
-from test_cli import test_negative_maxmemory_is_rejected_without_changing_limit
-from test_cli import test_repl_runs_complete_user_scenario
-from test_policy import test_cache_internals_do_not_delegate_to_prohibited_collections
-from test_policy import test_runtime_modules_enforce_command_and_capability_boundaries
-from test_store import test_delete_cleans_value_lru_and_ttl
-from test_store import test_empty_value_overwrite_and_eviction_keep_memory_exact
-from test_store import test_expire_missing_and_nonpositive_deadlines_clean_state
-from test_store import test_expired_get_removes_key_without_refreshing_survivor_recency
-from test_store import test_expiration_cleanup_handles_stale_heap_records
-from test_store import test_get_refreshes_lru_before_eviction
-from test_store import test_oversize_write_is_atomic_for_existing_key
-from test_store import test_stale_expiry_record_does_not_remove_overwritten_value
-from test_store import test_utf8_memory_and_overwrite_reset_ttl
-from test_store import test_zero_maxmemory_restores_unlimited_writes
-from test_structures import test_hash_map_resizes_and_preserves_colliding_entries
-from test_structures import test_linked_list_supports_constant_time_reordering
-from test_structures import test_min_heap_orders_expirations_and_keys
+from tests.test_cli import (
+    test_execute_enforces_documented_command_allowlist,
+    test_execute_escapes_terminal_output,
+    test_execute_supports_quoted_values_and_safe_parse_errors,
+    test_negative_maxmemory_is_rejected_without_changing_limit,
+    test_repl_runs_complete_user_scenario,
+)
+from tests.test_policy import (
+    test_cache_internals_do_not_delegate_to_prohibited_collections,
+    test_runtime_modules_enforce_capability_boundaries,
+)
+from tests.test_store import (
+    test_delete_cleans_value_lru_and_ttl,
+    test_empty_value_overwrite_and_eviction_keep_memory_exact,
+    test_expiration_cleanup_handles_stale_heap_records,
+    test_expire_missing_and_nonpositive_deadlines_clean_state,
+    test_expired_get_removes_key_without_refreshing_survivor_recency,
+    test_get_refreshes_lru_before_eviction,
+    test_oversize_write_is_atomic_for_existing_key,
+    test_stale_expiry_record_does_not_remove_overwritten_value,
+    test_store_rejects_invalid_limits_and_preserves_state,
+    test_superseded_deadlines_are_compacted,
+    test_utf8_memory_and_overwrite_reset_ttl,
+    test_zero_maxmemory_restores_unlimited_writes,
+)
+from tests.test_structures import (
+    test_hash_map_resizes_and_preserves_colliding_entries,
+    test_linked_list_supports_constant_time_reordering,
+    test_min_heap_orders_expirations_and_keys,
+)
 
 
 def main() -> None:
@@ -31,15 +42,18 @@ def main() -> None:
         test_expired_get_removes_key_without_refreshing_survivor_recency,
         test_stale_expiry_record_does_not_remove_overwritten_value,
         test_zero_maxmemory_restores_unlimited_writes,
+        test_store_rejects_invalid_limits_and_preserves_state,
+        test_superseded_deadlines_are_compacted,
         test_expire_missing_and_nonpositive_deadlines_clean_state,
         test_delete_cleans_value_lru_and_ttl,
         test_empty_value_overwrite_and_eviction_keep_memory_exact,
         test_execute_supports_quoted_values_and_safe_parse_errors,
+        test_execute_escapes_terminal_output,
         test_execute_enforces_documented_command_allowlist,
         test_negative_maxmemory_is_rejected_without_changing_limit,
         test_repl_runs_complete_user_scenario,
         test_cache_internals_do_not_delegate_to_prohibited_collections,
-        test_runtime_modules_enforce_command_and_capability_boundaries,
+        test_runtime_modules_enforce_capability_boundaries,
     ]
     for test in tests:
         test()

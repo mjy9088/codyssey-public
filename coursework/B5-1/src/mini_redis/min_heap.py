@@ -1,8 +1,14 @@
+"""Implement an array-backed binary minimum heap for expiry records."""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True, order=True, slots=True)
+@dataclass(frozen=True, order=True)
 class HeapItem:
+    """An expiry candidate ordered by deadline and then by key."""
+
     expire_at: float
     key: str
 
@@ -11,13 +17,16 @@ class MinHeap:
     """Store expiration records in an array-backed complete binary tree."""
 
     def __init__(self) -> None:
+        """Initialize an empty heap."""
         self._items: list[HeapItem] = []
 
     def push(self, item: HeapItem) -> None:
+        """Insert an expiry candidate and restore heap order."""
         self._items.append(item)
         self._heapify_up(len(self._items) - 1)
 
     def pop(self) -> HeapItem | None:
+        """Remove the smallest candidate, if any."""
         if not self._items:
             return None
         root = self._items[0]
@@ -28,9 +37,11 @@ class MinHeap:
         return root
 
     def peek(self) -> HeapItem | None:
+        """Return the smallest candidate without removing it."""
         return None if not self._items else self._items[0]
 
     def size(self) -> int:
+        """Return the number of queued candidates."""
         return len(self._items)
 
     def _heapify_up(self, index: int) -> None:

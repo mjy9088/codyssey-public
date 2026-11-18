@@ -6,7 +6,7 @@ from mini_redis.min_heap import HeapItem, MinHeap
 def test_linked_list_supports_constant_time_reordering() -> None:
     linked: DoublyLinkedList[str] = DoublyLinkedList()
     older = linked.insert_back("older")
-    linked.insert_front("newer")
+    _ = linked.insert_front("newer")
 
     linked.move_to_front(older)
 
@@ -21,6 +21,7 @@ def test_hash_map_resizes_and_preserves_colliding_entries() -> None:
         table.put(f"key-{index}", index)
 
     assert table.size() == 40
+    assert all(table.get(f"key-{index}") == index for index in range(40))
     assert table.get("key-17") == 17
     assert table.remove("key-17") == 17
     assert not table.contains("key-17")

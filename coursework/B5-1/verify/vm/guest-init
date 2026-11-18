@@ -7,7 +7,8 @@ mount -t devtmpfs devtmpfs /dev
 mkdir -p /dev/pts
 mount -t devpts devpts /dev/pts
 echo "VM-TEST-BEGIN: $(uname -srvmo)"
-if python /app/tests/run.py; then
+cd /app || exit 1
+if python -m tests.run; then
   echo "VM-TEST-SUCCESS"
 else
   status=$?

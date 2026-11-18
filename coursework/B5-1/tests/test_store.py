@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from mini_redis.store import MiniRedis
 
 
-@dataclass(slots=True)
+@dataclass
 class ManualClock:
     now: float = 100.0
 
@@ -139,8 +139,8 @@ def test_expire_missing_and_nonpositive_deadlines_clean_state() -> None:
 def test_delete_cleans_value_lru_and_ttl() -> None:
     clock = ManualClock()
     store = MiniRedis(clock=clock)
-    store.set("gone", "value")
-    store.expire("gone", 5)
+    assert store.set("gone", "value") == "OK"
+    assert store.expire("gone", 5) == 1
 
     assert store.delete("gone") == 1
     assert store.delete("gone") == 0
@@ -157,3 +157,44 @@ def test_empty_value_overwrite_and_eviction_keep_memory_exact() -> None:
     assert store.configure_maxmemory(2) == "OK"
     assert store.used_memory == 0
     assert store.evicted_keys == 1
+
+
+def test_store_rejects_invalid_limits_and_preserves_state() -> None:
+    clock = ManualClock()
+    store = MiniRedis(clock=clock)
+    assert store.configure_maxmemory(2) == "OK"
+    assert store.set("a", "1") == "OK"
+    assert store.expire("a", 30) == 1
+
+    for rejected_operation in (
+        lambda: store.configure_maxmemory(-1),
+        lambda: store.expire("a", int("9" * 310)),
+    ):
+        try:
+            _ = rejected_operation()
+        except ValueError:
+            continue
+        msg = "invalid limit was accepted"
+        raise AssertionError(msg)
+
+    assert store.maxmemory == 2
+    assert store.ttl("a") == 30
+    assert store.get("a") == "1"
+
+
+def test_superseded_deadlines_are_compacted() -> None:
+    clock = ManualClock()
+    store = MiniRedis(clock=clock)
+    assert store.set("a", "1") == "OK"
+    assert store.set("b", "2") == "OK"
+    assert store.expire("b", 5) == 1
+
+    for duration in range(10, 1010):
+        assert store.expire("a", duration) == 1
+
+    # Heap size verifies resource use, which intentionally excludes INFO payload bytes.
+    heap = store._expiry_heap  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+    assert heap.size() <= 65
+    clock.advance(5)
+    assert store.ttl("b") == -2
+    assert store.ttl("a") == 1004

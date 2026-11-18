@@ -7,6 +7,7 @@ exec qemu-system-x86_64 \
   -smp 1 \
   -m 256M \
   -nodefaults \
+  -nic none \
   -no-reboot \
   -display none \
   -serial stdio \
