@@ -169,7 +169,7 @@ sys.exit(0)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("macOS", result.stderr)
 
-    def test_native_mode_schedules_only_original_python_suites(self) -> None:
+    def test_native_mode_schedules_python_and_gureum_suites(self) -> None:
         with tempfile.TemporaryDirectory(prefix="native-runner-") as directory:
             work = Path(directory)
             fakebin = work / "bin"
@@ -177,6 +177,7 @@ sys.exit(0)
             calls = work / "calls.log"
             scripts = {
                 "uname": "#!/bin/sh\necho Darwin\n",
+                "bash": '#!/bin/sh\nprintf "bash %s\\n" "$*" >> "$RUNNER_CALLS"\n',
                 "python3": '#!/bin/sh\nprintf "python3 %s\\n" "$*" >> "$RUNNER_CALLS"\n',
                 "docker": '#!/bin/sh\nprintf "docker %s\\n" "$*" >> "$RUNNER_CALLS"\n[ "${1:-}" != build ] || cat >/dev/null\n',
             }
@@ -191,6 +192,7 @@ sys.exit(0)
             scheduled = calls.read_text()
             self.assertIn("tests/macos-setup-test.py", scheduled)
             self.assertIn("tests/vm-orchestration-test.py", scheduled)
+            self.assertIn("tests/gureum-activation-test.sh", scheduled)
             self.assertNotIn("tests/vm-guest-test.py", scheduled)
 
 

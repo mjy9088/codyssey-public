@@ -49,7 +49,10 @@ service_status=0
 if run_quiet_step "Starting services" docker compose up -d --no-build; then :; else
   service_status=1
 fi
-if wait_for_tailnet; then log_event tailscale ready; else
+if wait_for_tailnet; then
+  if [[ $tailnet_state == running ]]; then log_event tailscale ready;
+  else log_event tailscale needs-login; fi
+else
   service_status=1
   log_event tailscale failed
 fi
@@ -86,8 +89,21 @@ else
   log_event gost failed
 fi
 (( service_status == 0 )) || exit 1
-log_event services ready
-printf 'Environment ready. Run the same init command again to choose setup options.\n'
+if [[ $tailnet_state == needs-login && $(read_tailnet_backend) == running ]]; then
+  tailnet_state=running
+  log_event tailscale ready
+fi
+if [[ $tailnet_state == running ]]; then
+  log_event services ready
+  printf 'GOST API/UI ready. Tailscale connected.\n'
+else
+  log_event services needs-login
+  printf 'GOST API/UI ready. Tailscale login pending.\n'
+fi
+if (( prepared )) && [[ ${CODYSSEY_WORKSTATION_INCOMPLETE:-0} == 1 ]]; then
+  printf 'Workstation setup is incomplete. See the warnings above for details.\n' >&2
+fi
+printf 'Run the same init command again to choose setup options.\n'
 if [[ -t 0 && -t 1 && ${CODYSSEY_INTERACTIVE_SHELL:-1} != 0 ]]; then
   exec zsh -i
 fi

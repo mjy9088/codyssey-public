@@ -24,11 +24,7 @@ TEXT_KEYS: Final = (
     "NSAutomaticDashSubstitutionEnabled",
     "NSAutomaticTextReplacementEnabled",
 )
-KOREAN: Final[dict[str, PlistValue]] = {
-    "InputSourceKind": "Input Mode",
-    "Bundle ID": "org.youknowone.inputmethod.Gureum",
-    "Input Mode": "org.youknowone.inputmethod.Gureum.han2",
-}
+APPLE_KOREAN: Final = ("com.apple.inputmethod.Korean", "com.apple.inputmethod.Korean.2SetKorean")
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,15 +113,10 @@ def prepare_fixture(baseline: tuple[DomainSnapshot, ...], directory: Path) -> tu
     if not latin_sources:
         raise VerificationError("baseline has no Latin Keyboard Layout to preserve")
     unrelated_sources = [
-        source
-        for source in sources
-        if not (
-            source.get("InputSourceKind") == KOREAN["InputSourceKind"]
-            and source.get("Bundle ID") == KOREAN["Bundle ID"]
-            and source.get("Input Mode") == KOREAN["Input Mode"]
-        )
+        source for source in sources
+        if source.get("Bundle ID") not in APPLE_KOREAN
+        and source.get("Input Mode") not in APPLE_KOREAN
     ]
-    input_values["AppleEnabledInputSources"] = unrelated_sources
 
     hotkey_values = load(by_domain["com.apple.symbolichotkeys"].path)
     raw_hotkeys = hotkey_values.get("AppleSymbolicHotKeys", {})
@@ -137,7 +128,6 @@ def prepare_fixture(baseline: tuple[DomainSnapshot, ...], directory: Path) -> tu
     fixtures = {
         "NSGlobalDomain": global_values,
         "com.apple.dock": dock_values,
-        "com.apple.HIToolbox": input_values,
         "com.apple.symbolichotkeys": hotkey_values,
     }
     for domain, values in fixtures.items():
@@ -184,8 +174,8 @@ def verify_preferences(directory: Path, unrelated_sources: list[dict[str, PlistV
     verify_dock(dock_values)
 
     sources = dictionaries(input_values.get("AppleEnabledInputSources", []), "AppleEnabledInputSources")
-    if any(source not in sources for source in unrelated_sources) or sources.count(KOREAN) != 1:
-        raise VerificationError("input sources were not preserved with one exact Korean mode")
+    if any(source not in sources for source in unrelated_sources):
+        raise VerificationError("unrelated input sources were not preserved")
     hotkeys = hotkey_values.get("AppleSymbolicHotKeys")
     if not isinstance(hotkeys, dict):
         raise VerificationError("AppleSymbolicHotKeys is not a dictionary")

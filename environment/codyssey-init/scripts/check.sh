@@ -12,7 +12,7 @@ case ${1:-} in
       exit 1
     fi
     python3 -c 'import sys; assert sys.version_info >= (3, 10)'
-    # These suites use synthetic state and fake external commands only.
+    # Isolated fixtures never modify the real preference domains.
     python3 "$root/tests/portable-browser-test.py"
     python3 "$root/tests/macos-setup-test.py"
     python3 "$root/tests/vm-orchestration-test.py"
@@ -21,6 +21,7 @@ case ${1:-} in
     python3 "$root/tests/options-test.py"
     python3 "$root/tests/browser-configuration-test.py"
     python3 "$root/tests/iterm2-test.py"
+    bash "$root/tests/gureum-activation-test.sh"
     native_python=1
     ;;
   *) printf 'Usage: sh scripts/check.sh [--native-python]\n' >&2; exit 1 ;;
@@ -46,7 +47,7 @@ tar -C "$root" -cf "$context/payload.tar" \
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh tests/portable-browser-test.py \
   scripts/configure-tailnet-browser.py \
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh scripts/prepare-startup.sh scripts/install-iterm2.sh scripts/configure-iterm2.sh scripts/configure-shell.sh scripts/verify-tailnet-runtime.py scripts/verify-dock-ui.swift \
-  tests/tailnet-dns-test.sh
+  tests/tailnet-dns-test.sh tests/gureum-activation-test.sh tests/gureum-activation-test.swift
 tar -C "$context" -xf "$context/payload.tar"
 rm "$context/payload.tar"
 printf 'Preparing isolated checks…\n'

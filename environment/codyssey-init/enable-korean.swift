@@ -74,12 +74,9 @@ func configureShortcuts(verifyOnly: Bool) {
             fail("binding \(identifier) was not applied in the active session (key \(key), modifiers \(modifiers), enabled \(enabled(id))).")
         }
     }
-    print("Live shortcuts verified: Control-Space input switching; Command-Space Spotlight.")
-}
-
-if CommandLine.arguments.count == 2 && ["--shortcuts", "--verify-shortcuts"].contains(CommandLine.arguments[1]) {
-    configureShortcuts(verifyOnly: CommandLine.arguments[1] == "--verify-shortcuts")
-    exit(0)
+    if verifyOnly {
+        print("Live shortcuts verified: Control-Space input switching; Command-Space Spotlight.")
+    }
 }
 
 func source(_ identifier: String) -> TISInputSource? {
@@ -95,57 +92,92 @@ func enabled(_ source: TISInputSource) -> Bool {
     return CFBooleanGetValue(Unmanaged<CFBoolean>.fromOpaque(value).takeUnretainedValue())
 }
 
-func enableAndWait(_ identifier: String) {
-    guard let input = source(identifier) else {
-        fail("Input source unavailable: \(identifier)")
-    }
-    if enabled(input) { return }
-    fputs("Approve the macOS input-source activation dialog if shown. Waiting up to 120 seconds…\n", stderr)
-    let status = TISEnableInputSource(input)
-    guard status == noErr else {
-        fail("Could not request activation of \(identifier): \(status)")
-    }
-    // noErr acknowledges the request, not the user's approval. Keep this process
-    // alive and service its run loop until fresh TIS state confirms activation.
-    let deadline = Date(timeIntervalSinceNow: 120)
+// A parent activation request can return before the approval dialog closes.
+// The usable Hangul mode and the current source determine completion.
+func waitForHangul(
+    requestMode: () -> Bool,
+    selectMode: () -> Bool,
+    waitForNextAttempt: () -> Bool
+) -> Bool {
+    var requested = false
     repeat {
-        if let current = source(identifier), enabled(current) { return }
-        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.25))
-    } while Date() < deadline
-    fail("Input-source activation was not approved within 120 seconds (\(identifier)). Rerun setup and choose Allow; no logout is required.")
+        if !requested { requested = requestMode() }
+        if selectMode() { return true }
+    } while waitForNextAttempt()
+    return false
+}
+
+func flag(_ input: TISInputSource, _ property: CFString) -> Bool {
+    guard let value = TISGetInputSourceProperty(input, property) else { return false }
+    return CFBooleanGetValue(Unmanaged<CFBoolean>.fromOpaque(value).takeUnretainedValue())
+}
+
+func currentSourceID() -> String {
+    let current = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
+    guard let value = TISGetInputSourceProperty(current, kTISPropertyInputSourceID) else { return "" }
+    return Unmanaged<CFString>.fromOpaque(value).takeUnretainedValue() as String
+}
+
+#if !CODYSSEY_INPUT_TEST
+if CommandLine.arguments.count == 2 && ["--shortcuts", "--verify-shortcuts"].contains(CommandLine.arguments[1]) {
+    configureShortcuts(verifyOnly: CommandLine.arguments[1] == "--verify-shortcuts")
+    exit(0)
+}
+
+if CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "--current-source" {
+    let identifier = currentSourceID()
+    guard !identifier.isEmpty else { fail("Current keyboard input source is unavailable.") }
+    print(identifier)
+    exit(0)
 }
 
 guard CommandLine.arguments.count == 2 else {
-    fail("Usage: swift enable-korean.swift PATH_TO_GUREUM_APP | --shortcuts | --verify-shortcuts")
+    fail("Usage: swift enable-korean.swift PATH_TO_GUREUM_APP | --shortcuts | --verify-shortcuts | --current-source")
 }
 let app = URL(fileURLWithPath: CommandLine.arguments[1]) as CFURL
-guard TISRegisterInputSource(app) == noErr else {
-    fail("Could not register the installed Gureum input method.")
+let registrationStatus = TISRegisterInputSource(app)
+guard registrationStatus == noErr else {
+    fail("Could not register the installed Gureum input method (status \(registrationStatus)).")
 }
 
-// Approval of the parent must finish before requesting its Hangul mode.
 let parent = "org.youknowone.inputmethod.Korean"
 let identifier = "org.youknowone.inputmethod.Gureum.han2"
-enableAndWait(parent)
-enableAndWait(identifier)
+var parentStatus: OSStatus?
+if let input = source(parent), !enabled(input) {
+    parentStatus = TISEnableInputSource(input)
+}
+fputs("If macOS shows an input-source activation dialog, choose Allow. Waiting for Gureum Hangul to become selectable…\n", stderr)
 
-let deadline = Date(timeIntervalSinceNow: 10)
-var selectionStatus: OSStatus = -50
-var selected = false
-repeat {
-    if let korean = source(identifier) {
-        selectionStatus = TISSelectInputSource(korean)
-        let current = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
-        if let value = TISGetInputSourceProperty(current, kTISPropertyInputSourceID) {
-            let currentID = Unmanaged<CFString>.fromOpaque(value).takeUnretainedValue() as String
-            selected = selectionStatus == noErr && currentID == identifier
-        }
-        if selected { break }
+let deadline = ProcessInfo.processInfo.systemUptime + 120
+var modeStatus: OSStatus?
+var selectionStatus: OSStatus?
+let selected = waitForHangul(
+    requestMode: {
+        guard let mode = source(identifier) else { return false }
+        if enabled(mode) { return true }
+        guard flag(mode, kTISPropertyInputSourceIsEnableCapable) else { return false }
+        modeStatus = TISEnableInputSource(mode)
+        return modeStatus == noErr
+    },
+    selectMode: {
+        if currentSourceID() == identifier { return true }
+        guard let mode = source(identifier), enabled(mode),
+              flag(mode, kTISPropertyInputSourceIsSelectCapable) else { return false }
+        selectionStatus = TISSelectInputSource(mode)
+        return selectionStatus == noErr && currentSourceID() == identifier
+    },
+    waitForNextAttempt: {
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.5))
+        return ProcessInfo.processInfo.systemUptime < deadline
     }
-    RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.25))
-} while Date() < deadline
+)
 guard selected else {
-    fail("Korean input was enabled but selection was not confirmed (status \(selectionStatus)). Rerun setup in the active desktop session.")
+    func state(_ id: String) -> String {
+        guard let input = source(id) else { return "missing" }
+        return "enabled=\(enabled(input)), enable-capable=\(flag(input, kTISPropertyInputSourceIsEnableCapable)), select-capable=\(flag(input, kTISPropertyInputSourceIsSelectCapable))"
+    }
+    func status(_ result: OSStatus?) -> String { result.map { String($0) } ?? "not requested" }
+    fail("Gureum Hangul selection was not confirmed within 120 seconds. Parent: \(state(parent)) (request \(status(parentStatus))). Hangul: \(state(identifier)) (request \(status(modeStatus)), selection \(status(selectionStatus))). Retry with bash macos-setup.sh --input-only in the active desktop session.")
 }
 
 // Keep the existing Latin layout; remove the old Apple Korean sources only after
@@ -160,3 +192,4 @@ for identifier in previousSources {
     }
 }
 print("Gureum 1.13.2 Hangul 2-set registered, enabled, and selected.")
+#endif

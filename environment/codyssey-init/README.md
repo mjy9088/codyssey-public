@@ -399,12 +399,10 @@ Carbon registration and selection.
 `org.youknowone.inputmethod.Korean` and Hangul mode `org.youknowone.inputmethod.Gureum.han2`, and attempts
 to select Hangul. The legacy parent ID differs from the app's bundle ID,
 `org.youknowone.inputmethod.Gureum`. After successful Gureum selection, it disables the Apple Korean
-sources added by the earlier bootstrap. Activation requests can return success before the user approves
-the macOS dialog. The helper stays alive for up to 120 seconds per source, services its run loop,
-and waits for actual activation before enabling the next source. Choose Allow when prompted.
-Already-enabled sources are not prompted again. Selection is verified against the current input source;
-timeout or selection failure reports an actionable error while other preference groups continue. No logout is performed or required
-by the setup flow. To retry input setup in the current session:
+sources added by the earlier bootstrap. Choose Allow if macOS prompts. For up to 120 seconds the
+helper services its run loop and attempts activation once the Hangul mode is enable-capable.
+It verifies selection against the desktop's current input source. Timeouts report observed TIS
+state and status codes while the remaining preference groups continue. To retry in the same session:
 
 ```sh
 bash macos-setup.sh --input-only
@@ -462,9 +460,9 @@ log lines and preserve the command's exit status. Temporary logs are removed aft
 
 `verify-macos-setup.py` is a deliberately destructive live test requiring Python 3.10 or newer. It
 privately snapshots every preference domain before any write, requires an existing Latin keyboard
-layout, removes only the exact Korean input mode and symbolic-hotkey entries 60/61/64/65 from its
-baseline-derived fixture, clears Dock pins, and enables all nine text-automation settings. It never
-inserts a synthetic input source. It then applies the setup twice and verifies parsed plist values,
+layout, removes symbolic-hotkey entries 60/61/64/65 from its baseline-derived fixture, clears Dock
+pins, and enables all nine text-automation settings. The setup uses live TIS state to confirm Gureum
+selection. The verifier applies the setup twice and verifies parsed plist values,
 including exact Dock entries, typed hotkey parameters, and preservation of unrelated input sources
 and shortcuts. It will not run without both Darwin and this exact opt-in:
 
@@ -475,6 +473,16 @@ CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 verify-macos-setup.py
 `--desktop-only` snapshots only Dock, applies the desktop setup twice, verifies the real launcher
 with `--list`, and preserves keyboard/text preferences. The unattended VM uses this mode plus
 independent live shortcut verification, so input-source approval cannot block its service tests.
+The headless run reports the Gureum desktop check as pending. To complete it, open Terminal
+inside the disposable VM desktop and run:
+
+```sh
+bash scripts/verify-macos-vm.sh --disposable --input-desktop
+```
+
+Choose Allow when prompted, then follow the typing prompts. The check requires Hangul composition,
+Latin input after Control-Space, and Hangul composition after switching back. It checks the active
+source in addition to the text typed into Terminal.
 This mode does not verify notification dismissal or suppression.
 The VM driver additionally runs `scripts/verify-dock-ui.swift` to require named, resolved Terminal,
 Chrome and j items in the actual Dock UI. This read-only test requires the VM Guest Agent's existing

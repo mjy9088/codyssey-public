@@ -126,7 +126,7 @@ def assert_success_contract(state: Path) -> None:
     sources = read_domain(state, "com.apple.HIToolbox")["AppleEnabledInputSources"]
     assert isinstance(sources, list) and isinstance(sources[0], dict)
     assert sources[0]["KeyboardLayout Name"] == "ABC"
-    assert sources.count({"InputSourceKind": "Input Mode", "Bundle ID": "org.youknowone.inputmethod.Gureum", "Input Mode": "org.youknowone.inputmethod.Gureum.han2"}) == 1
+    assert sources == [{"InputSourceKind": "Keyboard Layout", "KeyboardLayout Name": "ABC"}]
     hotkeys = read_domain(state, "com.apple.symbolichotkeys")["AppleSymbolicHotKeys"]
     assert isinstance(hotkeys, dict) and hotkeys["99"] == {"enabled": True}
     assert hotkeys["60"] == {"enabled": True, "value": {"type": "standard", "parameters": [65535, 49, 262144]}}
@@ -150,7 +150,7 @@ def test_success_and_repeat() -> None:
         calls = (state / "calls.log").read_text()
         assert "killall\t-u test-user Dock" in calls
         assert "activateSettings" not in calls
-        assert ":'Bundle ID'" in calls and ":'Input Mode'" in calls
+        assert "defaults\timport com.apple.HIToolbox" not in calls
 
 
 def test_missing_chrome_preserves_dock_and_adds_launcher() -> None:

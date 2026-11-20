@@ -49,8 +49,15 @@ else
   "$plutil_bin" -create xml1 "$original"
 fi
 cp "$original" "$work"
-read_value() { "$plutil_bin" -extract "$1" raw "$work" 2>/dev/null || true; }
-read_type() { "$plutil_bin" -type "$1" "$work" 2>/dev/null || true; }
+"$plutil_bin" -lint "$work" >/dev/null
+read_plist() {
+  local value
+  if value=$("$plutil_bin" "$@" "$work" 2>/dev/null); then
+    printf '%s' "$value"
+  fi
+}
+read_value() { read_plist -extract "$1" raw; }
+read_type() { read_plist -type "$1"; }
 custom=$(read_value LoadPrefsFromCustomFolder)
 [[ $custom != true && $custom != 1 ]] || {
   printf 'iTerm2 uses a custom preferences folder; preserving that configuration.\n' >&2; exit 1;

@@ -204,38 +204,6 @@ apply_dock() {
   "$killall_bin" -u "${USER:-$(id -un)}" Dock >/dev/null 2>&1 || true
 }
 
-apply_input_sources() {
-  [[ $input_switch != caps-lock ]] || return 0
-  local work index=0 kind bundle mode failed=0
-  backup_domain input-sources com.apple.HIToolbox || return
-  [[ $BACKUP_KIND == present ]] || { warn 'input source list is unreadable'; return 1; }
-  work=$(mktemp "$backup_root/input-sources.work.XXXXXX") || return
-  cp "$BACKUP_PATH" "$work"
-  "$plistbuddy_bin" -c 'Print :AppleEnabledInputSources' "$work" >/dev/null 2>&1 || {
-    warn 'input source list is unreadable'
-    return 1
-  }
-  while "$plistbuddy_bin" -c "Print :AppleEnabledInputSources:$index" "$work" >/dev/null 2>&1; do
-    kind=$("$plistbuddy_bin" -c "Print :AppleEnabledInputSources:$index:InputSourceKind" "$work" 2>/dev/null || true)
-    bundle=$("$plistbuddy_bin" -c "Print :AppleEnabledInputSources:$index:'Bundle ID'" "$work" 2>/dev/null || true)
-    mode=$("$plistbuddy_bin" -c "Print :AppleEnabledInputSources:$index:'Input Mode'" "$work" 2>/dev/null || true)
-    if [[ $kind == 'Input Mode' && $bundle == 'org.youknowone.inputmethod.Gureum' && $mode == 'org.youknowone.inputmethod.Gureum.han2' ]]; then
-      return
-    fi
-    index=$((index + 1))
-  done
-  "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index dict" "$work" || failed=1
-  "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index:InputSourceKind string 'Input Mode'" "$work" || failed=1
-  "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index:'Bundle ID' string 'org.youknowone.inputmethod.Gureum'" "$work" || failed=1
-  "$plistbuddy_bin" -c "Add :AppleEnabledInputSources:$index:'Input Mode' string 'org.youknowone.inputmethod.Gureum.han2'" "$work" || failed=1
-  [[ $failed -eq 0 ]] || { warn 'input source update could not be prepared'; return 1; }
-  if ! "$defaults_bin" import com.apple.HIToolbox "$work" >/dev/null 2>&1; then
-    restore_domain com.apple.HIToolbox || warn 'input source rollback failed; backup retained'
-    warn 'input source write failed'
-    return 1
-  fi
-}
-
 add_hotkey() {
   local work=$1 identifier=$2 modifiers=$3
   "$plistbuddy_bin" -c "Delete :AppleSymbolicHotKeys:$identifier" "$work" >/dev/null 2>&1 || true
@@ -284,7 +252,9 @@ apply_switch_mode() {
 
 enable_korean() {
   local app
-  if [[ $defaults_bin == defaults && -x /usr/bin/swift ]]; then
+  backup_domain input-sources com.apple.HIToolbox || return 1
+  if [[ $defaults_bin == defaults ]]; then
+    [[ -x /usr/bin/swift ]] || { warn 'Swift is required to activate Gureum'; return 1; }
     app=$(bash "$(dirname -- "$0")/scripts/install-gureum.sh") || return 1
     /usr/bin/swift "$(dirname -- "$0")/enable-korean.swift" "$app" || return $?
   fi
@@ -322,7 +292,6 @@ if [[ ${1:-} != --input-only && ${1:-} != --shortcuts-only ]]; then
   if [[ ${1:-} != --no-dock ]]; then run_group dock apply_dock; fi
 fi
 if [[ ${1:-} != --shortcuts-only ]]; then
-  run_group input-sources apply_input_sources
   run_group gureum enable_korean
 fi
 run_group input-switch apply_switch_mode

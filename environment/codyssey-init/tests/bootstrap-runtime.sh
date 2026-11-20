@@ -21,6 +21,9 @@ if [ "$1" = env ]; then printf 'export MISE_ENV_APPLIED=1\n'; fi
 EOF
 cat >"$fakebin/curl" <<'EOF'
 #!/bin/sh
+case "$*" in
+  *localhost:18081*) [ -z "${LOGIN_ON_UI:-}" ] || : >"$LOGIN_ON_UI" ;;
+esac
 exit 0
 EOF
 cat >"$fakebin/open" <<'EOF'
@@ -44,7 +47,10 @@ for argument in "$@"; do printf '<%s>' "$argument" >>"$TEST_LOG"; done
 printf '<auth=%s><mise=%s>\n' "${TS_AUTHKEY:-}" "${MISE_ENV_APPLIED:-}" >>"$TEST_LOG"
 case "$*" in
   'compose ps --status running --services') printf 'tailscale\ngost\ngost-ui\n' ;;
-  'compose exec -T tailscale tailscale status --json') printf '{"BackendState":"%s","AuthURL":"%s"}\n' "${NEXT_STATE:-Running}" "${CURRENT_AUTH_URL:-}" ;;
+  'compose exec -T tailscale tailscale status --json')
+    backend=${NEXT_STATE:-Running}
+    if [ -n "${LOGIN_ON_UI:-}" ] && [ -f "$LOGIN_ON_UI" ]; then backend=Running; fi
+    printf '{"BackendState":"%s","AuthURL":"%s"}\n' "$backend" "${CURRENT_AUTH_URL:-}" ;;
   'compose logs --no-color tailscale')
     if [ -n "${LOGIN_READS_FILE:-}" ]; then
       count=0
@@ -75,8 +81,19 @@ NEXT_STATE=Running zsh "$work/next-script.zsh" </dev/null
 rm "$work/.env"
 NEXT_STATE=NeedsLogin zsh "$work/next-script.zsh" </dev/null >"$tmp/login.out"
 grep -q 'https://login.tailscale.com/a/synthetic' "$tmp/login.out"
+grep -Fxq 'GOST API/UI ready. Tailscale login pending.' "$tmp/login.out"
+if grep -q 'Environment ready' "$tmp/login.out"; then exit 1; fi
 grep -qx 'TS_AUTHKEY=' "$work/.env"
 [[ $(stat -c '%a' "$work/.env") == 600 ]]
+
+# Login can complete while the local GOST UI is starting.
+TS_AUTHKEY='' NEXT_STATE=NeedsLogin LOGIN_ON_UI="$tmp/logged-in" \
+  zsh "$work/next-script.zsh" </dev/null >"$tmp/logged-in.out"
+grep -Fxq 'GOST API/UI ready. Tailscale connected.' "$tmp/logged-in.out"
+
+TS_AUTHKEY='' NEXT_STATE=Running CODYSSEY_WORKSTATION_INCOMPLETE=1 \
+  zsh "$work/next-script.zsh" --prepared </dev/null >"$tmp/incomplete.out" 2>&1
+grep -Fxq 'Workstation setup is incomplete. See the warnings above for details.' "$tmp/incomplete.out"
 
 # Current status wins over historical log URLs.
 TS_AUTHKEY='' NEXT_STATE=NeedsLogin CURRENT_AUTH_URL=https://login.tailscale.com/a/current \
@@ -249,11 +266,13 @@ EOF
 cat >"$install_bin/zsh" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$*" >>"$INSTALL_LOG"
+printf 'workstation_incomplete=%s\n' "${CODYSSEY_WORKSTATION_INCOMPLETE:-}" >>"$INSTALL_LOG"
 EOF
 CODYSSEY_MACOS_SETUP=1 INSTALL_LOG="$tmp/preference-failure.log" HOME="$install_home" PATH="$install_bin:/usr/bin:/bin" \
   CODYSSEY_INIT_DIR="$work" bash "$work/init.sh" >"$tmp/preference-failure.out" 2>&1
 grep -q 'macOS preferences failed (exit 17)' "$tmp/preference-failure.out"
 grep -q 'Retry preferences separately:' "$tmp/preference-failure.out"
+grep -Fxq 'workstation_incomplete=1' "$tmp/preference-failure.log"
 grep -Fq -- "-i $work/next-script.zsh" "$tmp/preference-failure.log"
 
 # Explicit opt-out on Darwin must skip all preference/input-approval work.

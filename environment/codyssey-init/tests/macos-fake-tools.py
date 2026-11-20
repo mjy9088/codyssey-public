@@ -178,6 +178,9 @@ def plistbuddy(arguments: list[str]) -> int:
 
 
 def plutil(arguments: list[str]) -> int:
+    if arguments[0] == '-lint':
+        load(Path(arguments[1]))
+        return 0
     if arguments[:2] == ['-create', 'xml1']:
         save(Path(arguments[2]), {})
         return 0

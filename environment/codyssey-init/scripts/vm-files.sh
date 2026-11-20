@@ -17,5 +17,5 @@ vm_files=(
   scripts/configure-tailnet-browser.py
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh scripts/prepare-startup.sh scripts/install-iterm2.sh scripts/configure-iterm2.sh scripts/configure-shell.sh
   scripts/verify-tailnet-runtime.py scripts/verify-dock-ui.swift
-  tests/tailnet-dns-test.sh
+  tests/tailnet-dns-test.sh tests/gureum-activation-test.sh tests/gureum-activation-test.swift
 )

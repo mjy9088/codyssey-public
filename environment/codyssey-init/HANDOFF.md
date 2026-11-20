@@ -6,11 +6,15 @@ source. When transferring a change, export its reviewed commit as a patch from t
 
 ## Input method activation
 
-The helper waits for macOS approval of the Gureum parent before enabling its Hangul mode.
-A successful activation-request return value does not mean approval has completed. The helper
-keeps its run loop alive, checks fresh input-source state, and verifies the selected source.
-Already-enabled sources are reused. If approval times out, rerun input setup and choose Allow.
-Do not log out or reboot the classroom session to complete this flow.
+The helper requests Gureum parent activation if needed and waits for the Hangul mode to become
+selectable in the active desktop session. Choose Allow when macOS prompts. The helper verifies the
+current input source before removing the old Apple Korean sources. A timeout reports observed TIS
+state and request statuses. Retry input setup in the same session with `bash macos-setup.sh --input-only`.
+
+In Terminal on a disposable VM desktop, run
+`bash scripts/verify-macos-vm.sh --disposable --input-desktop` to verify approval, Hangul
+composition, and physical Control-Space switching in both directions. The headless VM run
+reports this check as pending.
 
 Interactive setup defaults to Control-Space for input switching and Command-Space for Spotlight,
 without a switching-key prompt, and asks only whether to clean up Dock pins. Caps Lock is not reliable in the reference

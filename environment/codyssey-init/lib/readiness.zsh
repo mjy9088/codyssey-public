@@ -1,20 +1,23 @@
 #!/usr/bin/env zsh
 
+read_tailnet_backend() {
+  local backend_json
+  backend_json=$(docker compose exec -T tailscale tailscale status --json 2>/dev/null || true)
+  if print -r -- "$backend_json" | grep -q '"BackendState"[[:space:]]*:[[:space:]]*"Running"'; then
+    print -r -- running
+  elif print -r -- "$backend_json" | grep -q '"BackendState"[[:space:]]*:[[:space:]]*"NeedsLogin"'; then
+    print -r -- needs-login
+  fi
+}
+
 wait_for_tailnet() {
-  local running tailscale_status
+  local running
   tailnet_state=
   for _ in {1..90}; do
     running=$(docker compose ps --status running --services 2>/dev/null || true)
     if print -r -- "$running" | grep -qx tailscale; then
-      tailscale_status=$(docker compose exec -T tailscale tailscale status --json 2>/dev/null || true)
-      if print -r -- "$tailscale_status" | grep -q '"BackendState"[[:space:]]*:[[:space:]]*"Running"'; then
-        tailnet_state=running
-        return 0
-      fi
-      if print -r -- "$tailscale_status" | grep -q '"BackendState"[[:space:]]*:[[:space:]]*"NeedsLogin"'; then
-        tailnet_state=needs-login
-        return 0
-      fi
+      tailnet_state=$(read_tailnet_backend)
+      [[ -z $tailnet_state ]] || return 0
     fi
     sleep 1
   done

@@ -2,6 +2,7 @@
 """Protect existing profiles while configuring the selected default, without TCC."""
 import importlib.util
 import os
+import sys
 from pathlib import Path
 import subprocess
 import tempfile
@@ -25,6 +26,9 @@ class PreferencesTests(unittest.TestCase):
         pgrep.write_text('#!/bin/sh\nexit "${ITERM_RUNNING:-1}"\n')
         pgrep.chmod(0o700)
         self.env['PGREP_BIN'] = str(pgrep)
+        if sys.platform == 'darwin':
+            self.env['PLUTIL_BIN'] = '/usr/bin/plutil'
+            self.env['PLISTBUDDY_BIN'] = '/usr/libexec/PlistBuddy'
 
     def run_setup(self, ok=True):
         result = subprocess.run(['/bin/bash', str(ROOT/'scripts/configure-iterm2.sh')],
@@ -50,6 +54,16 @@ class PreferencesTests(unittest.TestCase):
         backup = self.backups()[0]
         self.assertEqual(backup.stat().st_mode & 0o777, 0o700)
         self.assertEqual((backup/'preferences.missing').stat().st_mode & 0o777, 0o600)
+
+    def test_existing_domain_without_profile_keys(self):
+        self.write({'Unrelated': 'preserve'})
+        self.run_setup()
+        data = self.read()
+        self.assertEqual(data['Unrelated'], 'preserve')
+        profile, = data['New Bookmarks']
+        self.assertEqual(profile['Guid'], data['Default Bookmark Guid'])
+        self.assertEqual(profile['Option Key Sends'], 2)
+        self.assertIs(profile['Allow modifyOtherKeys'], True)
 
     def test_only_default_profile_changes(self):
         original = {'Default Bookmark Guid':'second', 'Unrelated':'preserve', 'New Bookmarks':[

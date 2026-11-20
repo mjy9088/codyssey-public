@@ -2,14 +2,40 @@
 set -euo pipefail
 
 if [[ ${1:-} == --help ]]; then
-  printf 'Usage: bash scripts/verify-macos-vm.sh --disposable\nRuns real keyless Docker bootstrap and destructive preferences verification in an existing macOS VM.\n'
+  printf 'Usage: bash scripts/verify-macos-vm.sh --disposable [--input-desktop]\nRuns real keyless Docker bootstrap and destructive preferences verification in an existing macOS VM. --input-desktop runs the interactive Gureum and Control-Space check only.\n'
   exit 0
 fi
-[[ $# == 1 && $1 == --disposable ]] || { printf 'Use --disposable: this changes the VM user shell and preferences.\n' >&2; exit 1; }
+[[ ${1:-} == --disposable && ( $# == 1 || ( $# == 2 && $2 == --input-desktop ) ) ]] || { printf 'Use --disposable: this changes the VM user shell and preferences.\n' >&2; exit 1; }
 [[ $(uname -s) == Darwin ]] || { printf 'This verifier requires macOS.\n' >&2; exit 1; }
 export PATH="/opt/homebrew/opt/python@3.13/libexec/bin:/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/bin:$PATH"
 [[ $(id -u) != 0 ]] || { printf 'Run as the VM desktop user, not root.\n' >&2; exit 1; }
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+if [[ ${2:-} == --input-desktop ]]; then
+  [[ -t 0 && -t 1 ]] || { printf 'Use Terminal in the disposable VM desktop.\n' >&2; exit 1; }
+  unset DEFAULTS_BIN PLISTBUDDY_BIN PLUTIL_BIN UNAME_BIN CODYSSEY_INPUT_SWITCH
+  helper="$root/enable-korean.swift"
+  hangul=org.youknowone.inputmethod.Gureum.han2
+  /bin/bash "$root/macos-setup.sh" --input-only
+  [[ $(/usr/bin/swift "$helper" --current-source) == "$hangul" ]]
+  printf 'With Gureum selected, type the physical keys gks and press Return (expected 한): '
+  IFS= read -r -t 60 typed
+  [[ $typed == 한 ]] || { printf 'Hangul composition failed.\n' >&2; exit 1; }
+
+  printf 'Press Control-Space, type abc, then press Return: '
+  IFS= read -r -t 60 typed
+  latin=$(/usr/bin/swift "$helper" --current-source)
+  [[ $typed == abc && -n $latin && $latin != "$hangul" ]] || {
+    printf 'Control-Space did not switch to Latin input.\n' >&2; exit 1;
+  }
+
+  printf 'Press Control-Space again, type the physical keys gks, then press Return: '
+  IFS= read -r -t 60 typed
+  [[ $typed == 한 && $(/usr/bin/swift "$helper" --current-source) == "$hangul" ]] || {
+    printf 'Control-Space did not switch back to Gureum Hangul.\n' >&2; exit 1;
+  }
+  printf 'PASS: Gureum activation, Hangul composition and Control-Space switching in both directions.\n'
+  exit 0
+fi
 . "$root/lib/preparation.sh"
 started=0 cleaned=0 work=
 cleanup() {
@@ -116,7 +142,7 @@ CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 "$root/verify-macos-setup.py" --
 swift "$root/scripts/verify-dock-ui.swift"
 swift "$root/enable-korean.swift" --shortcuts
 swift "$root/enable-korean.swift" --verify-shortcuts
-printf 'Input-source approval and physical Hangul typing require an interactive desktop check.\n'
+printf 'Gureum activation and typing pending. In the VM Terminal, run: bash %q --disposable --input-desktop\n' "$0"
 if cleanup 0; then
   :
 else

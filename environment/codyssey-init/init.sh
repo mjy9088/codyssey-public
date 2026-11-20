@@ -194,14 +194,17 @@ if [[ $tools_ready == 1 ]]; then
 fi
 
 macos_setup=0
+workstation_incomplete=0
 if [[ $(uname -s) == Darwin ]]; then
   macos_setup=$(choose_setup_option "${CODYSSEY_MACOS_SETUP:-}" 'Apply optional macOS keyboard, text and Dock preferences?')
 fi
 if [[ $(uname -s) == Darwin ]]; then
   if run_quiet_step "Installing iTerm2" bash "$init_dir/scripts/install-iterm2.sh"; then :; else
+    workstation_incomplete=1
     printf 'iTerm2 installation failed; continuing remaining setup.\n' >&2
   fi
   if run_quiet_step "Configuring iTerm2 keyboard" bash "$init_dir/scripts/configure-iterm2.sh"; then :; else
+    workstation_incomplete=1
     printf 'iTerm2 keyboard configuration failed; continuing remaining setup.\n' >&2
   fi
 fi
@@ -216,12 +219,16 @@ if [[ $(uname -s) == Darwin && ( $macos_setup == 1 || $j_setup == 1 ) ]]; then
     log_event preferences ready
   else
     preference_status=$?
+    workstation_incomplete=1
     log_event preferences "incomplete exit=$preference_status"
     printf 'codyssey-init: macOS preferences failed (exit %s); continuing remaining setup.\n' "$preference_status" >&2
     printf 'Retry preferences separately: bash "%s/macos-setup.sh"\n' "$init_dir" >&2
   fi
 else
   log_event preferences skipped
+fi
+if [[ $workstation_incomplete == 1 && ( $tailnet_setup == 0 || $container_status != 0 ) ]]; then
+  printf 'Workstation setup is incomplete. See the warnings above for details.\n' >&2
 fi
 if [[ $tailnet_setup == 0 ]]; then
   printf 'Setup finished. Optional Tailnet services were skipped; run the same init command again to choose options.\n'
@@ -234,6 +241,7 @@ if [[ $container_status != 0 ]]; then
 fi
 configure_tailscale_auth
 wait_startup_preparation
+export CODYSSEY_WORKSTATION_INCOMPLETE=$workstation_incomplete
 if [[ -t 0 ]]; then
   exec zsh -i "$init_dir/next-script.zsh" --prepared
 fi
