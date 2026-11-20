@@ -33,7 +33,7 @@ context=$(mktemp -d)
 trap 'rm -rf "$context"' EXIT HUP INT TERM
 tar -C "$root" -cf "$context/payload.tar" \
   Dockerfile docker-compose.yml init.sh next-script.zsh tailnet.sh justfile mise.toml mise.vm.toml \
-  README.md verify-macos-setup.py macos-setup.sh enable-korean.swift tailscale-entrypoint.sh .env.example \
+  README.md sdk/setup.mts sdk/cli.mts tests/setup-sdk-test.mts scripts/install-managed-j.sh verify-macos-setup.py macos-setup.sh enable-korean.swift tailscale-entrypoint.sh .env.example \
   lib/auth.sh lib/options.sh lib/logging.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh \
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh \
   tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/managed-j-runtime.sh tests/startup-overlap-test.sh \

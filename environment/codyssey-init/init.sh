@@ -17,6 +17,7 @@ remote_files=(
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh
   scripts/configure-tailnet-browser.py
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh
+  sdk/setup.mts sdk/cli.mts scripts/install-managed-j.sh
   scripts/prepare-startup.sh scripts/install-iterm2.sh scripts/configure-iterm2.sh scripts/configure-shell.sh
 )
 remote_staging=
@@ -25,54 +26,6 @@ cleanup_remote_staging() {
   [[ -z $remote_staging ]] || rm -rf "$remote_staging"
 }
 
-
-write_shell_quoted() {
-  local value=$1
-  printf "'"
-  while [[ $value == *"'"* ]]; do
-    printf "%s'\\\\''" "${value%%\'*}"
-    value=${value#*\'}
-  done
-  printf "%s'" "$value"
-}
-
-install_managed_j() {
-  local target=$1 bin command_path first_line second_line temporary mise_path
-  bin="$HOME/.local/bin"
-  command_path="$bin/j"
-  if [[ -e $command_path || -L $command_path ]]; then
-    first_line=
-    second_line=
-    {
-      IFS= read -r first_line || true
-      IFS= read -r second_line || true
-    } <"$command_path" 2>/dev/null || true
-    if [[ $first_line != '# codyssey-init: managed-j-v1' ]] \
-      && [[ $first_line != '#!/bin/sh' || $second_line != '# codyssey-init: managed-j-v1' ]]; then
-      printf 'codyssey-init: preserving existing unowned command at %s\n' "$command_path" >&2
-      return 0
-    fi
-  fi
-  mkdir -p "$bin" || die 'could not create j command directory.'
-  mise_path=$(command -v mise) || die 'mise is required to install the j wrapper.'
-  [[ $mise_path == /* ]] || mise_path="$PWD/$mise_path"
-  temporary=$(mktemp "$bin/.j.XXXXXX") || die 'could not create a temporary j wrapper.'
-  if ! {
-    printf '%s\n' '#!/bin/sh' '# codyssey-init: managed-j-v1' 'set -eu'
-    printf 'cd -- '
-    write_shell_quoted "$target"
-    printf '\nexec '
-    write_shell_quoted "$mise_path"
-    printf ' exec -- just "$@"\n'
-  } >"$temporary"; then
-    rm -f "$temporary"
-    die 'could not write the j wrapper.'
-  fi
-  if ! chmod 0700 "$temporary" || ! mv -f "$temporary" "$command_path"; then
-    rm -f "$temporary"
-    die 'could not install the j wrapper.'
-  fi
-}
 
 install_remote_files() {
   local target=$1 staging file destination
@@ -85,7 +38,7 @@ install_remote_files() {
       "https://raw.githubusercontent.com/mjy9088/codyssey-public/main/environment/codyssey-init/$file" -o "$staging/$file"
   done
   for file in init.sh tailnet.sh lib/auth.sh lib/options.sh lib/logging.sh lib/preparation.sh lib/bootstrap-tools.sh macos-setup.sh \
-    scripts/prepare-startup.sh; do
+    scripts/prepare-startup.sh scripts/install-managed-j.sh; do
     bash -n "$staging/$file"
   done
   for file in next-script.zsh lib/readiness.zsh; do
@@ -157,6 +110,31 @@ ensure_mise() {
     return 1
   fi
 }
+sdk_node=
+run_sdk() {
+  "$sdk_node" "$init_dir/sdk/cli.mts" "$@"
+}
+
+ensure_sdk_runtime() {
+  [[ -n $sdk_node ]] && return 0
+  if command -v node >/dev/null 2>&1 && node --input-type=module -e '
+    import { pathToFileURL } from "node:url";
+    await import(pathToFileURL(process.argv[1]).href);
+  ' "$init_dir/sdk/setup.mts" >/dev/null 2>&1; then
+    sdk_node=$(command -v node)
+    return 0
+  fi
+  local managed_node
+  if { [[ $tools_ready == 1 ]] || ensure_mise; } &&
+     run_quiet_step 'Installing Node for the setup SDK' mise install node@24.11.1 &&
+     managed_node=$(mise where node@24.11.1) && [[ -x $managed_node/bin/node ]]; then
+    sdk_node="$managed_node/bin/node"
+    return 0
+  fi
+  printf 'codyssey-init: setup requires Node.js 22.18 or newer.\n' >&2
+  return 1
+}
+
 if [[ $tailnet_setup == 1 ]]; then
   if (prepare_docker); then
     for orb_app in "${CODYSSEY_APPLICATIONS_DIR:-/Applications}/OrbStack.app" "$HOME/Applications/OrbStack.app"; do
@@ -169,9 +147,10 @@ if [[ $tailnet_setup == 1 ]]; then
   fi
   if ensure_mise; then :; else container_status=1; fi
   if ! command -v zsh >/dev/null 2>&1; then container_status=1; log_event zsh missing; fi
+  if ensure_sdk_runtime; then :; else container_status=1; fi
   if [[ $container_status == 0 ]]; then
     printf 'Preparing optional Tailnet environment…\n'
-    if start_startup_preparation "$init_dir"; then :; else container_status=$?; fi
+    if start_startup_preparation "$init_dir" "$sdk_node" "$init_dir/sdk/cli.mts" prepare-worker; then :; else container_status=$?; fi
   fi
 else
   log_event tailnet skipped
@@ -180,15 +159,15 @@ fi
 j_setup=$(choose_setup_option "${CODYSSEY_INSTALL_J:-}" 'Install optional Tailnet j command and Dock launcher?')
 if [[ $j_setup == 1 ]]; then
   if [[ $tools_ready == 1 ]] || ensure_mise; then
-    if (install_managed_j "$init_dir"); then log_event j installed; else log_event j failed; fi
+    if ensure_sdk_runtime && run_sdk install-launcher; then log_event j installed; else log_event j failed; fi
   else
     printf 'j command installation failed; continuing remaining setup.\n' >&2
   fi
 else
   log_event j skipped
 fi
-if [[ $tools_ready == 1 ]]; then
-  if run_quiet_step "Configuring shell" bash "$init_dir/scripts/configure-shell.sh"; then :; else
+if [[ $tools_ready == 1 ]] && ensure_sdk_runtime; then
+  if run_quiet_step "Configuring shell" run_sdk configure-shell; then :; else
     printf 'Shell configuration failed; continuing remaining setup.\n' >&2
   fi
 fi
@@ -198,17 +177,19 @@ workstation_incomplete=0
 if [[ $(uname -s) == Darwin ]]; then
   macos_setup=$(choose_setup_option "${CODYSSEY_MACOS_SETUP:-}" 'Apply optional macOS keyboard, text and Dock preferences?')
 fi
-if [[ $(uname -s) == Darwin ]]; then
-  if run_quiet_step "Installing iTerm2" bash "$init_dir/scripts/install-iterm2.sh"; then :; else
+if [[ $(uname -s) == Darwin ]] && ensure_sdk_runtime; then
+  if run_quiet_step "Installing iTerm2" run_sdk install-iterm2; then :; else
     workstation_incomplete=1
     printf 'iTerm2 installation failed; continuing remaining setup.\n' >&2
   fi
-  if run_quiet_step "Configuring iTerm2 keyboard" bash "$init_dir/scripts/configure-iterm2.sh"; then :; else
+  if run_quiet_step "Configuring iTerm2 keyboard" run_sdk configure-iterm2; then :; else
     workstation_incomplete=1
     printf 'iTerm2 keyboard configuration failed; continuing remaining setup.\n' >&2
   fi
+elif [[ $(uname -s) == Darwin ]]; then
+  workstation_incomplete=1
 fi
-if [[ $(uname -s) == Darwin && ( $macos_setup == 1 || $j_setup == 1 ) ]]; then
+if [[ $(uname -s) == Darwin && ( $macos_setup == 1 || $j_setup == 1 ) ]] && [[ -n $sdk_node ]]; then
   preference_mode=
   dock_cleanup=${CODYSSEY_DOCK_SETUP:-}
   if [[ $macos_setup == 0 ]]; then preference_mode=--desktop-only; dock_cleanup=${dock_cleanup:-0}; fi
@@ -243,9 +224,9 @@ configure_tailscale_auth
 wait_startup_preparation
 export CODYSSEY_WORKSTATION_INCOMPLETE=$workstation_incomplete
 if [[ -t 0 ]]; then
-  exec zsh -i "$init_dir/next-script.zsh" --prepared
+  exec "$sdk_node" "$init_dir/sdk/cli.mts" start-prepared
 fi
 if { true </dev/tty; } 2>/dev/null; then
-  exec zsh -i "$init_dir/next-script.zsh" --prepared </dev/tty
+  exec "$sdk_node" "$init_dir/sdk/cli.mts" start-prepared </dev/tty
 fi
-exec zsh -i "$init_dir/next-script.zsh" --prepared </dev/null
+exec "$sdk_node" "$init_dir/sdk/cli.mts" start-prepared </dev/null

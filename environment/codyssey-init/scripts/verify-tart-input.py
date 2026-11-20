@@ -18,11 +18,23 @@ FILES = (
     "enable-korean.swift",
     "macos-setup.sh",
     "scripts/install-gureum.sh",
+    "sdk/cli.mts",
+    "sdk/setup.mts",
     "scripts/verify-macos-vm.sh",
 )
 LAUNCHER = b"""#!/bin/bash
 cd "$(dirname -- "$0")" || exit 1
 umask 077
+export PATH="/opt/homebrew/bin:$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+if ! command -v node >/dev/null; then
+    if command -v mise >/dev/null && mise install node@24.11.1; then
+        export CODYSSEY_VERIFY_NODE="$(mise where node@24.11.1)/bin/node"
+    else
+        printf 'Guest needs Node.js 22.18+ or mise.\\n' >&2
+        printf '1\\n' > status
+        exit 1
+    fi
+fi
 /usr/bin/script -qF transcript /bin/bash scripts/verify-macos-vm.sh --disposable --input-desktop
 printf '%s\n' "$?" > status
 """
@@ -39,14 +51,14 @@ def connect_vnc(tart_log: Path):
     return api.connect(f"{endpoint.hostname}::{endpoint.port}", password=unquote(endpoint.password), timeout=10)
 
 
-def run_check(vm: str, tart_log: Path, expect_recovery: bool = False) -> None:
+def run_check(vm: str, tart_log: Path, expect_recovery: bool = False, confirm_desktop: bool = False) -> None:
     tart = subprocess.check_output(("mise", "-C", str(ROOT), "-E", "vm", "which", "tart"), text=True).strip()
 
     def guest(*args: str, data: bytes | None = None) -> bytes:
         stdin = ("-i",) if data is not None else ()
         return subprocess.run(
             (tart, "exec", *stdin, vm, *args),
-            input=data, stdout=subprocess.PIPE, check=True, timeout=30,
+            input=data, stdout=subprocess.PIPE, check=True, timeout=60,
         ).stdout
 
     directory = guest("/usr/bin/mktemp", "-d", "/tmp/codyssey-input.XXXXXX").decode().strip()
@@ -82,6 +94,8 @@ def run_check(vm: str, tart_log: Path, expect_recovery: bool = False) -> None:
             wait_for_guest(guest, directory, prompt, timeout=300 if index == 0 else 60)
             if index == 0:
                 guest("/usr/bin/open", "-a", "Terminal")
+                if confirm_desktop:
+                    input("Dismiss any separate Input Monitoring dialog, then press Enter here to start typing: ")
                 time.sleep(0.5)
             for key in keys:
                 client.keyPress(key)
@@ -124,6 +138,7 @@ if __name__ == "__main__":
     modes.add_argument("--expect-recovery", action="store_true", help="Wait for the real recovery message before approving")
     modes.add_argument("--capture", type=Path, help="Capture the guest screen to a local PNG")
     modes.add_argument("--click", type=int, nargs=2, metavar=("X", "Y"), help="Click coordinates from a guest screenshot")
+    parser.add_argument("--confirm-desktop", action="store_true", help="Wait for the operator before sending the first keys")
     args = parser.parse_args()
     try:
         if args.capture is not None or args.click is not None:
@@ -138,6 +153,6 @@ if __name__ == "__main__":
                 client.disconnect()
                 api.shutdown()
         else:
-            run_check(args.vm, args.tart_log, args.expect_recovery)
-    except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+            run_check(args.vm, args.tart_log, args.expect_recovery, args.confirm_desktop)
+    except (EOFError, RuntimeError, OSError, subprocess.SubprocessError) as error:
         sys.exit(str(error))

@@ -59,6 +59,8 @@ wait_startup_preparation() {
 
 start_startup_preparation() {
   local root=$1
+  shift
+  if [ "$#" -eq 0 ]; then set -- bash "$root/scripts/prepare-startup.sh"; fi
   [ -z "$startup_preparation_pid" ] || return 1
   startup_preparation_dir=$(mktemp -d "${TMPDIR:-/tmp}/codyssey-init-preparation.XXXXXX") || return 1
   chmod 0700 "$startup_preparation_dir" || {
@@ -71,7 +73,7 @@ start_startup_preparation() {
   startup_preparation_ready=$startup_preparation_dir/ready
   : >"$startup_preparation_log"
   chmod 0600 "$startup_preparation_log"
-  TS_AUTHKEY= bash "$root/scripts/prepare-startup.sh" \
+  TS_AUTHKEY= "$@" \
     "$startup_preparation_result" "$startup_preparation_ready" \
     >"$startup_preparation_log" 2>&1 &
   startup_preparation_pid=$!

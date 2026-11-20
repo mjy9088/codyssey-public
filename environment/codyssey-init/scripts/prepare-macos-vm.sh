@@ -32,7 +32,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # Host and guest dependencies are intentionally separate. No nested hypervisor is used.
-run_quiet_step 'Installing guest tools' brew install colima lima-additional-guestagents docker docker-compose docker-buildx qemu python@3.13
+run_quiet_step 'Installing guest tools' brew install colima lima-additional-guestagents docker docker-compose docker-buildx qemu python@3.13 node
 # Base-image preparation deliberately unlinks Docker. brew install alone can
 # leave an already installed formula unlinked.
 if ! command -v docker >/dev/null; then

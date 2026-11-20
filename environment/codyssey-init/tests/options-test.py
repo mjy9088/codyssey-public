@@ -19,6 +19,9 @@ class OptionTests(unittest.TestCase):
         shutil.copytree(ROOT, runtime)
         home.mkdir()
         tools.mkdir()
+        node = shutil.which('node')
+        self.assertIsNotNone(node, 'Node.js with native TypeScript support is required')
+        (tools/'node').symlink_to(node)
         calls = work/'calls'
         for name, content in {
             'uname': 'echo Darwin',

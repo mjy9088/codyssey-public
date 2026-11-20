@@ -20,6 +20,10 @@ class ColdStartTests(unittest.TestCase):
             home = work / "home"
             fakebin = work / "bin"
             fakebin.mkdir()
+            if entrypoint:
+                node = shutil.which('node')
+                self.assertIsNotNone(node, 'Node.js with native TypeScript support is required')
+                (fakebin / 'node').symlink_to(node)
             tools = home / "Applications/OrbStack.app/Contents/MacOS/xbin"
             tools.mkdir(parents=True)
             orb = tools.parent / "bin/orb"

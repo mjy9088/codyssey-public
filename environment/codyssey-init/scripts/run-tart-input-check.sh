@@ -3,12 +3,16 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: bash scripts/run-tart-input-check.sh BASE_VM [--expect-recovery]\n'
+  printf 'Usage: bash scripts/run-tart-input-check.sh BASE_VM [--expect-recovery] [--confirm-desktop]\n'
   printf 'Use a stopped local Tart base with a guest agent, Swift, and an auto-login desktop user.\n'
 }
 if [[ ${1:-} == --help ]]; then usage; exit 0; fi
-[[ $# -ge 1 && $# -le 2 && $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ &&
-   ( $# == 1 || $2 == --expect-recovery ) ]] || { usage >&2; exit 2; }
+[[ $# -ge 1 && $# -le 3 && $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { usage >&2; exit 2; }
+base=$1
+shift
+for option in "$@"; do
+  case $option in --expect-recovery|--confirm-desktop) ;; *) usage >&2; exit 2 ;; esac
+done
 [[ $(uname -s) == Darwin && $(uname -m) == arm64 ]] || {
   printf 'Use an Apple Silicon macOS host.\n' >&2; exit 1;
 }
@@ -46,7 +50,7 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-"$tart" clone "$1" "$name"
+"$tart" clone "$base" "$name"
 created=1
 "$tart" run --no-graphics --vnc-experimental "$name" >"$log" 2>&1 &
 runner=$!
@@ -62,5 +66,4 @@ for attempt in {1..15}; do
   sleep 2
 done
 (( ready )) || { printf 'VM did not expose VNC and a ready guest agent.\n' >&2; exit 1; }
-shift
 uv run --no-project --with vncdotool==1.4.2 python "$root/scripts/verify-tart-input.py" "$name" "$log" "$@"

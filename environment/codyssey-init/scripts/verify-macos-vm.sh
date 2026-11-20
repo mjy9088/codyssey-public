@@ -15,11 +15,13 @@ if [[ ${2:-} == --input-desktop ]]; then
   unset DEFAULTS_BIN PLISTBUDDY_BIN PLUTIL_BIN UNAME_BIN CODYSSEY_INPUT_SWITCH
   helper="$root/enable-korean.swift"
   hangul=org.youknowone.inputmethod.Gureum.han2
-  /bin/bash "$root/macos-setup.sh" --input-only
+  node_bin=${CODYSSEY_VERIFY_NODE:-node}
+  "$node_bin" "$root/sdk/cli.mts" configure-input
   [[ $(/usr/bin/swift "$helper" --current-source) == "$hangul" ]]
+  # The first activation may leave a separate Input Monitoring dialog to dismiss.
   # Space commits the Hangul composition and can also insert a trailing space.
   printf 'With Gureum selected, type gks, then press Space and Return (expected 한): '
-  IFS= read -r -t 60 typed || { printf 'Timed out waiting for desktop input.\n' >&2; exit 1; }
+  IFS= read -r -t 120 typed || { printf 'Timed out waiting for desktop input.\n' >&2; exit 1; }
   [[ $typed == 한 || $typed == '한 ' ]] || { printf 'Hangul composition failed.\n' >&2; exit 1; }
 
   printf 'Press Control-Space to switch to Latin input.\n'

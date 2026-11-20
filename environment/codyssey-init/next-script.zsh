@@ -12,8 +12,12 @@ init_run_log
 export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
 
 prepared=0
+result_path=
 if (( $# == 1 )) && [[ $1 == --prepared ]]; then
   prepared=1
+elif (( $# == 3 )) && [[ $1 == --prepared && $2 == --result && -f $3 && ! -L $3 ]]; then
+  prepared=1
+  result_path=$3
 elif (( $# != 0 )); then
   printf 'Usage: zsh next-script.zsh [--prepared]\n' >&2
   exit 2
@@ -99,6 +103,9 @@ if [[ $tailnet_state == running ]]; then
 else
   log_event services needs-login
   printf 'GOST API/UI ready. Tailscale login pending.\n'
+fi
+if [[ -n $result_path ]]; then
+  printf '%s\n' "$tailnet_state" "$ui_url" "${auth_url:-}" >"$result_path"
 fi
 if (( prepared )) && [[ ${CODYSSEY_WORKSTATION_INCOMPLETE:-0} == 1 ]]; then
   printf 'Workstation setup is incomplete. See the warnings above for details.\n' >&2
