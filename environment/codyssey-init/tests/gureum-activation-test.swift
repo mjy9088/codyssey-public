@@ -19,7 +19,8 @@ func testDelayedHangulActivation() {
             if tick == 4 { current = true; return noErr }
             return nil
         },
-        selectionRejected: { notices += 1 },
+        parentWaitElapsed: { tick >= 1 },
+        showDesktopRecovery: { notices += 1 },
         waitForNextAttempt: { rejected in
             if rejected { delayedAttempts.append(tick) }
             tick += 1
@@ -39,7 +40,8 @@ func testAcceptedRequestWithoutSelectionTimesOut() {
         requestMode: { requests += 1; return true },
         currentIsHangul: { false },
         selectMode: { noErr },
-        selectionRejected: { preconditionFailure("unexpected rejection") },
+        parentWaitElapsed: { false },
+        showDesktopRecovery: { preconditionFailure("unexpected rejection") },
         waitForNextAttempt: { _ in ticks += 1; return ticks < 3 }
     )
     precondition(!selected && requests == 1 && ticks == 3)
@@ -55,7 +57,8 @@ func testRejectedSelectionWaitsForDesktop() {
             requestMode: { true },
             currentIsHangul: { desktopSwitch && tick == 2 },
             selectMode: { selectionAttempts += 1; return OSStatus(paramErr) },
-            selectionRejected: { notices += 1 },
+            parentWaitElapsed: { false },
+            showDesktopRecovery: { notices += 1 },
             waitForNextAttempt: { rejected in
                 precondition(rejected)
                 tick += 1
@@ -67,25 +70,31 @@ func testRejectedSelectionWaitsForDesktop() {
     }
 }
 
-func testMissingOrUnapprovedParentTimesOut() {
-    var checks = 0
-    let selected = waitForHangul(
-        parentIsEnabled: { checks += 1; return false },
-        requestMode: { preconditionFailure("parent is unavailable") },
-        currentIsHangul: { false },
-        selectMode: { preconditionFailure("parent is unavailable") },
-        selectionRejected: { preconditionFailure("selection was not attempted") },
-        waitForNextAttempt: { rejected in
-            precondition(!rejected)
-            return checks < 3
-        }
-    )
-    precondition(!selected && checks == 3)
+func testPendingParentOffersRecovery() {
+    // The request was accepted, but the parent still reports disabled.
+    for desktopSwitch in [true, false] {
+        var checks = 0
+        var notices: [Int] = []
+        let selected = waitForHangul(
+            parentIsEnabled: { checks += 1; return false },
+            requestMode: { preconditionFailure("parent is unavailable") },
+            currentIsHangul: { desktopSwitch && checks == 4 },
+            selectMode: { preconditionFailure("parent is unavailable") },
+            parentWaitElapsed: { checks >= 2 },
+            showDesktopRecovery: { notices.append(checks) },
+            waitForNextAttempt: { rejected in
+                precondition(!rejected)
+                return checks < 5
+            }
+        )
+        precondition(selected == desktopSwitch)
+        precondition(notices == [2] && checks == (desktopSwitch ? 4 : 5))
+    }
 }
 
 precondition(source("org.example.codyssey.missing-input-source", includeDisabled: false) == nil)
 testDelayedHangulActivation()
-testMissingOrUnapprovedParentTimesOut()
+testPendingParentOffersRecovery()
 testAcceptedRequestWithoutSelectionTimesOut()
 testRejectedSelectionWaitsForDesktop()
 print("PASS: Gureum Hangul activation, desktop fallback, and timeout with simulated input-source state.")

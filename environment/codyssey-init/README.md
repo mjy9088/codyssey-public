@@ -423,8 +423,9 @@ sources added by the earlier bootstrap. Choose Allow if macOS prompts. For up to
 helper services its run loop and attempts activation once the Hangul mode is enable-capable.
 Gureum's QWERTY source uses `org.youknowone.inputmethod.Gureum.qwerty`. A stock ABC layout
 uses `com.apple.keylayout.ABC`.
-If macOS rejects automatic selection with status -50, the helper asks you to select Gureum
-Hangul 2-set in the Input menu while it watches the current desktop input source. Add it under
+If the parent remains unavailable for 15 seconds or macOS rejects automatic selection with status
+-50, the helper asks you to finish any pending Allow dialog. You can select Gureum Hangul 2-set
+in the Input menu while the same run watches the current desktop input source. Add it under
 **System Settings → Keyboard → Text Input → Edit** if needed. If it is listed but will not switch,
 switch to a working source and try removing and re-adding just Gureum. If the installed input
 method still does not appear in the picker, save your work and follow the
@@ -527,22 +528,32 @@ Choose Allow when prompted, then follow the typing prompts. The check requires H
 Latin input after Control-Space, and Hangul composition after switching back. It checks the active
 source in addition to the text typed into Terminal.
 
-To drive the same check from the host CLI, start a disposable Tart VM with its loopback VNC server.
-Run these commands from `environment/codyssey-init`, substituting the disposable VM name:
+From `environment/codyssey-init`, run the same check from the host CLI against a stopped local
+Tart base with a logged-in desktop, Guest Agent, and Swift. Install `uv` on the host and use the
+Tart version selected by `mise -E vm`.
 
 ```sh
-umask 077
-tart_log=$(mktemp)
-mise -E vm exec tart -- tart run --no-graphics --vnc-experimental VM_NAME >"$tart_log" 2>&1 &
-uv run --no-project --with vncdotool==1.4.2 python scripts/verify-tart-input.py VM_NAME "$tart_log"
+bash scripts/run-tart-input-check.sh BASE_VM
+# On a base without prior Gureum approval, exercise the recovery guidance first.
+bash scripts/run-tart-input-check.sh BASE_VM --expect-recovery
 ```
 
-Run the verifier once the VM has a logged-in desktop and `tart exec` is reachable. Choose Allow
-in the guest if macOS asks to activate Gureum. Dismiss the separate keystroke-monitoring request
-if it appears. The host opens the verifier in guest Terminal,
-waits for its prompts, and sends keystrokes over VNC. The guest confirms each source change
-before the host types the next sample and returns the final exit status. The Tart log contains the VNC password and should be kept private
-and removed after the VM stops.
+The runner clones the base, starts loopback VNC, waits for the guest, and prints the clone name
+and private VNC log path. Choose Allow in the guest when prompted. With `--expect-recovery`,
+leave Allow pending until the runner confirms that the recovery guidance appeared. Dismiss any
+separate keystroke-monitoring request. The guest confirms each source change before the host
+types the next sample. The runner stops its clone, deletes it on success, and retains it on
+failure for diagnosis.
+
+Use a VNC viewer, or capture the screen and click from a second terminal using the name and log
+printed by the runner. Use coordinates from the full-size PNG.
+
+```sh
+uv run --no-project --with vncdotool==1.4.2 python scripts/verify-tart-input.py VM_NAME "$tart_log" --capture "$(dirname "$tart_log")/screen.png"
+uv run --no-project --with vncdotool==1.4.2 python scripts/verify-tart-input.py VM_NAME "$tart_log" --click X Y
+```
+
+The runner removes its temporary VNC log after shutdown. Keep screenshots private.
 This mode does not verify notification dismissal or suppression.
 The VM driver additionally runs `scripts/verify-dock-ui.swift` to require named, resolved Terminal,
 Chrome and j items in the actual Dock UI. This read-only test requires the VM Guest Agent's existing

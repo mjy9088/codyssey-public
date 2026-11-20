@@ -101,28 +101,32 @@ func enabled(_ source: TISInputSource) -> Bool {
 // pending or after it was accepted. Keep retrying at a slower cadence and let
 // desktop selection complete the same flow. Prompt once and treat only the
 // current source as confirmation, including after a successful selection call.
+// If the parent stays disabled, selection never returns paramErr. Offer the
+// same recovery while the user can still complete activation in this run.
 func waitForHangul(
     parentIsEnabled: () -> Bool,
     requestMode: () -> Bool,
     currentIsHangul: () -> Bool,
     selectMode: () -> OSStatus?,
-    selectionRejected: () -> Void,
+    parentWaitElapsed: () -> Bool,
+    showDesktopRecovery: () -> Void,
     waitForNextAttempt: (_ selectionRejected: Bool) -> Bool
 ) -> Bool {
     var requested = false
-    var reportedRejection = false
+    var showedRecovery = false
     var rejected = false
     repeat {
         if currentIsHangul() { return true }
         rejected = false
-        if parentIsEnabled() {
+        let parentReady = parentIsEnabled()
+        if parentReady {
             if !requested { requested = requestMode() }
             rejected = selectMode() == OSStatus(paramErr)
             if currentIsHangul() { return true }
-            if rejected && !reportedRejection {
-                selectionRejected()
-                reportedRejection = true
-            }
+        }
+        if !showedRecovery && (rejected || (!parentReady && parentWaitElapsed())) {
+            showDesktopRecovery()
+            showedRecovery = true
         }
     } while waitForNextAttempt(rejected)
     return false
@@ -180,7 +184,8 @@ if currentSourceID() != identifier {
     fputs("If macOS shows an input-source activation dialog, choose Allow. Waiting for Gureum Hangul to become selectable…\n", stderr)
 }
 
-let deadline = ProcessInfo.processInfo.systemUptime + 120
+let activationStarted = ProcessInfo.processInfo.systemUptime
+let deadline = activationStarted + 120
 var modeStatus: OSStatus?
 var selectionStatus: OSStatus?
 var nextParentRequest = ProcessInfo.processInfo.systemUptime
@@ -211,8 +216,9 @@ let selected = waitForHangul(
         selectionStatus = TISSelectInputSource(mode)
         return selectionStatus
     },
-    selectionRejected: {
-        fputs("macOS rejected automatic Gureum selection. Choose Allow if the approval dialog is still open. If Gureum does not switch automatically, select Gureum Hangul 2-set from the desktop Input menu. Add it in System Settings > Keyboard > Text Input > Edit if needed.\n", stderr)
+    parentWaitElapsed: { ProcessInfo.processInfo.systemUptime >= activationStarted + 15 },
+    showDesktopRecovery: {
+        fputs("Gureum is not selected yet. Choose Allow if the approval dialog is still open. If Gureum does not switch automatically, select Gureum Hangul 2-set from the desktop Input menu. Add it in System Settings > Keyboard > Text Input > Edit if needed.\n", stderr)
     },
     waitForNextAttempt: { rejected in
         RunLoop.current.run(until: Date(timeIntervalSinceNow: rejected ? 3 : 0.5))

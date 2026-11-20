@@ -28,7 +28,7 @@ printf '%s\n' "$?" > status
 """
 
 
-def run_check(vm: str, tart_log: Path) -> None:
+def connect_vnc(tart_log: Path):
     matches = re.findall(r"VNC server is running at (vnc://\S+)", tart_log.read_text())
     if len(matches) != 1:
         raise RuntimeError("Expected one VNC endpoint from a fresh Tart run log.")
@@ -36,6 +36,10 @@ def run_check(vm: str, tart_log: Path) -> None:
     if endpoint.hostname != "127.0.0.1" or endpoint.port is None or not endpoint.password:
         raise RuntimeError("The Tart VNC endpoint must be password-protected and bound to 127.0.0.1.")
 
+    return api.connect(f"{endpoint.hostname}::{endpoint.port}", password=unquote(endpoint.password), timeout=10)
+
+
+def run_check(vm: str, tart_log: Path, expect_recovery: bool = False) -> None:
     tart = subprocess.check_output(("mise", "-C", str(ROOT), "-E", "vm", "which", "tart"), text=True).strip()
 
     def guest(*args: str, data: bytes | None = None) -> bytes:
@@ -59,9 +63,14 @@ def run_check(vm: str, tart_log: Path) -> None:
             launcher.size = len(LAUNCHER)
             archive.addfile(launcher, io.BytesIO(LAUNCHER))
         guest("/usr/bin/tar", "-xf", "-", "-C", directory, data=payload.getvalue())
-        client = api.connect(f"{endpoint.hostname}::{endpoint.port}", password=unquote(endpoint.password), timeout=10)
+        client = connect_vnc(tart_log)
         guest("/usr/bin/open", "-a", "Terminal", f"{directory}/verify-input.command")
-        print("If macOS asks to activate Gureum, choose Allow in the disposable VM desktop.", flush=True)
+        if expect_recovery:
+            print("Leave Allow pending until the guest displays recovery guidance.", flush=True)
+            wait_for_guest(guest, directory, "Gureum is not selected yet.", timeout=300)
+            print("Guest displayed recovery guidance. Choose Allow now.", flush=True)
+        else:
+            print("If macOS asks to activate Gureum, choose Allow in the disposable VM desktop.", flush=True)
         stages = (
             ("With Gureum selected", ("g", "k", "s", "space", "return")),
             ("Press Control-Space to switch", ("ctrl-space",)),
@@ -70,7 +79,7 @@ def run_check(vm: str, tart_log: Path) -> None:
             ("Type gks, then press Space", ("g", "k", "s", "space", "return")),
         )
         for index, (prompt, keys) in enumerate(stages):
-            wait_for_guest(guest, directory, prompt)
+            wait_for_guest(guest, directory, prompt, timeout=300 if index == 0 else 60)
             if index == 0:
                 guest("/usr/bin/open", "-a", "Terminal")
                 time.sleep(0.5)
@@ -85,10 +94,10 @@ def run_check(vm: str, tart_log: Path) -> None:
         guest("/bin/rm", "-rf", directory)
 
 
-def wait_for_guest(guest, directory: str, prompt: str | None) -> None:
+def wait_for_guest(guest, directory: str, prompt: str | None, timeout: int = 60) -> None:
     transcript_path = shlex.quote(f"{directory}/transcript")
     status_path = shlex.quote(f"{directory}/status")
-    deadline = time.monotonic() + (300 if prompt == "With Gureum selected" else 60)
+    deadline = time.monotonic() + timeout
     transcript = ""
     while time.monotonic() < deadline:
         status, _, transcript = guest(
@@ -111,8 +120,24 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("vm", help="Running disposable Tart VM with a logged-in desktop")
     parser.add_argument("tart_log", type=Path, help="Private log from tart run --no-graphics --vnc-experimental")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--expect-recovery", action="store_true", help="Wait for the real recovery message before approving")
+    modes.add_argument("--capture", type=Path, help="Capture the guest screen to a local PNG")
+    modes.add_argument("--click", type=int, nargs=2, metavar=("X", "Y"), help="Click coordinates from a guest screenshot")
     args = parser.parse_args()
     try:
-        run_check(args.vm, args.tart_log)
+        if args.capture is not None or args.click is not None:
+            client = connect_vnc(args.tart_log)
+            try:
+                if args.capture is not None:
+                    client.captureScreen(str(args.capture))
+                else:
+                    client.mouseMove(*args.click)
+                    client.mousePress(1)
+            finally:
+                client.disconnect()
+                api.shutdown()
+        else:
+            run_check(args.vm, args.tart_log, args.expect_recovery)
     except (RuntimeError, OSError, subprocess.SubprocessError) as error:
         sys.exit(str(error))
