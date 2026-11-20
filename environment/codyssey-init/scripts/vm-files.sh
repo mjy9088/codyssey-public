@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The VM payload is an allowlist: never send .env, runtime GOST edits, or host files.
 vm_files=(
-  .dockerignore .env.example Dockerfile README.md HANDOFF.md docker-compose.yml init.sh
+  .dockerignore .env.example Dockerfile README.md docker-compose.yml init.sh
   justfile lib/auth.sh lib/options.sh lib/logging.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh macos-setup.sh enable-korean.swift tailscale-entrypoint.sh mise.toml mise.vm.toml next-script.zsh tailnet.sh
   verify-macos-setup.py scripts/check.sh scripts/vm-files.sh
   scripts/create-macos-vm.sh tests/vm-orchestration-test.py tests/vm-guest-test.py tests/preinstalled-tools-test.py tests/installer-recovery-test.py tests/options-test.py tests/browser-configuration-test.py tests/iterm2-test.py

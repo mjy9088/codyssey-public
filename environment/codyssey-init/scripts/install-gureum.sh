@@ -2,19 +2,25 @@
 set -euo pipefail
 umask 077
 
-# Match the input method installed on the reference macOS environment.
+# Pin the package used for fresh installation; reuse an existing Gureum bundle.
 version=1.13.2
 checksum=eadbc2904e54885eea08f7c410e2adeec4caf8463c1321706cb3d1a3e42612d1
 [[ $(uname -s) == Darwin ]] || { printf 'Gureum setup requires macOS.\n' >&2; exit 1; }
-for app in '/Library/Input Methods/Gureum.app' "$HOME/Library/Input Methods/Gureum.app"; do
-  if [[ -x $app/Contents/MacOS/Gureum ]] && [[ $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist") == "$version" ]]; then
-    printf '%s\n' "$app"
-    exit 0
+target="$HOME/Library/Input Methods/Gureum.app"
+for app in "$target" '/Library/Input Methods/Gureum.app'; do
+  [[ -e $app || -L $app ]] || continue
+  info="$app/Contents/Info.plist"
+  identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info" 2>/dev/null || true)
+  executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$info" 2>/dev/null || true)
+  if [[ $identifier != org.youknowone.inputmethod.Gureum || -z $executable ||
+        $executable == */* || ! -f $app/Contents/MacOS/$executable || ! -x $app/Contents/MacOS/$executable ]]; then
+    printf 'Existing Gureum bundle is invalid: %s\n' "$app" >&2
+    exit 1
   fi
+  printf '%s\n' "$app"
+  exit 0
 done
 
-target="$HOME/Library/Input Methods/Gureum.app"
-[[ ! -e $target ]] || { printf 'An existing per-user Gureum version differs from %s; move it aside first.\n' "$version" >&2; exit 1; }
 stage=$(mktemp -d)
 copy=
 trap 'rm -rf "$stage"; [[ -z $copy ]] || rm -rf "$copy"' EXIT

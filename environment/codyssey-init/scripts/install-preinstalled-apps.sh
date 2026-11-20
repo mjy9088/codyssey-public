@@ -92,4 +92,4 @@ if /bin/zsh -ic 'command -v docker' >/dev/null 2>&1; then
   printf 'Docker is still on the login PATH. Choose a clean base or remove its Docker PATH customization in this clone.\n' >&2
   exit 1
 fi
-printf 'READY: OrbStack 2.2.4, Gureum 1.13.2 and iTerm2 installed; Docker CLI unavailable; input activation untouched.\n'
+printf 'READY: OrbStack 2.2.4, Gureum and iTerm2 available; Docker CLI unavailable; input activation untouched.\n'

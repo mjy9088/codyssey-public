@@ -236,6 +236,24 @@ Repeated runs cannot bypass system approval or make an incompatible Docker backe
 A remote install refuses differing runtime files instead of overwriting them; for an upgrade,
 use a fresh reviewed checkout or preserve your configuration and choose a fresh install directory.
 
+### Comparing environments
+
+Record the actual macOS build and architecture (`sw_vers` and `uname -m`), Swift version, app
+versions and install locations, and Docker Engine/Compose versions. To reproduce an incident,
+match the affected environment when available. An Apple Silicon guest on a different OS build
+provides coverage for that guest. Bootstrap download pins identify the artifacts used when a
+component needs installing.
+
+| Component | Example from an Intel reference workstation |
+| --- | --- |
+| macOS and CPU | 15.7.5, x86_64 |
+| OrbStack, Docker CLI, Compose | 2.0.5, 28.5.2, 2.40.3 |
+| mise and just | 2026.10.5 (macos-x64), 1.43.0 |
+| Installed Chrome and portable Chrome | 146.0.7680.165, 155.0.8059.39 (mac-x64) |
+| Gureum | 1.13.2, universal bundle under `/Library/Input Methods` |
+| System Python | 3.9.6. Use the container checks when Python 3.10+ is unavailable. |
+
+
 ## Container privilege and mount boundary
 
 The Tailscale service intentionally uses kernel networking (`TS_USERSPACE=false`), host networking,
@@ -350,7 +368,7 @@ OrbStack installation. Other Docker engines may need port forwarding from their 
 
 ## macOS preferences
 
-When personal macOS preferences are selected, this environment disables text automation and configures **Gureum 1.13.2 Hangul 2-set**
+When personal macOS preferences are selected, this environment disables text automation and configures **Gureum Hangul 2-set**
 with **Control-Space for input switching and Command-Space for Spotlight**.
 Control-Space is applied automatically without a switching-key prompt. Interactive setup
 asks whether to clean up Dock pins and stacks. Enter declines and preserves existing pins
@@ -388,12 +406,14 @@ The helper applies shortcuts even when System Settings is open, registers the li
 bindings directly, and verifies them in a fresh process as well as the writer.
 No Screen Recording, Accessibility, administrator privileges, or logout are needed for shortcut setup.
 
-The reference environment is macOS 15.7.5 on x86_64 with Gureum 1.13.2 installed at
-`/Library/Input Methods/Gureum.app`. This is an environment bootstrap, not a general-purpose macOS
-configuration tool. On a fresh machine, `scripts/install-gureum.sh` downloads the exact 1.13.2 package,
-verifies its pinned SHA-256, and extracts it into `~/Library/Input Methods/Gureum.app` without sudo.
-An existing matching installation is reused. Swift and the Xcode Command Line Tools are required for
-Carbon registration and selection.
+macOS, CPU architecture, Swift/Command Line Tools, Docker, browsers, and apps can differ between
+workstations and guests. Follow the environment comparison guidance above when investigating a failure.
+
+When Gureum is absent, `scripts/install-gureum.sh` verifies the SHA-256 of the pinned 1.13.2
+package and extracts it into `~/Library/Input Methods/Gureum.app` without sudo. An existing
+bundle with the expected identifier and an executable is reused at its installed version. A
+per-user bundle takes precedence over a system-wide bundle. Swift and the Xcode Command Line
+Tools are required for Carbon registration and selection.
 
 `enable-korean.swift` registers the installed app, enables its parent source
 `org.youknowone.inputmethod.Korean` and Hangul mode `org.youknowone.inputmethod.Gureum.han2`, and attempts
@@ -401,8 +421,24 @@ to select Hangul. The legacy parent ID differs from the app's bundle ID,
 `org.youknowone.inputmethod.Gureum`. After successful Gureum selection, it disables the Apple Korean
 sources added by the earlier bootstrap. Choose Allow if macOS prompts. For up to 120 seconds the
 helper services its run loop and attempts activation once the Hangul mode is enable-capable.
-It verifies selection against the desktop's current input source. Timeouts report observed TIS
-state and status codes while the remaining preference groups continue. To retry in the same session:
+Gureum's QWERTY source uses `org.youknowone.inputmethod.Gureum.qwerty`. A stock ABC layout
+uses `com.apple.keylayout.ABC`.
+If macOS rejects automatic selection with status -50, the helper asks you to select Gureum
+Hangul 2-set in the Input menu while it watches the current desktop input source. Add it under
+**System Settings → Keyboard → Text Input → Edit** if needed. If it is listed but will not switch,
+switch to a working source and try removing and re-adding just Gureum. If the installed input
+method still does not appear in the picker, save your work and follow the
+[Gureum installation instructions](https://github.com/gureum/gureum#수동-설치).
+
+Carbon can return -50 for an enabled, selectable Hangul mode both while Allow is pending and
+after approval. The helper shows the desktop recovery instructions once and retries at a slower
+cadence for the rest of the activation window. This lets a pending approval finish or a manual
+selection take effect. Completion requires Gureum to be the current input source. The desktop
+typing check separately verifies that the active source actually composes Hangul.
+
+Timeouts report observed TIS state and status codes while the remaining preference groups
+continue. Keep a working Latin layout and Apple Korean available until Gureum is usable. To
+retry in the same session after selecting Gureum:
 
 ```sh
 bash macos-setup.sh --input-only
@@ -415,7 +451,10 @@ and verifies their values and enabled state. These private APIs target the refer
 missing symbols produce an error for this group while other setup groups continue.
 Loaded shortcut registration does not prove physical key handling; test both Korean and English in a
 focused text field. The setup does not automatically replace Gureum with Apple Korean when Caps Lock fails.
-See [HANDOFF.md](HANDOFF.md) for installed input-source details and fresh-VM steps.
+For a live check, type `gksrmf` in an editable document and verify that it composes `한글`.
+Use Control-Space to switch in both directions and Command-Space to open Spotlight. If a focused
+app switches input sources automatically, select Gureum again in that app before checking.
+In Terminal, `/usr/bin/swift enable-korean.swift --current-source` prints the active source ID.
 
 Every successful domain export is retained as `text.plist`, `dock.plist`,
 `input-sources.plist`, or `hotkeys.plist` in the backup directory printed by the script. To restore a
@@ -555,6 +594,9 @@ HOME=/tmp/codyssey-home TS_AUTHKEY= docker compose config
 docker compose build tailscale
 ```
 
+Keep runtime logs, browser profiles, preference backups, traces, and VM execution evidence in
+private ignored storage. Review extra terminal and container output before sharing it.
+
 These checks are local simulation and build/configuration evidence only. They do not activate TUN,
 change host networking, authenticate Tailscale, or alter real macOS preferences.
 
@@ -622,7 +664,8 @@ bash scripts/create-preinstalled-macos-image.sh \
 ```
 
 The builder clones the source and changes only that new VM. It installs checksum-pinned OrbStack
-2.2.4 and iTerm2 3.7.7 in `~/Applications`, and Gureum 1.13.2 in `~/Library/Input Methods` without launching onboarding,
+2.2.4 in `~/Applications` and ensures iTerm2 and Gureum are present. When absent, the builder
+installs the pinned iTerm2 3.7.7 or Gureum 1.13.2 package. It completes this without launching onboarding,
 activating input sources, sudo, or a Homebrew installation. The OrbStack archive pins come from the
 [official Homebrew cask](https://github.com/Homebrew/homebrew-cask/blob/master/Casks/o/orbstack.rb).
 The reference diagnostic used OrbStack 2.2.3 on Intel macOS 15.7.4; this newer pinned app and an ARM
@@ -641,7 +684,7 @@ Use the base for the complete pre-deployment check:
 bash scripts/create-macos-vm.sh --image codyssey-preinstalled --preinstalled
 ```
 
-This mode first inspects the real OrbStack/Gureum/Chrome/iTerm2 bundles, checks Gureum's version, executes
+This mode first inspects the real OrbStack/Gureum/Chrome/iTerm2 bundles, checks the Gureum executable, executes
 bundled Docker/Compose/Buildx version queries, checks Swift, and confirms that Docker is absent from
 the login PATH. It never starts OrbStack. The cold-start suite then exercises the production startup
 helper and full `init.sh` against temporary synthetic homes and fake engine commands, covering missing
@@ -686,6 +729,15 @@ checks that the temporary debugging endpoint is gone before normal launch, and v
 unchanged second launch reuses the browser without repeating setup. It closes only the browser
 process owned by that unique test profile, then removes the profile. Browser downloads remain cached.
 It never opens the Tailscale login URL, authenticates, or touches an existing user browser profile.
+
+### Manual smoke test in a disposable desktop session
+
+Run the root `sh init.sh` with the options relevant to the incident. Verify Gureum composition
+and shortcuts using the [macOS preference checks](#macos-preferences). In the final zsh,
+check `mise` and `just`. If the test environment has an authorized Tailnet, check `just bash`,
+`mise --version`, `zellij --version`, MagicDNS short names, and proxy toggling in `just browser`.
+Rerun setup to verify reuse, then check that a graceful Tailnet container restart removes the
+ephemeral identity and requires a fresh login.
 
 ### An existing disposable VM
 

@@ -22,9 +22,13 @@ def bundle(candidates, identifiers):
 
 def inspect(home, applications=Path("/Applications"), input_methods=Path("/Library/Input Methods"), system=Path("/System/Applications")):
     orb, _ = bundle([applications / "OrbStack.app", home / "Applications/OrbStack.app"], {"dev.kdrag0n.MacVirt", "dev.kdrag0n.OrbStack"})
-    _, gureum = bundle([input_methods / "Gureum.app", home / "Library/Input Methods/Gureum.app"], {"org.youknowone.inputmethod.Gureum"})
-    if gureum.get("CFBundleShortVersionString") != "1.13.2":
-        raise RuntimeError("Gureum 1.13.2 is required")
+    gureum, info = bundle([home / "Library/Input Methods/Gureum.app", input_methods / "Gureum.app"], {"org.youknowone.inputmethod.Gureum"})
+    executable = info.get("CFBundleExecutable")
+    if not isinstance(executable, str) or not executable or "/" in executable:
+        raise RuntimeError("Invalid Gureum executable name")
+    gureum_binary = gureum / "Contents/MacOS" / executable
+    if not gureum_binary.is_file() or not os.access(gureum_binary, os.X_OK):
+        raise RuntimeError("Gureum executable is missing or not executable")
     bundle([applications / "Google Chrome.app", home / "Applications/Google Chrome.app"], {"com.google.Chrome"})
     bundle([applications / "iTerm.app", home / "Applications/iTerm.app"], {"com.googlecode.iterm2"})
     if not (system / "Utilities/Terminal.app").is_dir():
@@ -51,7 +55,7 @@ def main():
         if result.returncode:
             raise RuntimeError("Bundled CLI version query failed: " + binary.name + ": " + result.stderr[-400:])
     subprocess.run(["/usr/bin/swift", "--version"], check=True, capture_output=True, timeout=30)
-    print("PASS: installed app identities, Gureum version, bundled CLI execution, Swift and missing Docker PATH; no engine started.")
+    print("PASS: installed app identities, Gureum executable, bundled CLI execution, Swift and missing Docker PATH; no engine started.")
 
 
 if __name__ == "__main__":

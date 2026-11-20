@@ -80,9 +80,9 @@ func configureShortcuts(verifyOnly: Bool) {
     }
 }
 
-func source(_ identifier: String) -> TISInputSource? {
+func source(_ identifier: String, includeDisabled: Bool = true) -> TISInputSource? {
     let filter = [kTISPropertyInputSourceID as String: identifier] as CFDictionary
-    let sources = TISCreateInputSourceList(filter, true).takeRetainedValue() as NSArray
+    let sources = TISCreateInputSourceList(filter, includeDisabled).takeRetainedValue() as NSArray
     return sources.firstObject.map { $0 as! TISInputSource }
 }
 
@@ -95,16 +95,30 @@ func enabled(_ source: TISInputSource) -> Bool {
 
 // A parent activation request can return before the approval dialog closes.
 // The usable Hangul mode and the current source determine completion.
+// Carbon can return paramErr for an enabled, selectable mode while Allow is
+// pending or after it was accepted. Keep retrying at a slower cadence and let
+// desktop selection complete the same flow. Prompt once and treat only the
+// current source as confirmation, including after a successful selection call.
 func waitForHangul(
     requestMode: () -> Bool,
-    selectMode: () -> Bool,
-    waitForNextAttempt: () -> Bool
+    currentIsHangul: () -> Bool,
+    selectMode: () -> OSStatus?,
+    selectionRejected: () -> Void,
+    waitForNextAttempt: (_ selectionRejected: Bool) -> Bool
 ) -> Bool {
     var requested = false
+    var reportedRejection = false
+    var rejected = false
     repeat {
+        if currentIsHangul() { return true }
         if !requested { requested = requestMode() }
-        if selectMode() { return true }
-    } while waitForNextAttempt()
+        rejected = selectMode() == OSStatus(paramErr)
+        if currentIsHangul() { return true }
+        if rejected && !reportedRejection {
+            selectionRejected()
+            reportedRejection = true
+        }
+    } while waitForNextAttempt(rejected)
     return false
 }
 
@@ -114,8 +128,8 @@ func flag(_ input: TISInputSource, _ property: CFString) -> Bool {
 }
 
 func currentSourceID() -> String {
-    let current = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
-    guard let value = TISGetInputSourceProperty(current, kTISPropertyInputSourceID) else { return "" }
+    guard let current = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
+          let value = TISGetInputSourceProperty(current, kTISPropertyInputSourceID) else { return "" }
     return Unmanaged<CFString>.fromOpaque(value).takeUnretainedValue() as String
 }
 
@@ -148,19 +162,20 @@ if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--wait-for-s
 guard CommandLine.arguments.count == 2 else {
     fail("Usage: swift enable-korean.swift PATH_TO_GUREUM_APP | --shortcuts | --verify-shortcuts | --current-source | --wait-for-source {is|is-not} ID")
 }
-let app = URL(fileURLWithPath: CommandLine.arguments[1]) as CFURL
-let registrationStatus = TISRegisterInputSource(app)
-guard registrationStatus == noErr else {
-    fail("Could not register the installed Gureum input method (status \(registrationStatus)).")
-}
-
 let parent = "org.youknowone.inputmethod.Korean"
 let identifier = "org.youknowone.inputmethod.Gureum.han2"
 var parentStatus: OSStatus?
-if let input = source(parent), !enabled(input) {
-    parentStatus = TISEnableInputSource(input)
+if currentSourceID() != identifier {
+    let app = URL(fileURLWithPath: CommandLine.arguments[1]) as CFURL
+    let registrationStatus = TISRegisterInputSource(app)
+    guard registrationStatus == noErr else {
+        fail("Could not register the installed Gureum input method (status \(registrationStatus)).")
+    }
+    if let input = source(parent), !enabled(input) {
+        parentStatus = TISEnableInputSource(input)
+    }
+    fputs("If macOS shows an input-source activation dialog, choose Allow. Waiting for Gureum Hangul to become selectable…\n", stderr)
 }
-fputs("If macOS shows an input-source activation dialog, choose Allow. Waiting for Gureum Hangul to become selectable…\n", stderr)
 
 let deadline = ProcessInfo.processInfo.systemUptime + 120
 var modeStatus: OSStatus?
@@ -173,15 +188,18 @@ let selected = waitForHangul(
         modeStatus = TISEnableInputSource(mode)
         return modeStatus == noErr
     },
+    currentIsHangul: { currentSourceID() == identifier },
     selectMode: {
-        if currentSourceID() == identifier { return true }
-        guard let mode = source(identifier), enabled(mode),
-              flag(mode, kTISPropertyInputSourceIsSelectCapable) else { return false }
+        guard let mode = source(identifier, includeDisabled: false),
+              flag(mode, kTISPropertyInputSourceIsSelectCapable) else { return nil }
         selectionStatus = TISSelectInputSource(mode)
-        return selectionStatus == noErr && currentSourceID() == identifier
+        return selectionStatus
     },
-    waitForNextAttempt: {
-        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.5))
+    selectionRejected: {
+        fputs("macOS rejected automatic Gureum selection. Choose Allow if the approval dialog is still open. If Gureum does not switch automatically, select Gureum Hangul 2-set from the desktop Input menu. Add it in System Settings > Keyboard > Text Input > Edit if needed.\n", stderr)
+    },
+    waitForNextAttempt: { rejected in
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: rejected ? 3 : 0.5))
         return ProcessInfo.processInfo.systemUptime < deadline
     }
 )
@@ -191,7 +209,7 @@ guard selected else {
         return "enabled=\(enabled(input)), enable-capable=\(flag(input, kTISPropertyInputSourceIsEnableCapable)), select-capable=\(flag(input, kTISPropertyInputSourceIsSelectCapable))"
     }
     func status(_ result: OSStatus?) -> String { result.map { String($0) } ?? "not requested" }
-    fail("Gureum Hangul selection was not confirmed within 120 seconds. Parent: \(state(parent)) (request \(status(parentStatus))). Hangul: \(state(identifier)) (request \(status(modeStatus)), selection \(status(selectionStatus))). Retry with bash macos-setup.sh --input-only in the active desktop session.")
+    fail("Gureum Hangul selection was not confirmed within 120 seconds. Parent: \(state(parent)) (request \(status(parentStatus))). Hangul: \(state(identifier)) (request \(status(modeStatus)), selection \(status(selectionStatus))). Select Gureum in the desktop Input menu, then retry with bash macos-setup.sh --input-only.")
 }
 
 // Keep the existing Latin layout; remove the old Apple Korean sources only after
@@ -205,5 +223,5 @@ for identifier in previousSources {
         }
     }
 }
-print("Gureum 1.13.2 Hangul 2-set registered, enabled, and selected.")
+print("Gureum Hangul 2-set is selected.")
 #endif

@@ -8,7 +8,7 @@ die() {
 }
 
 remote_files=(
-  .dockerignore .env.example Dockerfile README.md HANDOFF.md docker-compose.yml init.sh justfile
+  .dockerignore .env.example Dockerfile README.md docker-compose.yml init.sh justfile
   macos-setup.sh mise.toml next-script.zsh tailnet.sh verify-macos-setup.py
   lib/auth.sh lib/options.sh lib/logging.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh gost/gost.yaml enable-korean.swift tailscale-entrypoint.sh
   chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs

@@ -5,6 +5,7 @@ import importlib.util
 import plistlib
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import shutil
 import unittest
@@ -195,6 +196,11 @@ class InstalledAppTests(unittest.TestCase):
         ):
             (path / 'Contents').mkdir(parents=True)
             (path / 'Contents/Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier': identifier, 'CFBundleShortVersionString': version}))
+        gureum = home / 'Library/Input Methods/Gureum.app/Contents'
+        info = plistlib.loads((gureum / 'Info.plist').read_bytes())
+        (gureum / 'Info.plist').write_bytes(plistlib.dumps(info | {'CFBundleExecutable': 'Gureum'}))
+        (gureum / 'MacOS').mkdir()
+        (gureum / 'MacOS/Gureum').touch(mode=0o700)
         for name in ('bin/orb', 'xbin/docker', 'xbin/docker-compose', 'xbin/docker-buildx'):
             path = apps / 'OrbStack.app/Contents/MacOS' / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -224,12 +230,34 @@ class InstalledAppTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'identity'):
                 module.inspect(*arguments)
 
-    def test_wrong_gureum_version_is_rejected(self):
+    def test_existing_gureum_version_can_vary(self):
         with tempfile.TemporaryDirectory() as directory:
             module, *arguments = self.fixture(Path(directory))
             info = arguments[0] / 'Library/Input Methods/Gureum.app/Contents/Info.plist'
-            info.write_bytes(plistlib.dumps({'CFBundleIdentifier': 'org.youknowone.inputmethod.Gureum', 'CFBundleShortVersionString': '0.0'}))
-            with self.assertRaisesRegex(RuntimeError, '1.13.2'):
+            metadata = plistlib.loads(info.read_bytes())
+            info.write_bytes(plistlib.dumps(metadata | {'CFBundleShortVersionString': '9.0'}))
+            self.assertEqual(len(module.inspect(*arguments)), 3)
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'uses the macOS plist utility')
+    def test_installer_reuses_existing_gureum_at_another_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _, home, *_ = self.fixture(Path(directory))
+            app = home / 'Library/Input Methods/Gureum.app'
+            plist = app / 'Contents/Info.plist'
+            metadata = plistlib.loads(plist.read_bytes())
+            plist.write_bytes(plistlib.dumps(metadata | {'CFBundleShortVersionString': '9.0'}))
+            result = subprocess.run(
+                ['/bin/bash', str(ROOT / 'scripts/install-gureum.sh')],
+                env=os.environ | {'HOME': str(home)}, capture_output=True, text=True, timeout=5,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), str(app))
+
+    def test_missing_gureum_executable_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module, *arguments = self.fixture(Path(directory))
+            (arguments[0] / 'Library/Input Methods/Gureum.app/Contents/MacOS/Gureum').unlink()
+            with self.assertRaisesRegex(RuntimeError, 'Gureum executable'):
                 module.inspect(*arguments)
 
 
