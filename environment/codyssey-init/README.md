@@ -430,8 +430,12 @@ switch to a working source and try removing and re-adding just Gureum. If the in
 method still does not appear in the picker, save your work and follow the
 [Gureum installation instructions](https://github.com/gureum/gureum#수동-설치).
 
-Carbon can return -50 for an enabled, selectable Hangul mode both while Allow is pending and
-after approval. The helper shows the desktop recovery instructions once and retries at a slower
+Carbon requires both the parent input source and the Hangul mode to be enabled before selecting
+the mode. An accepted enable request can still be waiting for Allow. The helper re-reads live
+state, treats a missing Carbon lookup as unavailable, and retries failed parent requests at
+intervals. It leaves an accepted request pending to avoid reopening the approval dialog.
+
+Even after both sources are enabled, Carbon may return -50. The helper shows the desktop recovery instructions once and retries at a slower
 cadence for the rest of the activation window. This lets a pending approval finish or a manual
 selection take effect. Completion requires Gureum to be the current input source. The desktop
 typing check separately verifies that the active source actually composes Hangul.

@@ -82,7 +82,8 @@ func configureShortcuts(verifyOnly: Bool) {
 
 func source(_ identifier: String, includeDisabled: Bool = true) -> TISInputSource? {
     let filter = [kTISPropertyInputSourceID as String: identifier] as CFDictionary
-    let sources = TISCreateInputSourceList(filter, includeDisabled).takeRetainedValue() as NSArray
+    guard let list = TISCreateInputSourceList(filter, includeDisabled) else { return nil }
+    let sources = list.takeRetainedValue() as NSArray
     return sources.firstObject.map { $0 as! TISInputSource }
 }
 
@@ -94,12 +95,14 @@ func enabled(_ source: TISInputSource) -> Bool {
 }
 
 // A parent activation request can return before the approval dialog closes.
-// The usable Hangul mode and the current source determine completion.
+// Carbon requires the parent and the mode to be enabled before selecting a mode.
+// An accepted enable request is not evidence that either source is enabled.
 // Carbon can return paramErr for an enabled, selectable mode while Allow is
 // pending or after it was accepted. Keep retrying at a slower cadence and let
 // desktop selection complete the same flow. Prompt once and treat only the
 // current source as confirmation, including after a successful selection call.
 func waitForHangul(
+    parentIsEnabled: () -> Bool,
     requestMode: () -> Bool,
     currentIsHangul: () -> Bool,
     selectMode: () -> OSStatus?,
@@ -111,12 +114,15 @@ func waitForHangul(
     var rejected = false
     repeat {
         if currentIsHangul() { return true }
-        if !requested { requested = requestMode() }
-        rejected = selectMode() == OSStatus(paramErr)
-        if currentIsHangul() { return true }
-        if rejected && !reportedRejection {
-            selectionRejected()
-            reportedRejection = true
+        rejected = false
+        if parentIsEnabled() {
+            if !requested { requested = requestMode() }
+            rejected = selectMode() == OSStatus(paramErr)
+            if currentIsHangul() { return true }
+            if rejected && !reportedRejection {
+                selectionRejected()
+                reportedRejection = true
+            }
         }
     } while waitForNextAttempt(rejected)
     return false
@@ -171,16 +177,26 @@ if currentSourceID() != identifier {
     guard registrationStatus == noErr else {
         fail("Could not register the installed Gureum input method (status \(registrationStatus)).")
     }
-    if let input = source(parent), !enabled(input) {
-        parentStatus = TISEnableInputSource(input)
-    }
     fputs("If macOS shows an input-source activation dialog, choose Allow. Waiting for Gureum Hangul to become selectable…\n", stderr)
 }
 
 let deadline = ProcessInfo.processInfo.systemUptime + 120
 var modeStatus: OSStatus?
 var selectionStatus: OSStatus?
+var nextParentRequest = ProcessInfo.processInfo.systemUptime
 let selected = waitForHangul(
+    parentIsEnabled: {
+        guard let input = source(parent) else { return false }
+        if enabled(input) { return true }
+        let now = ProcessInfo.processInfo.systemUptime
+        // noErr may mean macOS is waiting for Allow. Only failed requests are retried.
+        if parentStatus != OSStatus(noErr) && now >= nextParentRequest &&
+            flag(input, kTISPropertyInputSourceIsEnableCapable) {
+            parentStatus = TISEnableInputSource(input)
+            nextParentRequest = now + 3
+        }
+        return false
+    },
     requestMode: {
         guard let mode = source(identifier) else { return false }
         if enabled(mode) { return true }

@@ -17,10 +17,10 @@ if [[ ${2:-} == --input-desktop ]]; then
   hangul=org.youknowone.inputmethod.Gureum.han2
   /bin/bash "$root/macos-setup.sh" --input-only
   [[ $(/usr/bin/swift "$helper" --current-source) == "$hangul" ]]
-  # Space commits the Hangul composition before Return submits the line.
+  # Space commits the Hangul composition and can also insert a trailing space.
   printf 'With Gureum selected, type gks, then press Space and Return (expected 한): '
   IFS= read -r -t 60 typed || { printf 'Timed out waiting for desktop input.\n' >&2; exit 1; }
-  [[ $typed == '한 ' ]] || { printf 'Hangul composition failed.\n' >&2; exit 1; }
+  [[ $typed == 한 || $typed == '한 ' ]] || { printf 'Hangul composition failed.\n' >&2; exit 1; }
 
   printf 'Press Control-Space to switch to Latin input.\n'
   /usr/bin/swift "$helper" --wait-for-source is-not "$hangul"
@@ -35,7 +35,7 @@ if [[ ${2:-} == --input-desktop ]]; then
   /usr/bin/swift "$helper" --wait-for-source is "$hangul"
   printf 'Type gks, then press Space and Return: '
   IFS= read -r -t 60 typed || { printf 'Timed out waiting for desktop input.\n' >&2; exit 1; }
-  [[ $typed == '한 ' && $(/usr/bin/swift "$helper" --current-source) == "$hangul" ]] || {
+  [[ ( $typed == 한 || $typed == '한 ' ) && $(/usr/bin/swift "$helper" --current-source) == "$hangul" ]] || {
     printf 'Control-Space did not switch back to Gureum Hangul.\n' >&2; exit 1;
   }
   printf 'PASS: Gureum activation, Hangul composition and Control-Space switching in both directions.\n'

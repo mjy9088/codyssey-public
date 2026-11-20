@@ -1,19 +1,20 @@
 // Compiled with enable-korean.swift on macOS. No TIS preferences are changed.
 func testDelayedHangulActivation() {
-    // The parent approval was requested externally. Its enabled flag never
-    // changes, but the Hangul mode becomes available and eventually selectable.
+    // The child can already look ready while the parent is missing or disabled.
     var tick = 0
     var requests: [Int] = []
     var current = false
     var notices = 0
     var delayedAttempts: [Int] = []
     let selected = waitForHangul(
+        parentIsEnabled: { tick >= 2 },
         requestMode: {
             requests.append(tick)
             return tick >= 2
         },
         currentIsHangul: { current },
         selectMode: {
+            precondition(tick >= 2)
             if tick == 2 || tick == 3 { return OSStatus(paramErr) }
             if tick == 4 { current = true; return noErr }
             return nil
@@ -26,7 +27,7 @@ func testDelayedHangulActivation() {
         }
     )
     precondition(selected)
-    precondition(requests == [0, 1, 2])
+    precondition(requests == [2])
     precondition(notices == 1 && delayedAttempts == [2, 3])
 }
 
@@ -34,6 +35,7 @@ func testAcceptedRequestWithoutSelectionTimesOut() {
     var ticks = 0
     var requests = 0
     let selected = waitForHangul(
+        parentIsEnabled: { true },
         requestMode: { requests += 1; return true },
         currentIsHangul: { false },
         selectMode: { noErr },
@@ -49,6 +51,7 @@ func testRejectedSelectionWaitsForDesktop() {
         var selectionAttempts = 0
         var notices = 0
         let selected = waitForHangul(
+            parentIsEnabled: { true },
             requestMode: { true },
             currentIsHangul: { desktopSwitch && tick == 2 },
             selectMode: { selectionAttempts += 1; return OSStatus(paramErr) },
@@ -64,7 +67,25 @@ func testRejectedSelectionWaitsForDesktop() {
     }
 }
 
+func testMissingOrUnapprovedParentTimesOut() {
+    var checks = 0
+    let selected = waitForHangul(
+        parentIsEnabled: { checks += 1; return false },
+        requestMode: { preconditionFailure("parent is unavailable") },
+        currentIsHangul: { false },
+        selectMode: { preconditionFailure("parent is unavailable") },
+        selectionRejected: { preconditionFailure("selection was not attempted") },
+        waitForNextAttempt: { rejected in
+            precondition(!rejected)
+            return checks < 3
+        }
+    )
+    precondition(!selected && checks == 3)
+}
+
+precondition(source("org.example.codyssey.missing-input-source", includeDisabled: false) == nil)
 testDelayedHangulActivation()
+testMissingOrUnapprovedParentTimesOut()
 testAcceptedRequestWithoutSelectionTimesOut()
 testRejectedSelectionWaitsForDesktop()
 print("PASS: Gureum Hangul activation, desktop fallback, and timeout with simulated input-source state.")
