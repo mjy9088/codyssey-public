@@ -143,6 +143,45 @@ func currentSourceID() -> String {
     return Unmanaged<CFString>.fromOpaque(value).takeUnretainedValue() as String
 }
 
+let parent = "org.youknowone.inputmethod.Korean"
+let identifier = "org.youknowone.inputmethod.Gureum.han2"
+
+func inputState(_ id: String) -> String {
+    guard let input = source(id) else { return "missing" }
+    return "enabled=\(enabled(input)), enable-capable=\(flag(input, kTISPropertyInputSourceIsEnableCapable)), select-capable=\(flag(input, kTISPropertyInputSourceIsSelectCapable)), enabled-list=\(source(id, includeDisabled: false) != nil)"
+}
+
+func activationState() -> String {
+    let current = currentSourceID()
+    return "current=\(current.isEmpty ? "unavailable" : current); parent {\(inputState(parent))}; Hangul {\(inputState(identifier))}"
+}
+
+struct ActivationTrace {
+    private let started = ProcessInfo.processInfo.systemUptime
+    private let startedAt = ISO8601DateFormatter().string(from: Date())
+    private var events: [String] = []
+    private var lastState: String?
+
+    mutating func record(_ event: String) {
+        let elapsed = ProcessInfo.processInfo.systemUptime - started
+        events.append(String(format: "+%.1fs ", elapsed) + event)
+        // Keep the first observations and the latest events if polling is noisy.
+        if events.count > 32 { events.remove(at: 8) }
+    }
+
+    mutating func observe() {
+        let state = activationState()
+        guard state != lastState else { return }
+        lastState = state
+        record(state)
+    }
+
+    func write() {
+        fputs("Gureum diagnostic trace started \(startedAt) on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)\n", stderr)
+        for event in events { fputs("Gureum diagnostic \(event)\n", stderr) }
+    }
+}
+
 #if !CODYSSEY_INPUT_TEST
 if CommandLine.arguments.count == 2 && ["--shortcuts", "--verify-shortcuts"].contains(CommandLine.arguments[1]) {
     configureShortcuts(verifyOnly: CommandLine.arguments[1] == "--verify-shortcuts")
@@ -169,16 +208,43 @@ if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--wait-for-s
     fail("The active input source did not change as expected (current: \(currentSourceID())).")
 }
 
-guard CommandLine.arguments.count == 2 else {
-    fail("Usage: swift enable-korean.swift PATH_TO_GUREUM_APP | --shortcuts | --verify-shortcuts | --current-source | --wait-for-source {is|is-not} ID")
+if CommandLine.arguments.dropFirst().first == "--diagnose-gureum" {
+    let arguments = Array(CommandLine.arguments.dropFirst(2))
+    guard [["snapshot"], ["retry-parent"]].contains(arguments) else {
+        fail("Usage: swift enable-korean.swift --diagnose-gureum {snapshot|retry-parent}")
+    }
+    var trace = ActivationTrace()
+    trace.observe()
+    if arguments == ["retry-parent"] {
+        if let input = source(parent), !enabled(input), flag(input, kTISPropertyInputSourceIsEnableCapable) {
+            trace.record("explicit parent enable retry returned \(TISEnableInputSource(input))")
+            let deadline = ProcessInfo.processInfo.systemUptime + 5
+            repeat {
+                trace.observe()
+                RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.5))
+            } while ProcessInfo.processInfo.systemUptime < deadline
+            trace.record("retry outcome: " + activationState())
+        } else {
+            trace.record("parent enable retry skipped (already enabled, missing, or not enable-capable)")
+        }
+    }
+    trace.write()
+    exit(0)
 }
-let parent = "org.youknowone.inputmethod.Korean"
-let identifier = "org.youknowone.inputmethod.Gureum.han2"
+
+guard CommandLine.arguments.count == 2 else {
+    fail("Usage: swift enable-korean.swift PATH_TO_GUREUM_APP | --shortcuts | --verify-shortcuts | --current-source | --diagnose-gureum {snapshot|retry-parent} | --wait-for-source {is|is-not} ID")
+}
+var trace = ActivationTrace()
+trace.observe()
 var parentStatus: OSStatus?
 if currentSourceID() != identifier {
     let app = URL(fileURLWithPath: CommandLine.arguments[1]) as CFURL
     let registrationStatus = TISRegisterInputSource(app)
+    trace.record("register returned \(registrationStatus)")
+    trace.observe()
     guard registrationStatus == noErr else {
+        trace.write()
         fail("Could not register the installed Gureum input method (status \(registrationStatus)).")
     }
     fputs("If macOS shows an input-source activation dialog, choose Allow. Waiting for Gureum Hangul to become selectable…\n", stderr)
@@ -197,7 +263,9 @@ let selected = waitForHangul(
         // noErr may mean macOS is waiting for Allow. Only failed requests are retried.
         if parentStatus != OSStatus(noErr) && now >= nextParentRequest &&
             flag(input, kTISPropertyInputSourceIsEnableCapable) {
-            parentStatus = TISEnableInputSource(input)
+            let result = TISEnableInputSource(input)
+            trace.record("parent enable returned \(result)")
+            parentStatus = result
             nextParentRequest = now + 3
         }
         return false
@@ -206,32 +274,36 @@ let selected = waitForHangul(
         guard let mode = source(identifier) else { return false }
         if enabled(mode) { return true }
         guard flag(mode, kTISPropertyInputSourceIsEnableCapable) else { return false }
-        modeStatus = TISEnableInputSource(mode)
-        return modeStatus == noErr
+        let result = TISEnableInputSource(mode)
+        if modeStatus != result { trace.record("Hangul enable returned \(result)") }
+        modeStatus = result
+        return result == noErr
     },
     currentIsHangul: { currentSourceID() == identifier },
     selectMode: {
         guard let mode = source(identifier, includeDisabled: false),
               flag(mode, kTISPropertyInputSourceIsSelectCapable) else { return nil }
-        selectionStatus = TISSelectInputSource(mode)
-        return selectionStatus
+        let result = TISSelectInputSource(mode)
+        if selectionStatus != result { trace.record("Hangul selection returned \(result)") }
+        selectionStatus = result
+        return result
     },
     parentWaitElapsed: { ProcessInfo.processInfo.systemUptime >= activationStarted + 15 },
     showDesktopRecovery: {
+        trace.record("desktop recovery guidance displayed")
         fputs("Gureum is not selected yet. Choose Allow if the approval dialog is still open. If Gureum does not switch automatically, select Gureum Hangul 2-set from the desktop Input menu. Add it in System Settings > Keyboard > Text Input > Edit if needed.\n", stderr)
     },
     waitForNextAttempt: { rejected in
+        trace.observe()
         RunLoop.current.run(until: Date(timeIntervalSinceNow: rejected ? 3 : 0.5))
         return ProcessInfo.processInfo.systemUptime < deadline
     }
 )
 guard selected else {
-    func state(_ id: String) -> String {
-        guard let input = source(id) else { return "missing" }
-        return "enabled=\(enabled(input)), enable-capable=\(flag(input, kTISPropertyInputSourceIsEnableCapable)), select-capable=\(flag(input, kTISPropertyInputSourceIsSelectCapable))"
-    }
+    trace.observe()
+    trace.write()
     func status(_ result: OSStatus?) -> String { result.map { String($0) } ?? "not requested" }
-    fail("Gureum Hangul selection was not confirmed within 120 seconds. Parent: \(state(parent)) (request \(status(parentStatus))). Hangul: \(state(identifier)) (request \(status(modeStatus)), selection \(status(selectionStatus))). Select Gureum in the desktop Input menu, then retry with bash macos-setup.sh --input-only.")
+    fail("Gureum Hangul selection was not confirmed within 120 seconds. Parent: \(inputState(parent)) (request \(status(parentStatus))). Hangul: \(inputState(identifier)) (request \(status(modeStatus)), selection \(status(selectionStatus))). Select Gureum in the desktop Input menu, then retry with bash macos-setup.sh --input-only.")
 }
 
 // Keep the existing Latin layout; remove the old Apple Korean sources only after

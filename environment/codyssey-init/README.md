@@ -486,6 +486,37 @@ retry in the same session after selecting Gureum:
 bash macos-setup.sh --input-only
 ```
 
+On registration failure or timeout, the helper writes a timestamped trace to stderr. It includes
+changes in the live parent and Hangul mode flags, membership in the enabled-only list, the
+current source, and Carbon return codes. Carbon does not identify the time of an Allow click
+in this trace. Record that time separately to correlate it with the observed state changes.
+
+For a stalled approval, run the following from the installed setup directory in a second
+Terminal window on the affected desktop. Compile the helper before reproducing so Swift startup
+does not delay the snapshot. Use the same probe after signing back in.
+
+```sh
+probe_dir=$(mktemp -d)
+printf 'Probe and log directory: %s\n' "$probe_dir"
+/usr/bin/swiftc enable-korean.swift -o "$probe_dir/gureum-probe"
+
+# While Allow is visible
+"$probe_dir/gureum-probe" --diagnose-gureum snapshot 2>&1 | tee "$probe_dir/before-allow.log"
+
+# Immediately after clicking Allow
+"$probe_dir/gureum-probe" --diagnose-gureum snapshot 2>&1 | tee "$probe_dir/after-allow.log"
+
+# If the parent stays disabled after approval and setup exits
+"$probe_dir/gureum-probe" --diagnose-gureum retry-parent 2>&1 | tee "$probe_dir/retry-parent.log"
+
+# If it still stays disabled, log out and back in and set probe_dir to the printed path.
+"$probe_dir/gureum-probe" --diagnose-gureum snapshot 2>&1 | tee "$probe_dir/after-login.log"
+```
+
+The snapshot reads live state without changing settings. The explicit retry can trigger an
+approval prompt and samples state for five seconds after its single enable request. Neither
+diagnostic selects an input source or removes Apple Korean.
+
 Control-Space uses symbolic hotkey 60 with parameters `[65535, 49, 262144]`; Control-Shift-Space uses 61
 with `[65535, 49, 393216]`. The old value `786432` was Control-Option-Space. After synchronizing preferences through CFPreferences,
 the setup registers and enables the live bindings through SkyLight, waits for asynchronous application,
