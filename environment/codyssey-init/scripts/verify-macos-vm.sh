@@ -17,20 +17,25 @@ if [[ ${2:-} == --input-desktop ]]; then
   hangul=org.youknowone.inputmethod.Gureum.han2
   /bin/bash "$root/macos-setup.sh" --input-only
   [[ $(/usr/bin/swift "$helper" --current-source) == "$hangul" ]]
-  printf 'With Gureum selected, type the physical keys gks and press Return (expected 한): '
-  IFS= read -r -t 60 typed
-  [[ $typed == 한 ]] || { printf 'Hangul composition failed.\n' >&2; exit 1; }
+  # Space commits the Hangul composition before Return submits the line.
+  printf 'With Gureum selected, type gks, then press Space and Return (expected 한): '
+  IFS= read -r -t 60 typed || { printf 'Timed out waiting for desktop input.\n' >&2; exit 1; }
+  [[ $typed == '한 ' ]] || { printf 'Hangul composition failed.\n' >&2; exit 1; }
 
-  printf 'Press Control-Space, type abc, then press Return: '
-  IFS= read -r -t 60 typed
+  printf 'Press Control-Space to switch to Latin input.\n'
+  /usr/bin/swift "$helper" --wait-for-source is-not "$hangul"
+  printf 'Type abc and press Return: '
+  IFS= read -r -t 60 typed || { printf 'Timed out waiting for desktop input.\n' >&2; exit 1; }
   latin=$(/usr/bin/swift "$helper" --current-source)
   [[ $typed == abc && -n $latin && $latin != "$hangul" ]] || {
     printf 'Control-Space did not switch to Latin input.\n' >&2; exit 1;
   }
 
-  printf 'Press Control-Space again, type the physical keys gks, then press Return: '
-  IFS= read -r -t 60 typed
-  [[ $typed == 한 && $(/usr/bin/swift "$helper" --current-source) == "$hangul" ]] || {
+  printf 'Press Control-Space again to switch to Hangul.\n'
+  /usr/bin/swift "$helper" --wait-for-source is "$hangul"
+  printf 'Type gks, then press Space and Return: '
+  IFS= read -r -t 60 typed || { printf 'Timed out waiting for desktop input.\n' >&2; exit 1; }
+  [[ $typed == '한 ' && $(/usr/bin/swift "$helper" --current-source) == "$hangul" ]] || {
     printf 'Control-Space did not switch back to Gureum Hangul.\n' >&2; exit 1;
   }
   printf 'PASS: Gureum activation, Hangul composition and Control-Space switching in both directions.\n'

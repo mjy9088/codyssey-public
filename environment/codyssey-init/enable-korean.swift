@@ -22,6 +22,14 @@ func configureShortcuts(verifyOnly: Bool) {
     let enabled = unsafeBitCast(enabledAddress, to: IsEnabled.self)
     let bindings: [(String, UInt32)] = [("60", 262144), ("61", 393216), ("64", 1048576), ("65", 1572864)]
 
+    func matches(_ identifier: String, _ expectedModifiers: UInt32) -> Bool {
+        let id = Int32(identifier)!
+        var character: UInt16 = 0, key: UInt16 = 0
+        var modifiers: UInt32 = 0
+        return get(id, &character, &key, &modifiers) == 0 &&
+            key == 49 && modifiers == expectedModifiers && enabled(id)
+    }
+
     if !verifyOnly {
         let domain = "com.apple.symbolichotkeys" as CFString
         var keys = CFPreferencesCopyAppValue("AppleSymbolicHotKeys" as CFString, domain) as? [String: Any] ?? [:]
@@ -42,27 +50,20 @@ func configureShortcuts(verifyOnly: Bool) {
         }
         let set = unsafeBitCast(setAddress, to: SetHotKey.self)
         let setEnabled = unsafeBitCast(enableAddress, to: SetEnabled.self)
-        for (identifier, modifiers) in bindings {
-            let id = Int32(identifier)!
-            guard set(id, 65535, 49, modifiers) == 0 else {
-                fail("could not register shortcut \(identifier).")
-            }
-        }
-        for (identifier, _) in bindings {
-            guard setEnabled(Int32(identifier)!, true) == 0 else { fail("could not enable shortcut \(identifier).") }
-        }
-        // WindowServer applies registrations asynchronously.
-        let deadline = Date(timeIntervalSinceNow: 5)
+        // The input-source approval flow can refresh live shortcuts while
+        // WindowServer is applying registrations. Retry only mismatched bindings.
+        let deadline = ProcessInfo.processInfo.systemUptime + 10
         repeat {
-            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
-            let ready = bindings.allSatisfy { identifier, expected in
-                var character: UInt16 = 0, key: UInt16 = 0
-                var modifiers: UInt32 = 0
+            for (identifier, modifiers) in bindings where !matches(identifier, modifiers) {
                 let id = Int32(identifier)!
-                return get(id, &character, &key, &modifiers) == 0 && key == 49 && modifiers == expected && enabled(id)
+                guard set(id, 65535, 49, modifiers) == 0 else {
+                    fail("could not register shortcut \(identifier).")
+                }
+                guard setEnabled(id, true) == 0 else { fail("could not enable shortcut \(identifier).") }
             }
-            if ready { break }
-        } while Date() < deadline
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.5))
+            if bindings.allSatisfy({ matches($0.0, $0.1) }) { break }
+        } while ProcessInfo.processInfo.systemUptime < deadline
     }
 
     for (identifier, expectedModifiers) in bindings {
@@ -131,8 +132,21 @@ if CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "--current-so
     exit(0)
 }
 
+if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--wait-for-source" {
+    let relation = CommandLine.arguments[2]
+    let expected = CommandLine.arguments[3]
+    guard relation == "is" || relation == "is-not" else { fail("Expected is or is-not.") }
+    let deadline = ProcessInfo.processInfo.systemUptime + 30
+    repeat {
+        let current = currentSourceID()
+        if !current.isEmpty && ((current == expected) == (relation == "is")) { exit(0) }
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+    } while ProcessInfo.processInfo.systemUptime < deadline
+    fail("The active input source did not change as expected (current: \(currentSourceID())).")
+}
+
 guard CommandLine.arguments.count == 2 else {
-    fail("Usage: swift enable-korean.swift PATH_TO_GUREUM_APP | --shortcuts | --verify-shortcuts | --current-source")
+    fail("Usage: swift enable-korean.swift PATH_TO_GUREUM_APP | --shortcuts | --verify-shortcuts | --current-source | --wait-for-source {is|is-not} ID")
 }
 let app = URL(fileURLWithPath: CommandLine.arguments[1]) as CFURL
 let registrationStatus = TISRegisterInputSource(app)

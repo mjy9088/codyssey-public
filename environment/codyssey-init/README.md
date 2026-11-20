@@ -483,6 +483,23 @@ bash scripts/verify-macos-vm.sh --disposable --input-desktop
 Choose Allow when prompted, then follow the typing prompts. The check requires Hangul composition,
 Latin input after Control-Space, and Hangul composition after switching back. It checks the active
 source in addition to the text typed into Terminal.
+
+To drive the same check from the host CLI, start a disposable Tart VM with its loopback VNC server.
+Run these commands from `environment/codyssey-init`, substituting the disposable VM name:
+
+```sh
+umask 077
+tart_log=$(mktemp)
+mise -E vm exec tart -- tart run --no-graphics --vnc-experimental VM_NAME >"$tart_log" 2>&1 &
+uv run --no-project --with vncdotool==1.4.2 python scripts/verify-tart-input.py VM_NAME "$tart_log"
+```
+
+Run the verifier once the VM has a logged-in desktop and `tart exec` is reachable. Choose Allow
+in the guest if macOS asks to activate Gureum. Dismiss the separate keystroke-monitoring request
+if it appears. The host opens the verifier in guest Terminal,
+waits for its prompts, and sends keystrokes over VNC. The guest confirms each source change
+before the host types the next sample and returns the final exit status. The Tart log contains the VNC password and should be kept private
+and removed after the VM stops.
 This mode does not verify notification dismissal or suppression.
 The VM driver additionally runs `scripts/verify-dock-ui.swift` to require named, resolved Terminal,
 Chrome and j items in the actual Dock UI. This read-only test requires the VM Guest Agent's existing
