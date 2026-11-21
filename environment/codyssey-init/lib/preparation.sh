@@ -97,6 +97,10 @@ finish_startup() {
   if command -v log_event >/dev/null 2>&1; then log_event run "exit=$startup_result"; fi
   restore_startup_terminal
   cancel_startup_preparation
+  if [ "$startup_result" -ne 0 ] && [ "$startup_result" -lt 128 ] &&
+    command -v offer_diagnostic_upload >/dev/null 2>&1; then
+    offer_diagnostic_upload || true
+  fi
   exit "$startup_result"
 }
 

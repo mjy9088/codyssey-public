@@ -254,10 +254,13 @@ command you ran, the repository revision (`git rev-parse HEAD` for a checkout), 
 visible error. The shareable log records UTC timestamps, macOS/architecture, stage outcomes,
 and exit codes. It deliberately excludes command output, environment dumps, auth input,
 Tailscale login URLs, and container logs. Detailed tool diagnostics still appear in the
-terminal on failure. Review any extra terminal output before sharing it. Delete old log files
-manually when no longer needed; no automatic upload occurs. If logging is unavailable, a
-warning is printed and setup continues. Remote download/preflight failures occur before the
-runtime log exists, so include their terminal error separately.
+terminal on failure. Review any extra terminal output before sharing it. When runtime setup
+exits with an error in a terminal, the prompt shows the shareable log path and the
+upload destination. Press Enter or type `y` to send it,
+or type `n` to decline. Unattended runs and cancellations skip the prompt. Delete old log
+files manually when no longer needed. If logging is unavailable, a warning is printed and
+setup continues. Remote download/preflight failures occur before the runtime log exists,
+so include their terminal error separately.
 
 A transient browser-control socket timeout is retried once after its setup browser closes.
 Repeated timeouts and policy/ownership errors are reported; the latter are never retried.

@@ -37,7 +37,7 @@ tar -C "$root" -cf "$context/payload.tar" \
   lib/auth.sh lib/options.sh lib/logging.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh \
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh \
   tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/managed-j-runtime.sh tests/startup-overlap-test.sh \
-  tests/preparation-safety-test.sh tests/auth-prompt-test.sh tests/fixtures/dockerignore \
+  tests/preparation-safety-test.sh tests/auth-prompt-test.sh tests/diagnostic-upload-test.py tests/fixtures/dockerignore \
   tests/macos-fake-tools.py tests/macos-setup-test.py tests/fixtures/gost.yaml \
   tests/vm-orchestration-test.py tests/vm-guest-test.py tests/preinstalled-tools-test.py tests/installer-recovery-test.py tests/options-test.py tests/browser-configuration-test.py tests/iterm2-test.py scripts/check.sh scripts/create-macos-vm.sh scripts/prepare-macos-vm.sh \
   scripts/verify-macos-vm.sh scripts/install-preinstalled-apps.sh scripts/create-preinstalled-macos-image.sh scripts/check-preinstalled-apps.py scripts/verify-portable-browser.py scripts/vm-files.sh \

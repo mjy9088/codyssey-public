@@ -219,6 +219,9 @@ EOF
   printf 'n\n' >&8
   wait_for_file "$case_dir/dock-prompted" "$case_pid"
   printf '\n\n' >&8
+  if [[ $expected_status -ne 0 ]]; then
+    printf 'n\n' >&8
+  fi
   set +e
   wait "$case_pid"
   case_status=$?
@@ -234,6 +237,7 @@ EOF
   else
     [[ ! -e $case_dir/services-started && ! -e $case_dir/zsh.log ]]
     grep -q 'startup preparation failed (exit 19)' "$case_dir/output"
+    grep -Fq '[Y/n]' "$case_dir/output"
   fi
   assert_no_preparation_artifacts
 }

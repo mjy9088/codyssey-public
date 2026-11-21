@@ -22,4 +22,5 @@ if [[ ${CODYSSEY_NATIVE_PYTHON_CHECKS:-0} != 1 ]]; then
   python3 /src/tests/iterm2-test.py
 fi
 python3 /src/tests/vm-guest-test.py
+python3 /src/tests/diagnostic-upload-test.py
 printf 'PASS: isolated bootstrap checks completed\n'

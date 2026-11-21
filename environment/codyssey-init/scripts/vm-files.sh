@@ -9,7 +9,7 @@ vm_files=(
   scripts/prepare-macos-vm.sh scripts/verify-macos-vm.sh scripts/install-preinstalled-apps.sh scripts/create-preinstalled-macos-image.sh scripts/check-preinstalled-apps.py scripts/verify-portable-browser.py
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh
   tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/managed-j-runtime.sh tests/startup-overlap-test.sh
-  tests/preparation-safety-test.sh tests/auth-prompt-test.sh tests/macos-fake-tools.py
+  tests/preparation-safety-test.sh tests/auth-prompt-test.sh tests/diagnostic-upload-test.py tests/macos-fake-tools.py
   tests/macos-setup-test.py tests/fixtures/dockerignore tests/fixtures/gost.yaml
   chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs

@@ -3,9 +3,14 @@
 # input, environment variables, login URLs, or container logs into a shareable log.
 init_run_log() {
   local directory
-  if [ "${1:-}" != new ] && [ -n "${CODYSSEY_RUN_LOG:-}" ]; then return 0; fi
-  CODYSSEY_RUN_LOG=
   directory="$HOME/Library/Logs/codyssey-init"
+  if [ "${1:-}" != new ]; then
+    case ${CODYSSEY_RUN_LOG:-} in
+      "$directory"/run.[[:alnum:]][[:alnum:]][[:alnum:]][[:alnum:]][[:alnum:]][[:alnum:]])
+        if [ -f "$CODYSSEY_RUN_LOG" ] && [ ! -L "$CODYSSEY_RUN_LOG" ]; then return 0; fi ;;
+    esac
+  fi
+  CODYSSEY_RUN_LOG=
   if ! (umask 077; mkdir -p "$directory" && chmod 0700 "$directory"); then
     printf 'codyssey-init: could not create diagnostic log directory.\n' >&2
     return 0
@@ -19,6 +24,31 @@ init_run_log() {
   fi
   printf 'Diagnostic log (attach this file when reporting a problem): %s\n' "$CODYSSEY_RUN_LOG"
 }
+
+offer_diagnostic_upload() (
+  local answer http_status
+  local endpoint='https://logs.mj-y.com/logs/codyssey-public-init'
+  [ -t 1 ] && [ -n "${CODYSSEY_RUN_LOG:-}" ] &&
+    [ -f "$CODYSSEY_RUN_LOG" ] && [ ! -L "$CODYSSEY_RUN_LOG" ] || return 0
+  { true </dev/tty; } 2>/dev/null || return 0
+  exec 3<"$CODYSSEY_RUN_LOG" || return 0
+
+  printf 'Send diagnostic log %s to %s? [Y/n] ' "$CODYSSEY_RUN_LOG" "$endpoint" || return 0
+  IFS= read -r answer </dev/tty || return 0
+  case $answer in
+    ''|[Yy]|[Yy][Ee][Ss]) ;;
+    *) return 0 ;;
+  esac
+
+  if http_status=$(curl --disable --silent --max-time 15 --output /dev/null \
+    --write-out '%{http_code}' -H 'Content-Type: application/octet-stream' \
+    --data-binary @- "$endpoint" <&3 3<&-); then
+    case $http_status in
+      2[0-9][0-9]) printf 'Diagnostic log sent.\n' >&2; return 0 ;;
+    esac
+  fi
+  printf 'Could not send diagnostic log. Local copy: %s\n' "$CODYSSEY_RUN_LOG" >&2
+)
 
 log_event() {
   [ -n "${CODYSSEY_RUN_LOG:-}" ] || return 0
