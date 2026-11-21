@@ -149,7 +149,9 @@ def verify_dock(dock_values: dict[str, PlistValue]) -> None:
         if not isinstance(tile_data, dict) or not isinstance(tile_data.get("file-data"), dict):
             raise VerificationError("Dock entry has an invalid plist shape")
         url_type = tile_data["file-data"].get("_CFURLStringType")
-        if type(url_type) is not int or url_type != 15 or type(tile_data.get("file-type")) is not int or tile_data["file-type"] != 1:
+        file_type = tile_data.get("file-type")
+        # Sequoia's running Dock can rewrite an application tile from type 1 to 41.
+        if type(url_type) is not int or url_type != 15 or type(file_type) is not int or file_type not in (1, 41):
             raise VerificationError("Dock app URL/file types must be plist integers")
         urls.append(tile_data["file-data"].get("_CFURLString"))
     others = dictionaries(dock_values.get("persistent-others", []), "persistent-others")
@@ -186,7 +188,9 @@ def verify_preferences(directory: Path, unrelated_sources: list[dict[str, PlistV
             raise VerificationError("Spotlight shortcuts were not configured")
     if {key: value for key, value in hotkeys.items() if key not in {"60", "61", "64", "65"}} != unrelated_hotkeys or hotkeys.get("60") != expected_60 or hotkeys.get("61") != expected_61:
         raise VerificationError("symbolic hotkeys do not preserve unrelated typed entries")
-    return values
+    # verify_dock checks the requested pins, launcher and visibility on each pass.
+    # Dock assigns fresh tile GUIDs and a modification counter after a reload.
+    return global_values, input_values, hotkey_values
 
 
 def restore(baseline: tuple[DomainSnapshot, ...]) -> list[str]:
@@ -267,4 +271,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except subprocess.CalledProcessError as error:
+        # The failed command may have printed recovery steps before rollback.
+        sys.stdout.write(error.stdout or "")
+        sys.stderr.write(error.stderr or "")
+        raise SystemExit(str(error)) from None

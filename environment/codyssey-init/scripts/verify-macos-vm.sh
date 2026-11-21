@@ -2,14 +2,34 @@
 set -euo pipefail
 
 if [[ ${1:-} == --help ]]; then
-  printf 'Usage: bash scripts/verify-macos-vm.sh --disposable [--input-desktop]\nRuns real keyless Docker bootstrap and destructive preferences verification in an existing macOS VM. --input-desktop runs the interactive Gureum and Control-Space check only.\n'
+  printf 'Usage: bash scripts/verify-macos-vm.sh --disposable [--workstation | --input-desktop]\n--workstation runs the live macOS setup and preferences checks without Docker.\n--input-desktop runs the interactive Gureum and Control-Space check.\nThe default also runs the keyless Docker bootstrap.\n'
   exit 0
 fi
-[[ ${1:-} == --disposable && ( $# == 1 || ( $# == 2 && $2 == --input-desktop ) ) ]] || { printf 'Use --disposable: this changes the VM user shell and preferences.\n' >&2; exit 1; }
+[[ ${1:-} == --disposable && ( $# == 1 || ( $# == 2 && ( $2 == --workstation || $2 == --input-desktop ) ) ) ]] || { printf 'Use --disposable: this changes the VM user shell and preferences.\n' >&2; exit 1; }
 [[ $(uname -s) == Darwin ]] || { printf 'This verifier requires macOS.\n' >&2; exit 1; }
 [[ $(id -u) != 0 ]] || { printf 'Run as the VM desktop user, not root.\n' >&2; exit 1; }
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 . "$root/scripts/vm-guest-path.sh"
+if [[ ${2:-} == --workstation ]]; then
+  cd "$root"
+  unset CODYSSEY_INIT_DIR CODYSSEY_TTY_PATH ZDOTDIR
+  unset UNAME_BIN DEFAULTS_BIN PLISTBUDDY_BIN PLUTIL_BIN KILLALL_BIN
+  unset CODYSSEY_APPLICATIONS_DIR CODYSSEY_SYSTEM_APPLICATIONS_DIR CODYSSEY_INPUT_SWITCH
+  export TS_AUTHKEY='' CODYSSEY_TAILNET_SETUP=0 CODYSSEY_INSTALL_J=1 CODYSSEY_MACOS_SETUP=1
+  export CODYSSEY_DOCK_SETUP=1 CODYSSEY_OPEN_BROWSER=0 CODYSSEY_INTERACTIVE_SHELL=0
+  python3 -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ required"'
+  bash init.sh
+  mise trust "$root/mise.toml"
+  mise install
+  CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 verify-macos-setup.py
+  /bin/zsh "$HOME/Library/Application Support/codyssey-init/Codyssey j.command" --list
+  /usr/bin/swift scripts/verify-dock-ui.swift
+  /usr/bin/swift enable-korean.swift --verify-shortcuts
+  [[ $(/usr/bin/swift enable-korean.swift --current-source) == org.youknowone.inputmethod.Gureum.han2 ]]
+  printf 'PASS: macOS workstation setup, repeated preferences, live Dock and shortcuts.\n'
+  printf 'To verify typing in the guest Terminal, run: bash %q --disposable --input-desktop\n' "$0"
+  exit 0
+fi
 if [[ ${2:-} == --input-desktop ]]; then
   [[ -t 0 && -t 1 ]] || { printf 'Use Terminal in the disposable VM desktop.\n' >&2; exit 1; }
   unset DEFAULTS_BIN PLISTBUDDY_BIN PLUTIL_BIN UNAME_BIN CODYSSEY_INPUT_SWITCH

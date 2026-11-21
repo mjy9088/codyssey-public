@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: bash scripts/create-macos-vm.sh --image SOURCE [--name NAME] [--delete-on-success] [--preinstalled]
+Usage: bash scripts/create-macos-vm.sh --image SOURCE [--name NAME] [--delete-on-success] [--workstation | --preinstalled]
 Apple Silicon: Tart on macOS 14+, with mise and a desktop running Guest Agent.
 SOURCE is a reviewed local Tart base or a registry image pinned with @sha256:...
 Intel: Fusion Pro with VMware Tools and key-authenticated SSH in the guest.
@@ -12,12 +12,13 @@ CODYSSEY_FUSION_KNOWN_HOSTS (pin the base key under codyssey-fusion).
 The clone's .vmwarevm bundle is created in the current directory.
 Provisioning uses Homebrew or preinstalled Intel tools. --preinstalled checks installed apps and cold-start fixtures
 before using software-emulated Docker; the OrbStack engine is never required.
+--workstation runs the live macOS setup and preferences checks without Docker.
 Creates, provisions, and verifies a fresh VM.
 Retains the VM on failure and stops it after confirmed guest cleanup.
 No host home directory is shared.
 EOF
 }
-image='' name="codyssey-verify-$(date +%Y%m%d-%H%M%S)-$$" delete_on_success=0 preinstalled=0 build_preinstalled=0
+image='' name="codyssey-verify-$(date +%Y%m%d-%H%M%S)-$$" delete_on_success=0 preinstalled=0 build_preinstalled=0 workstation=0
 while (( $# )); do
   case $1 in
     --help) usage; exit 0 ;;
@@ -27,11 +28,13 @@ while (( $# )); do
       shift 2 ;;
     --build-preinstalled) build_preinstalled=1; shift ;;
     --preinstalled) preinstalled=1; shift ;;
+    --workstation) workstation=1; shift ;;
     --delete-on-success) delete_on_success=1; shift ;;
     *) usage >&2; exit 1 ;;
   esac
 done
 (( !build_preinstalled || !delete_on_success )) || { printf "A base image cannot be deleted on success.\n" >&2; exit 1; }
+(( !workstation || !(preinstalled || build_preinstalled) )) || { usage >&2; exit 1; }
 [[ -n $image && $image != -* && $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { usage >&2; exit 1; }
 [[ $(uname -s) == Darwin ]] || { printf 'This verifier requires a macOS host.\n' >&2; exit 1; }
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
@@ -119,6 +122,9 @@ rm -f "$transfer"
 transfer=
 if (( build_preinstalled )); then
   vm_exec /bin/bash "$guest_root/scripts/install-preinstalled-apps.sh" --disposable
+elif (( workstation )); then
+  vm_desktop_preflight "$guest_root"
+  vm_desktop_exec "$guest_root" 1200 /bin/bash "$guest_root/scripts/verify-macos-vm.sh" --disposable --workstation
 else
   if (( preinstalled )); then
     vm_exec /usr/bin/python3 "$guest_root/scripts/check-preinstalled-apps.py"

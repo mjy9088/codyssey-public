@@ -384,19 +384,27 @@ def test_interactive_dock_default_and_decline() -> None:
                 assert len(dock["persistent-others"]) == 2
 
 
-def test_verifier_rejects_string_dock_types() -> None:
+def test_verifier_checks_dock_types() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         env, state = environment(Path(temporary))
         baseline(state)
         assert apply(env).returncode == 0
         original = read_domain(state, "com.apple.dock")
         code = 'import runpy,plistlib,sys; m=runpy.run_path(sys.argv[1]); m["verify_dock"](plistlib.load(open(sys.argv[2],"rb")))'
+        command = ["python3", "-c", code, str(ROOT / "verify-macos-setup.py"),
+                   str(state_path(state, "com.apple.dock"))]
+        rewritten = copy.deepcopy(original)
+        for item in rewritten["persistent-apps"]:
+            item["tile-data"]["file-type"] = 41
+        write_domain(state, "com.apple.dock", rewritten)
+        result = subprocess.run(command, env=env, text=True, capture_output=True)
+        assert result.returncode == 0, result.stderr
+
         for group in ("persistent-apps", "persistent-others"):
             broken = copy.deepcopy(original)
             broken[group][0]["tile-data"]["file-data"]["_CFURLStringType"] = "15"
             write_domain(state, "com.apple.dock", broken)
-            result = subprocess.run(["python3", "-c", code, str(ROOT / "verify-macos-setup.py"),
-                                     str(state_path(state, "com.apple.dock"))], env=env, text=True, capture_output=True)
+            result = subprocess.run(command, env=env, text=True, capture_output=True)
             assert result.returncode != 0 and "must be plist integers" in result.stderr, result.stderr
 
 
@@ -425,7 +433,7 @@ def test_launcher_requires_explicit_opt_in() -> None:
 
 def main() -> None:
     test_launcher_requires_explicit_opt_in()
-    test_verifier_rejects_string_dock_types()
+    test_verifier_checks_dock_types()
     test_interactive_dock_default_and_decline()
     test_keep_dock_adds_launcher_once_and_rolls_back_failure()
     test_desktop_verifier_preserves_keyboard_and_text()

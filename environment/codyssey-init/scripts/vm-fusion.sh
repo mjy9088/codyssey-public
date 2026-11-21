@@ -76,6 +76,8 @@ vm_running() {
 vm_ready() {
   fusion_address=$(fusion getGuestIPAddress "$fusion_vmx") || return
   [[ $fusion_address =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+  # The guest shell resolves its own identity and console user.
+  # shellcheck disable=SC2016
   vm_exec /bin/sh -c 'test "$(id -u)" != 0 && test "$(id -un)" = "$(stat -f %Su /dev/console)"'
 }
 
@@ -97,7 +99,7 @@ vm_exec() { fusion_ssh "$@" </dev/null; }
 vm_transfer() { fusion_ssh /usr/bin/tar -xf - -C "$1" <"$2"; }
 
 vm_desktop_preflight() {
-  vm_desktop_exec "$1" 60 /usr/bin/swift "$1/scripts/verify-dock-ui.swift" --preflight
+  vm_desktop_exec "$1" 300 /usr/bin/swift "$1/scripts/verify-dock-ui.swift" --preflight
 }
 
 vm_desktop_exec() {

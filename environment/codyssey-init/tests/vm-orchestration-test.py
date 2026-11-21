@@ -255,6 +255,17 @@ exec tart "$@"
         self.assertTrue(any("/Users/synthetic/guest work/scripts/verify-macos-vm.sh" in cmd for cmd in commands))
         self.assertLess(result.stdout.index("TART_STOP_COMPLETE"), result.stdout.index("PASS:"))
 
+    def test_intel_workstation_verifies_and_shuts_down_without_docker(self):
+        result, commands, _ = self.run_case(arch="x86_64", extra=("--workstation",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        preflight = next(index for index, cmd in enumerate(commands) if cmd[-1] == "--preflight")
+        verification = next(index for index, cmd in enumerate(commands) if cmd[-1] == "--workstation")
+        shutdown = next(index for index, cmd in enumerate(commands) if cmd[0] == "stop")
+        self.assertLess(preflight, verification)
+        self.assertLess(verification, shutdown)
+        self.assertFalse(any("prepare-macos-vm.sh" in arg or "DOCKER_CONTEXT" in arg
+                             for cmd in commands for arg in cmd))
+
     def test_intel_clones_transfers_verifies_and_cleans_up_through_fusion(self):
         result, commands, names = self.run_case(arch="x86_64", extra=("--delete-on-success",))
         self.assertEqual(result.returncode, 0, result.stderr)

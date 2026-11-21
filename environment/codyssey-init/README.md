@@ -598,6 +598,8 @@ bash scripts/verify-macos-vm.sh --disposable --input-desktop
 Choose Allow when prompted, then follow the typing prompts. The check requires Hangul composition,
 Latin input after Control-Space, and Hangul composition after switching back. It checks the active
 source in addition to the text typed into Terminal.
+In Fusion, focus the guest Terminal and wait for the menu bar input indicator
+and the next Terminal prompt before entering each sample.
 
 From `environment/codyssey-init`, run the same check from the host CLI against a stopped local
 Tart base with a logged-in desktop, Guest Agent, and Swift. Install `uv` on the host and use the
@@ -1119,20 +1121,18 @@ in the secret manager and use a scoped secret reference. The repeatable
 verification command itself authenticates with the dedicated SSH key.
 Verify the version and architecture inside the guest with
 `sw_vers` and `uname -m`. Install Xcode Command Line Tools with `xcode-select --install`.
-For a new Intel guest, install [MacPorts](https://www.macports.org/install.php) and
-prepare the verification tools as follows:
+For workstation verification, install [MacPorts](https://www.macports.org/install.php)
+in the Intel guest and prepare Python and Node:
 
 ```sh
-sudo /opt/local/bin/port install lima +additional_guestagents
-sudo /opt/local/bin/port install colima docker docker-compose-plugin docker-buildx-plugin python313 nodejs24
+sudo /opt/local/bin/port install python313 nodejs24
 sudo /opt/local/bin/port select --set python3 python313
 ```
 
 Install Google Chrome from Google in `/Applications` or the guest user's
-`~/Applications`. Confirm `docker compose version` and `docker buildx version`
-as the desktop user before running verification. The verifier uses the Intel
-MacPorts tools already installed in the guest. Existing Homebrew-based guests can
-continue to use Homebrew.
+`~/Applications`. If you are preparing the optional Docker verification route as well,
+also install `lima +additional_guestagents`, `colima`, `docker`,
+`docker-compose-plugin`, and `docker-buildx-plugin` in the guest.
 
 The verifier needs an active desktop session. For unattended runs, open
 **System Settings > Users & Groups** in the disposable guest and set
@@ -1176,7 +1176,7 @@ access to the process running the Swift check. From a copy of this directory in 
 base, use the same Aqua job to ask macOS for access:
 
 ```sh
-/usr/bin/python3 scripts/vm-aqua-exec.py 60 \
+/usr/bin/python3 scripts/vm-aqua-exec.py 300 \
   /usr/bin/swift "$PWD/scripts/verify-dock-ui.swift" --request-access
 ```
 
@@ -1196,10 +1196,19 @@ CODYSSEY_FUSION_GUEST_USER=vmuser \
 CODYSSEY_FUSION_KNOWN_HOSTS="$HOME/.ssh/codyssey-fusion-known-hosts" \
 bash /path/to/codyssey-public/environment/codyssey-init/scripts/create-macos-vm.sh \
   --image "/path/to/Reviewed Base.vmwarevm/Reviewed Base.vmx" \
-  --name codyssey-environment-test
+  --name codyssey-environment-test --workstation
 ```
 
-The script creates `codyssey-environment-test.vmwarevm` in the current directory. To build a
+The script creates `codyssey-environment-test.vmwarevm` in the current directory.
+`--workstation` runs the repository bootstrap with macOS preferences enabled and Tailnet
+setup disabled. It checks repeat application, the live Dock and launcher, shortcut
+registration, and the selected input source in the guest's desktop session.
+If macOS prompts on first activation, approve Gureum in the guest. Approve it once
+in the disposable base before shutting down if future clones must run unattended.
+The separate [Terminal typing check](#destructive-live-preference-verifier) exercises actual
+Hangul and Latin input.
+
+To build a
 preinstalled base, invoke `create-preinstalled-macos-image.sh` with the same Fusion environment
 and source options. For a later `--preinstalled` run, pass the resulting bundle's `.vmx` as
 `--image`. The Fusion adapter uses
@@ -1241,8 +1250,8 @@ the corresponding SSH host-key pin on the host with the lab's connection configu
 Tart boots the clone headlessly. Fusion starts it through the Fusion app so the
 running inventory and guest transport are available, and may show a first-start
 notice in the console. Both backends retry the guest connection for six minutes.
-On Fusion, the desktop preflight has a one-minute job timeout and the full Aqua verification
-has a six-hour job timeout.
+On Fusion, the desktop preflight has a five-minute job timeout. The workstation check
+has a twenty-minute timeout and the combined Aqua verification has a six-hour timeout.
 They stream the same allowlisted environment files into the guest, then run the same provisioning
 and verification scripts. Docker runs only inside the disposable guest. The transfer excludes
 `.env`, user-edited GOST configuration, and host credentials. The host script owns sequencing,
