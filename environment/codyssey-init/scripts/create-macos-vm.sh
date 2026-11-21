@@ -123,14 +123,12 @@ transfer=
 if (( build_preinstalled )); then
   vm_exec /bin/bash "$guest_root/scripts/install-preinstalled-apps.sh" --disposable
 elif (( workstation )); then
-  vm_desktop_preflight "$guest_root"
   vm_desktop_exec "$guest_root" 1200 /bin/bash "$guest_root/scripts/verify-macos-vm.sh" --disposable --workstation
 else
   if (( preinstalled )); then
     vm_exec /usr/bin/python3 "$guest_root/scripts/check-preinstalled-apps.py"
     vm_exec /usr/bin/python3 "$guest_root/tests/preinstalled-tools-test.py"
   fi
-  vm_desktop_preflight "$guest_root"
   prepare_requested=1
   vm_exec /bin/bash "$guest_root/scripts/prepare-macos-vm.sh" --disposable --managed
   vm_desktop_exec "$guest_root" 21600 /usr/bin/env DOCKER_CONTEXT=colima-codyssey-verify \

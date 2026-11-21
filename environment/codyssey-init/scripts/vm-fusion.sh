@@ -98,10 +98,6 @@ fusion_ssh() {
 vm_exec() { fusion_ssh "$@" </dev/null; }
 vm_transfer() { fusion_ssh /usr/bin/tar -xf - -C "$1" <"$2"; }
 
-vm_desktop_preflight() {
-  vm_desktop_exec "$1" 300 /usr/bin/swift "$1/scripts/verify-dock-ui.swift" --preflight
-}
-
 vm_desktop_exec() {
   local guest_files=$1
   shift

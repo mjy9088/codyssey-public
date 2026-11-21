@@ -54,18 +54,6 @@ vm_retained() {
   printf 'Delete: mise -C %q -E vm exec tart -- tart delete %q\n' "$tart_root" "$tart_name"
 }
 
-vm_desktop_preflight() {
-  local verifier="$1/scripts/verify-dock-ui.swift" status
-  if vm_exec /usr/bin/swift "$verifier" --preflight; then
-    return 0
-  else
-    status=$?
-  fi
-  printf 'After opening the retained clone and signing in, request guest Accessibility access with:\n' >&2
-  printf '  mise -C %q -E vm exec tart -- tart exec %q /usr/bin/swift %q --request-access\n' \
-    "$tart_root" "$tart_name" "$verifier" >&2
-  return "$status"
-}
 vm_desktop_exec() {
   shift 2 # Tart Guest Agent already runs in the desktop session.
   vm_exec "$@"

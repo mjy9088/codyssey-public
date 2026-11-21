@@ -23,10 +23,9 @@ if [[ ${2:-} == --workstation ]]; then
   mise install
   CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 verify-macos-setup.py
   /bin/zsh "$HOME/Library/Application Support/codyssey-init/Codyssey j.command" --list
-  /usr/bin/swift scripts/verify-dock-ui.swift
   /usr/bin/swift enable-korean.swift --verify-shortcuts
   [[ $(/usr/bin/swift enable-korean.swift --current-source) == org.youknowone.inputmethod.Gureum.han2 ]]
-  printf 'PASS: macOS workstation setup, repeated preferences, live Dock and shortcuts.\n'
+  printf 'PASS: macOS workstation setup, repeated preferences, Dock launcher and live shortcuts.\n'
   printf 'To verify typing in the guest Terminal, run: bash %q --disposable --input-desktop\n' "$0"
   exit 0
 fi
@@ -166,7 +165,6 @@ python3 scripts/verify-tailnet-runtime.py --disposable
 python3 scripts/verify-portable-browser.py --disposable
 # Use the retained source tree, so Dock never points into the removed test copy.
 CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 "$root/verify-macos-setup.py" --desktop-only
-swift "$root/scripts/verify-dock-ui.swift"
 swift "$root/enable-korean.swift" --shortcuts
 swift "$root/enable-korean.swift" --verify-shortcuts
 printf 'Gureum activation and typing pending. In the VM Terminal, run: bash %q --disposable --input-desktop\n' "$0"

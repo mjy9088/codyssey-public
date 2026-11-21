@@ -52,8 +52,6 @@ if args[0] == "exec":
         open(marker, "w").write(str(count))
         if count < 3:
             sys.exit(1)
-    elif args[-1] == "--preflight" and scenario == "desktop-preflight-failure":
-        sys.exit(21)
     elif any("check-preinstalled-apps.py" in item for item in args) and scenario == "preflight-failure":
         sys.exit(21)
     elif "--stop" in args:
@@ -153,10 +151,7 @@ elif args[0] == "/usr/bin/tar":
         json.dump(names, stream)
 elif len(args) > 1 and args[1].endswith("/vm-aqua-exec.py"):
     scenario = os.environ["VM_TEST_SCENARIO"]
-    if args[-1] == "--preflight":
-        if scenario == "desktop-preflight-failure":
-            sys.exit(21)
-    elif scenario == "verify-failure":
+    if scenario == "verify-failure":
         sys.exit(19)
 '''
 
@@ -257,29 +252,11 @@ exec tart "$@"
         self.assertTrue(any("/Users/synthetic/guest work/scripts/verify-macos-vm.sh" in cmd for cmd in commands))
         self.assertLess(result.stdout.index("TART_STOP_COMPLETE"), result.stdout.index("PASS:"))
 
-    def test_tart_checks_desktop_before_changing_guest_settings(self):
-        for extra in ((), ("--workstation",)):
-            with self.subTest(extra=extra):
-                result, commands, _ = self.run_case(
-                    "desktop-preflight-failure", (*extra, "--delete-on-success")
-                )
-                self.assertEqual(result.returncode, 21, result.stderr)
-                self.assertTrue(any(cmd[-1] == "--preflight" for cmd in commands))
-                self.assertIn("--request-access", result.stderr)
-                self.assertFalse(any(
-                    arg.endswith(("prepare-macos-vm.sh", "verify-macos-vm.sh"))
-                    for cmd in commands for arg in cmd
-                ))
-                self.assertIn(["stop", "synthetic-test"], commands)
-                self.assertFalse(any(cmd[0] == "delete" for cmd in commands))
-
     def test_intel_workstation_verifies_and_shuts_down_without_docker(self):
         result, commands, _ = self.run_case(arch="x86_64", extra=("--workstation",))
         self.assertEqual(result.returncode, 0, result.stderr)
-        preflight = next(index for index, cmd in enumerate(commands) if cmd[-1] == "--preflight")
         verification = next(index for index, cmd in enumerate(commands) if cmd[-1] == "--workstation")
         shutdown = next(index for index, cmd in enumerate(commands) if cmd[0] == "stop")
-        self.assertLess(preflight, verification)
         self.assertLess(verification, shutdown)
         self.assertFalse(any("prepare-macos-vm.sh" in arg or "DOCKER_CONTEXT" in arg
                              for cmd in commands for arg in cmd))
@@ -289,16 +266,14 @@ exec tart "$@"
         self.assertEqual(result.returncode, 0, result.stderr)
         lifecycle = [cmd[0] for cmd in commands if cmd[0] != "list"]
         self.assertEqual(lifecycle, ["clone", "configure", "configure", "start", "getGuestIPAddress", "ssh", "ssh",
-                                     "ssh", "ssh", "ssh", "ssh", "ssh", "stop", "deleteVM"])
+                                     "ssh", "ssh", "ssh", "ssh", "stop", "deleteVM"])
         destination = next(cmd[2] for cmd in commands if cmd[0] == "clone")
         self.assertEqual([cmd[1:] for cmd in commands if cmd[0] == "configure"],
                          [[destination, "isolation.tools.hgfs.disable", "TRUE"],
                           [destination, "sharedFolder.maxNum", "0"]])
         self.assertIn("scripts/vm-guest-path.sh", names)
         self.assertIn("scripts/vm-aqua-exec.py", names)
-        preflight = next(cmd for cmd in commands if "--preflight" in cmd)
         verify = next(cmd for cmd in commands if "DOCKER_CONTEXT=colima-codyssey-verify" in cmd)
-        self.assertTrue(preflight[2].endswith("/vm-aqua-exec.py"))
         self.assertTrue(verify[2].endswith("/vm-aqua-exec.py"))
         self.assertNotIn(".env", names)
         self.assertNotIn("gost/gost.yaml", names)
@@ -330,12 +305,6 @@ exec tart "$@"
         self.assertEqual(result.returncode, 0, result.stderr)
         verbs = [cmd[0] for cmd in commands]
         self.assertEqual(verbs[verbs.index("stop"):], ["stop", "list", "list", "deleteVM"])
-
-    def test_fusion_desktop_preflight_failure_prevents_provisioning(self):
-        result, commands, _ = self.run_case("desktop-preflight-failure", arch="x86_64")
-        self.assertEqual(result.returncode, 21, result.stderr)
-        self.assertFalse(any("--managed" in cmd for cmd in commands))
-        self.assertTrue(any(cmd[0] == "stop" for cmd in commands))
 
     def test_fusion_collision_does_not_modify_existing_bundle(self):
         result, commands, _ = self.run_case("collision", ("--delete-on-success",), arch="x86_64")

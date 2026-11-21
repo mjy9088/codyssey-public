@@ -46,7 +46,7 @@ tar -C "$root" -cf "$context/payload.tar" \
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh tests/chrome-extension-test.mjs \
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh tests/portable-browser-test.py \
   scripts/configure-tailnet-browser.py \
-  scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh scripts/prepare-startup.sh scripts/install-iterm2.sh scripts/configure-iterm2.sh scripts/configure-shell.sh scripts/verify-tailnet-runtime.py scripts/verify-dock-ui.swift \
+  scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh scripts/prepare-startup.sh scripts/install-iterm2.sh scripts/configure-iterm2.sh scripts/configure-shell.sh scripts/verify-tailnet-runtime.py \
   tests/tailnet-dns-test.sh tests/gureum-activation-test.sh tests/gureum-activation-test.swift
 tar -C "$context" -xf "$context/payload.tar"
 rm "$context/payload.tar"

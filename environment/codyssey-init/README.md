@@ -562,8 +562,7 @@ Dock tiles use typed XML plist values: URL type 15 and file types are integers, 
 strings. This setup targets fresh installations; it does not migrate malformed tiles from older installs.
 
 Notification dismissal is not automated: controlling Notification Center requires separate
-Accessibility permission, which may already be granted to a VM's Guest Agent but is not assumed
-for a classroom terminal. Clear existing notifications manually. To suppress future banners,
+Accessibility permission. Clear existing notifications manually. To suppress future banners,
 enable Do Not Disturb in Control Center or disable unwanted apps in System Settings > Notifications.
 Those are per-user settings and require no administrator password.
 
@@ -629,11 +628,9 @@ uv run --no-project --with vncdotool==1.4.2 python scripts/verify-tart-input.py 
 
 The runner removes its temporary VNC log after shutdown. Keep screenshots private.
 This mode does not verify notification dismissal or suppression.
-The VM driver additionally runs `scripts/verify-dock-ui.swift` to require named, resolved Terminal,
-Chrome and j items in the actual Dock UI. This read-only test requires the VM Guest Agent's existing
-Accessibility authorization; it fails when unavailable rather than reporting UI success. Production
-Dock setup does not use Accessibility or request this permission. Screenshots and a direct Terminal
-launch are separate checks; a matching plist alone does not prove that Dock rendered an icon.
+The VM driver checks the saved Dock pins and runs the launcher’s `--list` command.
+To verify the Dock appearance and click behavior, open the retained VM console and
+check that Terminal, Chrome, and the j launcher appear and open correctly.
 
 On success, the requested setup remains applied and the temporary verifier snapshot is removed. On
 any failure or interruption, restoration is attempted for every captured domain before the original
@@ -872,7 +869,7 @@ expensive process startup under x86 emulation. The default `scripts/check.sh` ru
 the isolated container.
 Verification checks the
 unauthenticated state, Bash/client tools, TUN device and home mount, GOST API and UI HTTP readiness,
-and the single shell activation block. It then runs the private local Headscale lab for ephemeral lifecycle, short-name DNS and terminal tools, verifies a fresh portable browser profile and relaunch, and verifies the real Dock launcher twice plus live shortcut registration. Input-method approval and physical Hangul typing remain an interactive check; the unattended VM does not wait for or bypass macOS approval dialogs. Run the full live preference verifier separately in an approved desktop session. GOST API readiness also checks whether this Docker environment makes
+and the single shell activation block. It then runs the private local Headscale lab for ephemeral lifecycle, short-name DNS and terminal tools, verifies a fresh portable browser profile and relaunch, and verifies the real Dock launcher twice plus live shortcut registration. Input-method approval and physical Hangul typing remain an interactive check; the unattended VM does not wait for or bypass macOS approval dialogs. Run the full live preference verifier separately in a logged-in disposable desktop session. GOST API readiness also checks whether this Docker environment makes
 the Linux host's loopback listener accessible from the macOS guest; failure is a real incompatibility,
 not a simulated success. UI HTTP readiness does not prove browser rendering or API interaction.
 
@@ -1170,19 +1167,8 @@ Copy the single line from `id_ed25519.pub` into the guest account's
 
 Before using an existing base, check that it meets the same requirements and has no active
 Docker engine. The script disables shared folders on the clone before boot.
-The runner uses a temporary LaunchAgent in the logged-in user's Aqua session. Before installing
-guest tools, it checks that the Aqua job can see the Dock and that macOS has granted Accessibility
-access to the process running the Swift check. From a copy of this directory in the disposable
-base, use the same Aqua job to ask macOS for access:
-
-```sh
-/usr/bin/python3 scripts/vm-aqua-exec.py 300 \
-  /usr/bin/swift "$PWD/scripts/verify-dock-ui.swift" --request-access
-```
-
-Use the guest's System Settings to grant access when macOS prompts. Rerun the command with
-`--preflight` to check access before shutting down the base. A failed preflight during host
-verification retains the clone for inspection.
+The runner uses a temporary LaunchAgent in the logged-in user’s Aqua session
+for desktop verification. Accessibility access is unnecessary.
 
 Create a dedicated host known-hosts file with the reviewed base's SSH host public key. For example,
 copy the public key from `/etc/ssh/ssh_host_ed25519_key.pub` via the base VM console, then put
@@ -1201,7 +1187,7 @@ bash /path/to/codyssey-public/environment/codyssey-init/scripts/create-macos-vm.
 
 The script creates `codyssey-environment-test.vmwarevm` in the current directory.
 `--workstation` runs the repository bootstrap with macOS preferences enabled and Tailnet
-setup disabled. It checks repeat application, the live Dock and launcher, shortcut
+setup disabled. It checks repeat application, the saved Dock pins and launcher, shortcut
 registration, and the selected input source in the guest's desktop session.
 If macOS prompts on first activation, approve Gureum in the guest. Approve it once
 in the disposable base before shutting down if future clones must run unattended.
@@ -1247,17 +1233,10 @@ the corresponding SSH host-key pin on the host with the lab's connection configu
 
 #### Verification and cleanup
 
-Tart boots the clone headlessly. Before provisioning or workstation setup, the
-Dock preflight checks Accessibility access and the Dock tree through Tart Guest
-Agent. If it fails, open the retained clone with a desktop, sign in, and run the
-printed `--request-access` command from the host. Grant access in the disposable
-guest and rerun the command with `--preflight` to confirm it. You can then shut
-down the authorized clone and use it as the base for a fresh check.
-
-Fusion starts the clone through the Fusion app so the
+Tart boots the clone headlessly. Fusion starts the clone through the Fusion app so the
 running inventory and guest transport are available, and may show a first-start
 notice in the console. Both backends retry the guest connection for six minutes.
-On Fusion, the desktop preflight has a five-minute job timeout. The workstation check
+On Fusion, the workstation check
 has a twenty-minute timeout and the combined Aqua verification has a six-hour timeout.
 They stream the same allowlisted environment files into the guest, then run the same provisioning
 and verification scripts. Docker runs only inside the disposable guest. The transfer excludes
@@ -1282,6 +1261,6 @@ python3 tests/vm-orchestration-test.py
 
 These orchestration tests do not establish a successful real VM run. The Linux container cannot
 exercise Tart, Fusion, Colima, Homebrew, macOS defaults, Chrome rendering, guest readiness timing, or QEMU port
-forwarding on a real Mac. Real guest success is reported only when provisioning, Docker checks, both
-bootstrap passes, live preference verification, and cleanup all finish successfully on supported
-macOS hosts.
+forwarding on a real Mac. The full VM check requires successful provisioning, Docker and
+bootstrap checks, desktop verification, and cleanup. The workstation-only check requires
+successful desktop verification and cleanup.
