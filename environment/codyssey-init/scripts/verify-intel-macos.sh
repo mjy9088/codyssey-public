@@ -66,7 +66,8 @@ if [[ -z $prepare ]]; then
   run=$(mktemp -d "$storage/runs/intel-workstation.XXXXXX")
   cd "$storage/verification"
   printf 'Cloning %s\nLog: %s/verify.log\n' "$base" "$run"
-  /bin/bash "$root/scripts/create-macos-vm.sh" --image "$base" --name "${run##*/}" --workstation \
+  CODYSSEY_FUSION_START_MODE=${CODYSSEY_FUSION_START_MODE:-nogui} \
+    /bin/bash "$root/scripts/create-macos-vm.sh" --image "$base" --name "${run##*/}" --workstation \
     2>&1 | tee "$run/verify.log"
   exit
 fi
@@ -85,8 +86,12 @@ new_pin=0
 if [[ ! -e $pin && ! -L $pin ]]; then
   new_pin=1
   export CODYSSEY_FUSION_KNOWN_HOSTS="$temp/known_hosts"
+elif [[ ! -s $pin ]]; then
+  printf 'The saved SSH host key file is empty or missing: %s\n' "$pin" >&2
+  exit 1
 fi
-printf 'Waiting for VMware Tools, Remote Login and Command Line Tools in the selected guest.\n'
+printf 'Keep this host command running while you prepare the guest (up to %s seconds).\n' "$timeout"
+previous_status=
 while :; do
   if (( new_pin )) && [[ ! -s $temp/known_hosts ]]; then
     # This variable is scoped to the selected VMX through Fusion's guest channel.
@@ -102,15 +107,30 @@ while :; do
       ssh-keygen -lf "$temp/known_hosts" >/dev/null
     fi
   fi
-  if [[ -s $CODYSSEY_FUSION_KNOWN_HOSTS ]]; then
+  if [[ ! -s $CODYSSEY_FUSION_KNOWN_HOSTS ]]; then
+    status='Waiting for the guest SSH key. Open the VM console and run: bash /Volumes/Codyssey/setup.sh'
+  else
     vm_init "$base" prepared-base
-    if vm_ready "$base" 2>/dev/null && vm_exec /usr/bin/xcode-select -p >/dev/null 2>&1; then
-      break
+    if ! fusion_address=$(fusion_guest_address "$base" 2>/dev/null); then
+      status='Fusion has not reported a guest IPv4 address. Finish VMware Tools setup and check the guest network.'
+    elif fusion_console_ready >/dev/null 2>&1; then
+      if vm_exec /usr/bin/xcode-select -p >/dev/null 2>&1; then
+        break
+      fi
+      status='SSH is connected. Finish the Command Line Tools installation in the guest.'
+    elif [[ $? == 255 ]]; then
+      status="SSH could not connect with the pinned key. Check Remote Login and access for $fusion_user in the guest."
+    else
+      status="SSH is connected. Sign in to the guest desktop as $fusion_user and leave that session open."
     fi
+  fi
+  if [[ $status != "$previous_status" ]]; then
+    printf '%s\n' "$status"
+    previous_status=$status
   fi
   remaining=$((deadline - SECONDS))
   if (( remaining <= 0 )); then
-    printf 'Guest preparation timed out. Check the guest screen and resume with step 05.\n' >&2
+    printf 'Guest preparation timed out. Resolve the condition above, then resume with step 05.\n' >&2
     exit 1
   fi
   if (( remaining > 15 )); then remaining=15; fi

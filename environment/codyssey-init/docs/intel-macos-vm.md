@@ -110,9 +110,14 @@ account only, then leave that user signed in. [Apple Remote Login](https://suppo
 
 The host waits for the guest for up to 30 minutes. It reads the SSH host key
 directly from the selected VM through VMware Tools and pins it after a strict
-SSH connection succeeds. It then installs any missing MacPorts, Python, Node.js,
+SSH connection succeeds. The host prints the current prerequisite as it
+progresses. If it is waiting for the guest SSH key, run the setup command in the
+guest Terminal and finish any VMware Tools prompts. If it is waiting for SSH or
+Command Line Tools, check Remote Login or finish the Apple installer in the
+guest. It then installs any missing MacPorts, Python, Node.js,
 and Google Chrome, shuts down the base, and disconnects the setup disc. Enter
-the guest administrator password when prompted.
+the guest administrator password when prompted. Close the installer or setup
+console with Command-W once the base has shut down.
 
 If the host wait is interrupted or an automatic package install fails, leave the
 guest running. If needed, install the missing tool using the
@@ -141,11 +146,17 @@ bash scripts/intel-macos-vm/06-verify-workstation.sh
 
 Step 06 creates a full clone under `verification/`, writes a private log under
 `runs/`, and stops and retains the clone. It checks macOS preferences, the Dock
-launcher, and live shortcut settings without Docker. Sign in if the clone waits
-at login, and approve Gureum on its first activation. A base with lab auto-login
-and prior Gureum approval supports unattended runs. Use the separate
+launcher, and live shortcut settings without Docker. It starts the clone in the
+background without opening a Fusion window. If the guest needs a login or first
+Gureum approval, use the printed `open` command to show its console. Close that
+console when the run finishes. A base with lab auto-login and prior Gureum
+approval supports unattended runs. Use the separate
 [Terminal typing check](verification.md#terminal-typing-check) to test actual
 Hangul and Latin input.
+
+If an imported base cannot connect in the background, run step 06 with
+`CODYSSEY_FUSION_START_MODE=gui`. The background connection supports Fusion's
+default NAT network when VMware Tools cannot report the guest address.
 
 To reuse a prepared base, copy its complete powered-off `.vmwarevm` bundle.
 If prompted in Fusion, choose **I moved it**. With the lab identity and verified

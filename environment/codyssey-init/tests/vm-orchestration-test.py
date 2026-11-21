@@ -92,10 +92,12 @@ elif command == "clone":
     assert args[2:] == ["full", "-cloneName=" + pathlib.Path(args[1]).stem]
     pathlib.Path(args[1]).touch()
 elif command == "start":
-    assert args[1:] == ["gui"]
+    assert args[1:] == (["nogui"] if os.environ.get("VM_TEST_QUICK") == "1" else ["gui"])
     running.write_text(args[0])
 elif command == "getGuestIPAddress":
     assert len(args) == 1 and pathlib.Path(args[0]).samefile(running.read_text())
+    if scenario == "quick-prep-no-address":
+        sys.exit(1)
     print("192.0.2.42")
 elif command == "readVariable":
     assert args[1:] == ["guestVar", "codyssey.ssh-host-key"]
@@ -148,6 +150,10 @@ if scenario == "quick-prepare":
     assert pin == "codyssey-fusion ssh-ed25519 GUESTKEY\n"
 if scenario == "quick-prep-mismatch":
     sys.exit(255)
+if scenario == "quick-prep-console" and args[:2] == ["/bin/sh", "-c"]:
+    sys.exit(1)
+if scenario == "quick-prep-clt" and args == ["/usr/bin/xcode-select", "-p"]:
+    sys.exit(1)
 if "--managed" in args and scenario in ("lost-prepare-reply", "unresolved-guest-stop"):
     sys.exit(255)
 if "--stop" in args and scenario == "unresolved-guest-stop":
@@ -233,6 +239,7 @@ exec tart "$@"
                        "--image", str(base) if arch == "x86_64" else "reviewed-base",
                        "--name", "synthetic-test", *extra]
             if quick:
+                env["VM_TEST_QUICK"] = "1"
                 command = ["bash", str(ROOT / "scripts/verify-intel-macos.sh"), str(base), *extra]
                 identity = work / "lab-key"
                 identity.touch()
@@ -304,7 +311,37 @@ exec tart "$@"
         result, commands, _ = self.run_case(arch="x86_64", quick=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(any(cmd[-1] == "--workstation" for cmd in commands))
+        self.assertEqual([cmd[-1] for cmd in commands if cmd[0] == "start"], ["nogui"])
         self.assertFalse(any("prepare-macos-vm.sh" in arg for cmd in commands for arg in cmd))
+
+    def test_intel_headless_nat_address_uses_current_lease_for_clone_mac(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            vmx, leases = work / "guest.vmx", work / "leases"
+            nat = 'ethernet0.connectionType = "nat"\n'
+            mac = "00:0c:29:11:22:33"
+            config = f'ethernet0.generatedAddress = "{mac}"\n'
+            lease = (
+                "lease 192.0.2.42 {\n"
+                "  ends 0 2099/01/01 00:00:00;\n"
+                f"  hardware ethernet {mac};\n"
+                "}\n"
+            )
+            command = [
+                "bash", "-c", '. "$1"; fusion_nat_guest_address "$2" "$3"',
+                "nat-lease", str(ROOT / "scripts/vm-fusion.sh"), str(vmx), str(leases),
+            ]
+            for vmx_text, lease_text, expected in (
+                (nat + config, lease, "192.0.2.42"),
+                (nat + config, lease + lease.replace(mac, "00:0c:29:22:33:44"), ""),
+                (nat + config, lease.replace("2099", "2000"), ""),
+                (nat.replace("nat", "bridged") + config, lease, ""),
+            ):
+                vmx.write_text(vmx_text)
+                leases.write_text(lease_text)
+                result = subprocess.run(command, text=True, capture_output=True, timeout=10)
+                self.assertEqual(result.stdout.strip(), expected)
+                self.assertEqual(result.returncode, 0 if expected else 1, result.stderr)
 
     def test_intel_numbered_steps_remember_a_base_when_storage_moves(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -347,11 +384,21 @@ test "$(fusion_selected_base)" = "$4"
             self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_intel_base_preparation_pins_only_verified_keys(self):
-        for scenario in ("quick-prepare", "quick-prep-mismatch", "quick-prep-no-key", "quick-prep-invalid-key"):
+        cases = {
+            "quick-prepare": "Verified the SSH host key",
+            "quick-prep-mismatch": "Check Remote Login",
+            "quick-prep-no-key": "Waiting for the guest SSH key",
+            "quick-prep-invalid-key": "Invalid Ed25519 host key",
+            "quick-prep-no-address": "Fusion has not reported a guest IPv4 address",
+            "quick-prep-console": "Sign in to the guest desktop",
+            "quick-prep-clt": "Finish the Command Line Tools installation",
+        }
+        for scenario, message in cases.items():
             with self.subTest(scenario=scenario):
                 result, commands, files = self.run_case(
                     scenario, ("--prepare",), arch="x86_64", quick=True)
                 self.assertEqual(result.returncode == 0, scenario == "quick-prepare", result.stderr)
+                self.assertIn(message, result.stdout + result.stderr)
                 self.assertFalse(any(cmd[0] == "clone" for cmd in commands))
                 self.assertTrue(any(cmd[0] == "readVariable" for cmd in commands))
                 if scenario == "quick-prepare":

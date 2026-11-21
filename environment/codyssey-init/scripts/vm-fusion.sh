@@ -219,12 +219,18 @@ fusion_list_contains() {
 }
 
 vm_start() {
+  local mode=${CODYSSEY_FUSION_START_MODE:-gui}
+  [[ $mode == gui || $mode == nogui ]] || {
+    printf 'Set CODYSSEY_FUSION_START_MODE to gui or nogui.\n' >&2
+    return 1
+  }
   "$fusion_vmcli" "$fusion_vmx" ConfigParams SetEntry isolation.tools.hgfs.disable TRUE || return
   "$fusion_vmcli" "$fusion_vmx" ConfigParams SetEntry sharedFolder.maxNum 0 || return
   fusion_isolated=1
-  # Start through the Fusion application so its inventory and guest transport
-  # remain available for the Aqua desktop verification.
-  fusion start "$fusion_vmx" gui || return
+  if [[ $mode == nogui ]]; then
+    printf 'Open the guest console if needed: open %q\n' "$fusion_vmx"
+  fi
+  fusion start "$fusion_vmx" "$mode" || return
   fusion_started=1
 }
 
@@ -235,13 +241,51 @@ vm_running() {
 
 fusion_guest_address() {
   local address
-  address=$(fusion getGuestIPAddress "$1") || return
+  if ! address=$(fusion getGuestIPAddress "$1"); then
+    [[ ${CODYSSEY_FUSION_START_MODE:-gui} == nogui ]] || return 1
+    address=$(fusion_nat_guest_address "$1" /var/db/vmware/vmnet-dhcpd-vmnet8.leases) || return
+  fi
   [[ $address =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
   printf '%s\n' "$address"
 }
 
+fusion_nat_guest_address() {
+  local vmx=$1 leases=$2 mac now
+  [[ -r $leases ]] || return 1
+  mac=$(awk -F'"' '
+    { key = tolower($1); sub(/[[:blank:]]*=.*$/, "", key) }
+    key == "ethernet0.connectiontype" { connection = tolower($2) }
+    key == "ethernet0.vnet" { network = tolower($2) }
+    key == "ethernet0.generatedaddress" { mac = tolower($2) }
+    END { if (connection == "nat" && (network == "" || network == "vmnet8")) print mac }
+  ' "$vmx") || return
+  [[ $mac =~ ^[0-9a-f]{2}(:[0-9a-f]{2}){5}$ ]] || return 1
+  now=$(date -u '+%Y/%m/%d %H:%M:%S') || return
+  # The DHCP file can contain multiple records for an address. Use its last
+  # complete lease and reject an expired or reassigned address.
+  awk -v mac="$mac" -v now="$now" '
+    $1 == "lease" && $3 == "{" { ip = $2; hardware = expiry = ""; next }
+    !ip { next }
+    $1 == "hardware" && $2 == "ethernet" { hardware = tolower($3); sub(/;$/, "", hardware) }
+    $1 == "ends" { expiry = $3 " " $4; sub(/;$/, "", expiry) }
+    $1 == "}" {
+      owner[ip] = hardware; expires[ip] = expiry
+      if (hardware == mac) candidate = ip
+      ip = ""
+    }
+    END {
+      if (candidate && owner[candidate] == mac && expires[candidate] > now) print candidate
+      else exit 1
+    }
+  ' "$leases"
+}
+
 vm_ready() {
   fusion_address=$(fusion_guest_address "${1:-$fusion_vmx}") || return
+  fusion_console_ready
+}
+
+fusion_console_ready() {
   # The guest shell resolves its own identity and console user.
   # shellcheck disable=SC2016
   vm_exec /bin/sh -c 'test "$(id -u)" != 0 && test "$(id -un)" = "$(stat -f %Su /dev/console)"'
