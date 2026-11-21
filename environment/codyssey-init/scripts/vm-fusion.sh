@@ -242,7 +242,7 @@ vm_running() {
 fusion_guest_address() {
   local address
   if ! address=$(fusion getGuestIPAddress "$1"); then
-    [[ ${CODYSSEY_FUSION_START_MODE:-gui} == nogui ]] || return 1
+    [[ ${CODYSSEY_FUSION_START_MODE:-gui} == nogui || ${CODYSSEY_FUSION_NAT_FALLBACK:-0} == 1 ]] || return 1
     address=$(fusion_nat_guest_address "$1" /var/db/vmware/vmnet-dhcpd-vmnet8.leases) || return
   fi
   [[ $address =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1

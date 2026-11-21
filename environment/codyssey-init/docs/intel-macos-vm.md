@@ -97,11 +97,25 @@ Step 04 saves the initial desktop checkpoint, disconnects the installer, and
 boots the guest with a setup disc containing its VMware Tools package and the
 host's public SSH key.
 
-In the guest Terminal, type this one command.
+Sign in to the guest. With English Finder labels, Python 3.8 or newer on the
+host, and Apple Command Line Tools on the host, step 04 waits for Finder and
+opens the setup file using Fusion's localhost console. If Terminal does not open, double-click **Start
+Setup.command** on the **Codyssey** disc or run this in the guest Terminal.
 
 ```sh
 bash /Volumes/Codyssey/setup.sh
 ```
+
+To enter the disposable guest password once, run step 04 with
+`--prompt-guest-password`. For unattended preparation, set
+`CODYSSEY_FUSION_GUEST_PASSWORD_FILE` to a host file owned by you with mode
+`0600` containing the guest administrator password on one line. Step 04 uses
+it for the matching guest login and administrator prompts and handles recognized
+VMware dialogs. Step 05 uses the same file to authenticate guest package
+installation over the pinned SSH connection, including Apple's Command Line
+Tools when Software Update offers them. Keep persistent credential files
+outside the repository. When step 04 starts Fusion itself, it closes Fusion
+after the guest has stopped.
 
 Approve the VMware Tools and Command Line Tools prompts and restart if macOS
 asks. Rerun the guest command after signing in if macOS restarted. Enable
@@ -175,6 +189,14 @@ can run without arguments.
 See [VM check scope and cleanup](verification.md#vm-check-scope-and-cleanup) for
 the combined service route and cleanup behavior. Set `CODYSSEY_FUSION_VMRUN` if
 Fusion is installed in another location.
+
+## 07. Close Fusion after verification
+
+```sh
+bash scripts/intel-macos-vm/07-close-fusion.sh
+```
+
+This closes Fusion and its consoles once no guest is running.
 
 ## Installer recovery
 

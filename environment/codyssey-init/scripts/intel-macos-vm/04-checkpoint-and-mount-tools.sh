@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+prompt_password=0
+if [[ ${1:-} == --prompt-guest-password ]]; then
+  prompt_password=1
+  shift
+fi
 if [[ ${1:-} == --help || $# -gt 1 ]]; then
-  printf 'Usage: bash %s [BASE.vmx]\n' "$0"
+  printf 'Usage: bash %s [--prompt-guest-password] [BASE.vmx]\n' "$0"
   [[ ${1:-} == --help ]]
   exit
 fi
@@ -23,7 +28,22 @@ mount="$work/darwin"
 mounted=0
 stage=
 cache_stage=
+vnc_enabled=0
+started=0
+opened_fusion=0
 cleanup() {
+  if [[ ${CODYSSEY_FUSION_GUEST_PASSWORD_FILE:-} == "$work/guest-password" ]]; then
+    rm -f -- "$work/guest-password"
+  fi
+  if (( vnc_enabled )); then
+    running=$(fusion list) || return 1
+    if (( started )) && fusion_list_contains "$base" "$running"; then
+      fusion_started=1
+      vm_stop "$base" || return 1
+      printf 'Stopped the guest to close its temporary console. Run step 04 again to resume.\n' >&2
+    fi
+    "$fusion_vmcli" "$base" ConfigParams SetEntry RemoteDisplay.vnc.enabled FALSE || return 1
+  fi
   if [[ -n $stage ]]; then
     rm -rf -- "$stage"
   fi
@@ -35,8 +55,22 @@ cleanup() {
     return
   fi
   rm -rf -- "$work"
+  if (( opened_fusion )); then
+    bash "$scripts/intel-macos-vm/07-close-fusion.sh" || :
+  fi
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+if (( prompt_password )) && [[ -z ${CODYSSEY_FUSION_GUEST_PASSWORD_FILE:-} ]]; then
+  [[ -t 0 ]] || { printf 'Use a terminal to enter the guest credential.\n' >&2; exit 1; }
+  IFS= read -rs -p 'Disposable guest administrator password: ' password
+  printf '\n'
+  [[ -n $password ]] || { printf 'The guest password is empty.\n' >&2; exit 1; }
+  export CODYSSEY_FUSION_GUEST_PASSWORD_FILE="$work/guest-password"
+  printf '%s\n' "$password" > "$CODYSSEY_FUSION_GUEST_PASSWORD_FILE"
+  unset password
+fi
 if [[ ! -e $tools && ! -L $tools ]]; then
   cache_stage=$(mktemp -d "$storage/tools/.download.XXXXXX")
   download="$cache_stage/darwin.iso"
@@ -66,7 +100,17 @@ fi
 printf '%s %s\n' "$key_type" "$key_blob" > "$work/media/host.pub"
 ssh-keygen -lf "$work/media/host.pub" >/dev/null
 printf '%s\n' "$guest_user" > "$work/media/guest-user"
+prompt_id=$(od -An -N4 -tx1 /dev/urandom | tr -d '[:space:]')
+printf '%s\n' "$prompt_id" > "$work/media/prompt-id"
+if [[ -n ${CODYSSEY_FUSION_GUEST_PASSWORD_FILE:-} ]]; then
+  touch "$work/media/automatic-setup"
+fi
 cp "$scripts/intel-macos-vm/guest-setup.sh" "$work/media/setup.sh"
+cat > "$work/media/Start Setup.command" <<'EOF'
+#!/bin/bash
+exec /bin/bash "$(dirname "$0")/setup.sh"
+EOF
+chmod 755 "$work/media/Start Setup.command"
 # DiskImages requires access to both paths, including when the cache is on removable storage.
 cp "$tools" "$work/darwin.iso"
 digest=$(shasum -a 256 "$work/darwin.iso")
@@ -96,14 +140,43 @@ fi
 "$fusion_vmcli" "$base" ConfigParams SetEntry sata0:2.fileName "$setup_iso"
 "$fusion_vmcli" "$base" ConfigParams SetEntry sata0:2.startConnected TRUE
 "$fusion_vmcli" "$base" ConfigParams SetEntry sata0:2.present TRUE
+launcher="$scripts/intel-macos-vm"
+if command -v python3 >/dev/null && xcrun --find swiftc >/dev/null 2>&1 &&
+   ! grep -qiE '^RemoteDisplay\.vnc\.enabled[[:blank:]]*=[[:blank:]]*"TRUE"' "$base"; then
+  printf 'Preparing the Finder screen recognizer.\n'
+  if xcrun swiftc -module-cache-path "$storage/tools/swift-cache" "$launcher/recognize-screen.swift" -o "$work/recognize"; then
+    port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+    "$fusion_vmcli" "$base" ConfigParams SetEntry RemoteDisplay.vnc.ip 127.0.0.1
+    "$fusion_vmcli" "$base" ConfigParams SetEntry RemoteDisplay.vnc.port "$port"
+    vnc_enabled=1
+    "$fusion_vmcli" "$base" ConfigParams SetEntry RemoteDisplay.vnc.enabled TRUE
+  fi
+fi
+if ! pgrep -x 'VMware Fusion' >/dev/null; then
+  opened_fusion=1
+fi
+started=1
 fusion start "$base" gui
-cat <<'EOF'
-In the guest Terminal, run:
+setup_opened=0
+if (( vnc_enabled )); then
+  printf 'Waiting for Finder to show the guest setup file. Sign in to the guest if needed.\n'
+  if python3 "$launcher/open-guest-setup.py" "$fusion_vmcli" "$base" "$work/recognize" "$work/screen.png" "$port" "$guest_user" "$prompt_id"; then
+    setup_opened=1
+  fi
+fi
+if (( ! setup_opened )); then
+  cat <<'EOF'
+If Terminal did not open, double-click Start Setup.command on the Codyssey disc.
+If needed, you can also start it from the guest Terminal:
 
 bash /Volumes/Codyssey/setup.sh
 
+EOF
+fi
+cat <<'EOF'
 Approve VMware Tools and Command Line Tools if prompted. Restart the guest if
 requested and rerun the command after signing in. Enable Remote Login for the
 lab account. This command waits for the guest and continues automatically.
 EOF
-bash "$scripts/intel-macos-vm/05-prepare-base.sh" "$base"
+CODYSSEY_FUSION_NAT_FALLBACK=1 CODYSSEY_FUSION_SETUP_OPENED=$setup_opened \
+  bash "$scripts/intel-macos-vm/05-prepare-base.sh" "$base"

@@ -108,13 +108,17 @@ while :; do
     fi
   fi
   if [[ ! -s $CODYSSEY_FUSION_KNOWN_HOSTS ]]; then
-    status='Waiting for the guest SSH key. Open the VM console and run: bash /Volumes/Codyssey/setup.sh'
+    if [[ ${CODYSSEY_FUSION_SETUP_OPENED:-0} == 1 ]]; then
+      status='Waiting for the guest SSH key. Check the setup Terminal for an approval or administrator prompt.'
+    else
+      status='Waiting for the guest SSH key. In the guest Finder, open the Codyssey disc and double-click Start Setup.command (or run bash /Volumes/Codyssey/setup.sh in the guest Terminal).'
+    fi
   else
     vm_init "$base" prepared-base
     if ! fusion_address=$(fusion_guest_address "$base" 2>/dev/null); then
       status='Fusion has not reported a guest IPv4 address. Finish VMware Tools setup and check the guest network.'
     elif fusion_console_ready >/dev/null 2>&1; then
-      if vm_exec /usr/bin/xcode-select -p >/dev/null 2>&1; then
+      if [[ -n ${CODYSSEY_FUSION_GUEST_PASSWORD_FILE:-} ]] || vm_exec /usr/bin/xcode-select -p >/dev/null 2>&1; then
         break
       fi
       status='SSH is connected. Finish the Command Line Tools installation in the guest.'
@@ -149,6 +153,11 @@ guest_root=$(vm_exec /usr/bin/mktemp -d /tmp/codyssey-fusion-base.XXXXXX)
 }
 tar -C "$root" -cf "$temp/payload.tar" scripts/prepare-fusion-base.sh scripts/vm-guest-path.sh
 vm_transfer "$guest_root" "$temp/payload.tar"
-fusion_ssh_terminal=-t fusion_ssh /bin/bash "$guest_root/scripts/prepare-fusion-base.sh"
+if [[ -n ${CODYSSEY_FUSION_GUEST_PASSWORD_FILE:-} ]]; then
+  python3 "$root/scripts/intel-macos-vm/guest_credential.py" |
+    fusion_ssh /bin/bash "$guest_root/scripts/prepare-fusion-base.sh" --sudo-password-stdin
+else
+  fusion_ssh_terminal=-t fusion_ssh /bin/bash "$guest_root/scripts/prepare-fusion-base.sh"
+fi
 vm_exec /bin/rm -rf -- "$guest_root"
 printf 'Guest tools are ready.\n'

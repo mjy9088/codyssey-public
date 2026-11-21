@@ -1,11 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+use_credential=0
+if [[ ${1:-} == --sudo-password-stdin ]]; then
+  IFS= read -r guest_password
+  [[ -n $guest_password ]]
+  use_credential=1
+fi
+
+admin() {
+  if (( use_credential )); then
+    printf '%s\n' "$guest_password" | sudo -S -p '' "$@"
+  else
+    sudo "$@"
+  fi
+}
+
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 . "$root/scripts/vm-guest-path.sh"
+
+install_command_line_tools() (
+  request=/tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+  if (set -C; : > "$request") 2>/dev/null; then
+    trap 'rm -f -- "$request"' EXIT
+  fi
+  listing=$(LC_ALL=C /usr/sbin/softwareupdate --list) || return 1
+  label=$(awk '/^[[:space:]]*\* Label: Command Line Tools for Xcode/ {
+    sub(/^[[:space:]]*\* Label: /, ""); print
+  }' <<< "$listing" | sort -V | tail -n 1)
+  [[ -n $label ]] || { printf 'Apple Software Update did not offer Command Line Tools.\n' >&2; return 1; }
+  printf 'Installing %s from Apple Software Update.\n' "$label"
+  admin /usr/sbin/softwareupdate --install "$label" &&
+    admin /usr/bin/xcode-select --switch /Library/Developer/CommandLineTools
+)
+
 if ! /usr/bin/xcode-select -p >/dev/null 2>&1; then
-  printf 'Install Command Line Tools from the guest Terminal with xcode-select --install, then retry.\n' >&2
-  exit 1
+  if (( ! use_credential )) || ! install_command_line_tools; then
+    printf 'Install Command Line Tools from the guest Terminal with xcode-select --install, then retry.\n' >&2
+    exit 1
+  fi
 fi
 guest_tools_ready() {
   python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' &&
@@ -31,11 +64,12 @@ if ! guest_tools_ready; then
         printf 'MacPorts package checksum mismatch.\n' >&2
         exit 1
       }
-      sudo /usr/sbin/installer -pkg "$work/MacPorts.pkg" -target /
+      admin /usr/sbin/installer -pkg "$work/MacPorts.pkg" -target /
     )
   fi
-  sudo "$(command -v port)" install python313 nodejs24
-  sudo "$(command -v port)" select --set python3 python313
+  admin "$(command -v port)" install python313 nodejs24
+  admin "$(command -v port)" select --set python3 python313
+  hash -r
   guest_tools_ready || { printf 'Expected Python 3.10+ and Node.js 22.18+ on the guest PATH.\n' >&2; exit 1; }
 fi
 if [[ ! -d '/Applications/Google Chrome.app' && ! -d "$HOME/Applications/Google Chrome.app" ]]; then
