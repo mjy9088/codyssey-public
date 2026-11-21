@@ -89,12 +89,13 @@ if command == "list":
             running.unlink()
 elif command == "clone":
     assert pathlib.Path(args[1]).parent.is_dir()
-    assert args[2:] == ["full", "-cloneName=synthetic-test"]
+    assert args[2:] == ["full", "-cloneName=" + pathlib.Path(args[1]).stem]
     pathlib.Path(args[1]).touch()
 elif command == "start":
     assert args[1:] == ["gui"]
     running.write_text(args[0])
 elif command == "getGuestIPAddress":
+    assert len(args) == 1 and pathlib.Path(args[0]).samefile(running.read_text())
     print("192.0.2.42")
 elif command == "stop":
     assert args[1:] == ["soft"]
@@ -135,6 +136,11 @@ args = shlex.split(sys.argv[-1])
 with open(os.environ["VM_TEST_LOG"], "a") as stream:
     stream.write(json.dumps(["ssh", *args]) + "\n")
 scenario = os.environ["VM_TEST_SCENARIO"]
+if scenario == "quick-prepare":
+    pin = open(os.environ["CODYSSEY_FUSION_KNOWN_HOSTS"]).read()
+    assert pin == "codyssey-fusion ssh-ed25519 CONSOLEKEY\n"
+if scenario == "quick-prep-mismatch":
+    sys.exit(255)
 if "--managed" in args and scenario in ("lost-prepare-reply", "unresolved-guest-stop"):
     sys.exit(255)
 if "--stop" in args and scenario == "unresolved-guest-stop":
@@ -143,8 +149,11 @@ if "--stop" in args and scenario == "unresolved-guest-stop":
 if args[:2] == ["/bin/sh", "-c"]:
     if args[2].startswith("mktemp"):
         print("/Users/synthetic/guest's work")
+elif args[0] == "/usr/bin/mktemp":
+    print("/tmp/codyssey-fusion-base.Abc123")
 elif args[0] == "/usr/bin/tar":
-    assert args[1:] == ["-xf", "-", "-C", "/Users/synthetic/guest's work"]
+    expected = "/tmp/codyssey-fusion-base.Abc123" if scenario == "quick-prepare" else "/Users/synthetic/guest's work"
+    assert args[1:] == ["-xf", "-", "-C", expected]
     with tarfile.open(fileobj=sys.stdin.buffer, mode="r|*") as archive:
         names = [item.name for item in archive]
     with open(os.environ["VM_TEST_PAYLOAD"], "w") as stream:
@@ -157,7 +166,7 @@ elif len(args) > 1 and args[1].endswith("/vm-aqua-exec.py"):
 
 
 class OrchestrationTests(unittest.TestCase):
-    def run_case(self, scenario="success", extra=(), arch="arm64"):
+    def run_case(self, scenario="success", extra=(), arch="arm64", quick=False):
         with tempfile.TemporaryDirectory(prefix="vm-orchestration-") as directory:
             work = Path(directory)
             fakebin = work / "bin"
@@ -181,6 +190,10 @@ exec tart "$@"
                 "vmrun": "#!" + sys.executable + "\n" + FAKE_VMRUN,
                 "vmcli": "#!" + sys.executable + "\n" + FAKE_VMCLI,
                 "ssh": "#!" + sys.executable + "\n" + FAKE_SSH,
+                "ssh-agent": '#!/bin/sh\nexport SSH_AGENT_PID=123\nexec "$@"\n',
+                "ssh-add": '#!/bin/sh\nif [ "$1" = -L ]; then echo "ssh-ed25519 CLIENTKEY"; fi\n',
+                "ssh-keygen": '#!/bin/sh\n[ "$1" = -lf ]\n',
+                "shasum": '#!/bin/sh\ncat >/dev/null\necho "synthetic-hash  -"\n',
             }.items():
                 target = fakebin / name
                 target.write_text(script)
@@ -209,11 +222,31 @@ exec tart "$@"
                 if scenario == "offline-configuration-failure":
                     env["fusion_isolated"] = "1"
             env["VM_TEST_ARCH"] = arch
+            command = ["bash", str(ROOT / "scripts/create-macos-vm.sh"),
+                       "--image", str(base) if arch == "x86_64" else "reviewed-base",
+                       "--name", "synthetic-test", *extra]
+            operator_input = None
+            if quick:
+                command = ["bash", str(ROOT / "scripts/verify-intel-macos.sh"), str(base), *extra]
+                identity = work / "lab-key"
+                identity.touch()
+                env.update(CODYSSEY_FUSION_STORAGE=str(work / "storage"),
+                           CODYSSEY_FUSION_CREDENTIALS=str(work / "credentials"),
+                           CODYSSEY_FUSION_IDENTITY=str(identity))
+                env.pop("codyssey_fusion_agent_pid", None)
+                if "--prepare" in extra:
+                    known_hosts.unlink()
+                    Path(env["VM_TEST_RUNNING"]).write_text(str(base))
+                    operator_input = "ssh-ed25519 CONSOLEKEY console-comment\n"
             result = subprocess.run(
-                ["bash", str(ROOT / "scripts/create-macos-vm.sh"),
-                 "--image", str(base) if arch == "x86_64" else "reviewed-base", "--name", "synthetic-test", *extra],
-                cwd=work, env=env, text=True, capture_output=True, timeout=25,
+                command, cwd=work, env=env, input=operator_input, text=True, capture_output=True, timeout=25,
             )
+            if quick and "--prepare" in extra:
+                self.assertEqual(known_hosts.exists(), scenario == "quick-prepare")
+            elif quick:
+                logs = list((work / "storage/runs").glob("*/verify.log"))
+                self.assertEqual(len(logs), 1)
+                self.assertIn("fresh macOS VM", logs[0].read_text())
             mise_calls = (work / "mise.log").read_text().splitlines() if (work / "mise.log").exists() else []
             if scenario == "linux" or arch == "x86_64":
                 self.assertEqual(mise_calls, [])
@@ -260,6 +293,24 @@ exec tart "$@"
         self.assertLess(verification, shutdown)
         self.assertFalse(any("prepare-macos-vm.sh" in arg or "DOCKER_CONTEXT" in arg
                              for cmd in commands for arg in cmd))
+
+    def test_intel_quick_start_reuses_credentials_and_writes_log(self):
+        result, commands, _ = self.run_case(arch="x86_64", quick=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any(cmd[-1] == "--workstation" for cmd in commands))
+        self.assertFalse(any("prepare-macos-vm.sh" in arg for cmd in commands for arg in cmd))
+
+    def test_intel_base_preparation_pins_only_verified_keys(self):
+        for scenario in ("quick-prepare", "quick-prep-mismatch"):
+            with self.subTest(scenario=scenario):
+                result, commands, files = self.run_case(
+                    scenario, ("--prepare",), arch="x86_64", quick=True)
+                self.assertEqual(result.returncode == 0, scenario == "quick-prepare", result.stderr)
+                self.assertFalse(any(cmd[0] == "clone" for cmd in commands))
+                if scenario == "quick-prepare":
+                    self.assertIn("scripts/prepare-fusion-base.sh", files)
+                else:
+                    self.assertEqual(files, [])
 
     def test_intel_clones_transfers_verifies_and_cleans_up_through_fusion(self):
         result, commands, names = self.run_case(arch="x86_64", extra=("--delete-on-success",))

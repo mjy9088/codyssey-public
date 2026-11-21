@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # Fusion owns the VMX lifecycle. VMware Tools supplies the address; SSH
 # supplies command status, output, and archive input without guest passwords.
-vm_init() {
-  local image=$1 name=$2
-  fusion_isolated=0 fusion_started=0
+fusion_tools() {
   fusion_vmrun=${CODYSSEY_FUSION_VMRUN:-/Applications/VMware Fusion.app/Contents/Library/vmrun}
   [[ $fusion_vmrun == /* && -x $fusion_vmrun ]] || {
     printf 'Install VMware Fusion Pro or set CODYSSEY_FUSION_VMRUN to its vmrun path.\n' >&2
@@ -14,11 +12,24 @@ vm_init() {
     printf 'Fusion requires vmcli alongside vmrun for offline VM configuration.\n' >&2
     return 1
   }
+}
+
+fusion_source_path() {
+  local image=$1
   [[ $image == *.vmx && -f $image && ! -L $image && $image != *$'\n'* ]] || {
     printf 'Fusion requires a reviewed, powered-off local .vmx.\n' >&2
     return 1
   }
-  fusion_source=$(CDPATH='' cd -- "$(dirname -- "$image")" && pwd -P)/$(basename -- "$image")
+  local directory
+  directory=$(CDPATH='' cd -- "$(dirname -- "$image")" && pwd -P) || return
+  printf '%s/%s\n' "$directory" "$(basename -- "$image")"
+}
+
+vm_init() {
+  local image=$1 name=$2
+  fusion_isolated=0 fusion_started=0
+  fusion_tools || return
+  fusion_source=$(fusion_source_path "$image") || return
   fusion_user=${CODYSSEY_FUSION_GUEST_USER:-}
   fusion_known_hosts=${CODYSSEY_FUSION_KNOWN_HOSTS:-}
   [[ $fusion_user =~ ^[A-Za-z_][A-Za-z0-9_.-]*$ &&
@@ -74,7 +85,7 @@ vm_running() {
 }
 
 vm_ready() {
-  fusion_address=$(fusion getGuestIPAddress "$fusion_vmx") || return
+  fusion_address=$(fusion getGuestIPAddress "${1:-$fusion_vmx}") || return
   [[ $fusion_address =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
   # The guest shell resolves its own identity and console user.
   # shellcheck disable=SC2016
@@ -83,16 +94,21 @@ vm_ready() {
 
 fusion_ssh() {
   local arg command='' separator='' quote_escape="'\\''"
+  local -a identity_options
+  identity_options=()
+  if [[ -n ${CODYSSEY_FUSION_IDENTITY:-} ]]; then
+    identity_options=(-o IdentitiesOnly=yes -i "$CODYSSEY_FUSION_IDENTITY")
+  fi
   for arg in "$@"; do
     # SSH joins arguments into a remote shell command. Preserve argument boundaries.
     command+="$separator'${arg//\'/$quote_escape}'"
     separator=' '
   done
-  ssh -F /dev/null -T -4 -o BatchMode=yes -o ConnectTimeout=5 \
+  ssh -F /dev/null "${fusion_ssh_terminal:--T}" -4 -o BatchMode=yes -o ConnectTimeout=5 \
     -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
     -o StrictHostKeyChecking=yes -o GlobalKnownHostsFile=/dev/null \
     -o "UserKnownHostsFile=\"$fusion_known_hosts\"" -o HostKeyAlias=codyssey-fusion \
-    -l "$fusion_user" -- "$fusion_address" "$command"
+    ${identity_options[@]+"${identity_options[@]}"} -l "$fusion_user" -- "$fusion_address" "$command"
 }
 
 vm_exec() { fusion_ssh "$@" </dev/null; }

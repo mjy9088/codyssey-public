@@ -10,7 +10,7 @@ whose first installation enables All websites routing automatically.
 Run `just browser` in the bootstrap directory. It downloads a pinned Chrome for Testing archive,
 verifies it, and automatically loads a private extension copy in a separate profile. No manual
 extension installation is needed. All websites routing enables on the first launch; subsequent launches
-preserve the user's choice. See [the bootstrap README](../README.md#portable-tailnet-browser).
+preserve the user's choice. See the [portable browser guide](../docs/portable-browser.md).
 
 ## Install in ordinary Chrome
 

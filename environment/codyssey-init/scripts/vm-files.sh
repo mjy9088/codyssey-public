@@ -7,6 +7,7 @@ vm_files=(
   verify-macos-setup.py scripts/check.sh scripts/vm-files.sh
   scripts/vm-tart.sh scripts/vm-fusion.sh scripts/vm-aqua-exec.py scripts/verify-tart-input.py scripts/vm-guest-path.sh scripts/create-macos-vm.sh tests/vm-orchestration-test.py tests/vm-guest-test.py tests/preinstalled-tools-test.py tests/installer-recovery-test.py tests/options-test.py tests/browser-configuration-test.py tests/iterm2-test.py
   scripts/prepare-macos-vm.sh scripts/verify-macos-vm.sh scripts/install-preinstalled-apps.sh scripts/create-preinstalled-macos-image.sh scripts/check-preinstalled-apps.py scripts/verify-portable-browser.py
+  scripts/verify-intel-macos.sh scripts/prepare-fusion-base.sh
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh
   tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/managed-j-runtime.sh tests/startup-overlap-test.sh
   tests/preparation-safety-test.sh tests/auth-prompt-test.sh tests/diagnostic-upload-test.py tests/macos-fake-tools.py
