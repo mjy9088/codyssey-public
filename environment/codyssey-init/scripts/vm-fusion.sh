@@ -114,8 +114,10 @@ vm_stop() {
   if ! fusion_list_contains "$fusion_vmx" "$running"; then
     # Without a soft stop response, disappearance from the running list
     # cannot distinguish a clean shutdown from suspension or a crash.
-    [[ $fusion_started == 0 ]]
-    return
+    if [[ $fusion_started == 0 ]]; then
+      return 0
+    fi
+    return 1
   fi
   fusion stop "$fusion_vmx" soft || return
   deadline=$((SECONDS + 60))

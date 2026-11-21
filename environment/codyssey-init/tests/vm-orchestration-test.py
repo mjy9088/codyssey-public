@@ -52,6 +52,8 @@ if args[0] == "exec":
         open(marker, "w").write(str(count))
         if count < 3:
             sys.exit(1)
+    elif args[-1] == "--preflight" and scenario == "desktop-preflight-failure":
+        sys.exit(21)
     elif any("check-preinstalled-apps.py" in item for item in args) and scenario == "preflight-failure":
         sys.exit(21)
     elif "--stop" in args:
@@ -254,6 +256,22 @@ exec tart "$@"
         self.assertTrue(any("DOCKER_CONTEXT=colima-codyssey-verify" in cmd for cmd in commands))
         self.assertTrue(any("/Users/synthetic/guest work/scripts/verify-macos-vm.sh" in cmd for cmd in commands))
         self.assertLess(result.stdout.index("TART_STOP_COMPLETE"), result.stdout.index("PASS:"))
+
+    def test_tart_checks_desktop_before_changing_guest_settings(self):
+        for extra in ((), ("--workstation",)):
+            with self.subTest(extra=extra):
+                result, commands, _ = self.run_case(
+                    "desktop-preflight-failure", (*extra, "--delete-on-success")
+                )
+                self.assertEqual(result.returncode, 21, result.stderr)
+                self.assertTrue(any(cmd[-1] == "--preflight" for cmd in commands))
+                self.assertIn("--request-access", result.stderr)
+                self.assertFalse(any(
+                    arg.endswith(("prepare-macos-vm.sh", "verify-macos-vm.sh"))
+                    for cmd in commands for arg in cmd
+                ))
+                self.assertIn(["stop", "synthetic-test"], commands)
+                self.assertFalse(any(cmd[0] == "delete" for cmd in commands))
 
     def test_intel_workstation_verifies_and_shuts_down_without_docker(self):
         result, commands, _ = self.run_case(arch="x86_64", extra=("--workstation",))

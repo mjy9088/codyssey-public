@@ -1247,7 +1247,14 @@ the corresponding SSH host-key pin on the host with the lab's connection configu
 
 #### Verification and cleanup
 
-Tart boots the clone headlessly. Fusion starts it through the Fusion app so the
+Tart boots the clone headlessly. Before provisioning or workstation setup, the
+Dock preflight checks Accessibility access and the Dock tree through Tart Guest
+Agent. If it fails, open the retained clone with a desktop, sign in, and run the
+printed `--request-access` command from the host. Grant access in the disposable
+guest and rerun the command with `--preflight` to confirm it. You can then shut
+down the authorized clone and use it as the base for a fresh check.
+
+Fusion starts the clone through the Fusion app so the
 running inventory and guest transport are available, and may show a first-start
 notice in the console. Both backends retry the guest connection for six minutes.
 On Fusion, the desktop preflight has a five-minute job timeout. The workstation check
