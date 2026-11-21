@@ -48,6 +48,20 @@ fusion_storage_path() {
   fi
 }
 
+fusion_guest_identity() {
+  local credentials=${CODYSSEY_FUSION_CREDENTIALS:-"$HOME/.local/share/codyssey/fusion/credentials"}
+  printf '%s\n' "${CODYSSEY_FUSION_IDENTITY:-"$credentials/id_ed25519"}"
+}
+
+fusion_ensure_guest_identity() {
+  local identity=$1
+  [[ $identity == /* ]] || { printf 'Use an absolute SSH identity path.\n' >&2; return 1; }
+  if [[ ! -e $identity && ! -e $identity.pub && ! -L $identity && ! -L $identity.pub ]]; then
+    (umask 077; mkdir -p "${identity%/*}" && ssh-keygen -t ed25519 -C codyssey-fusion-lab -f "$identity") || return
+  fi
+  [[ -f $identity && -r $identity ]] || { printf 'Missing private key: %s\n' "$identity" >&2; return 1; }
+}
+
 fusion_read_selection() {
   local file=$1 value
   [[ -f $file && ! -L $file ]] || return 1
@@ -219,9 +233,15 @@ vm_running() {
   running=$(fusion list) && fusion_list_contains "$fusion_vmx" "$running"
 }
 
+fusion_guest_address() {
+  local address
+  address=$(fusion getGuestIPAddress "$1") || return
+  [[ $address =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+  printf '%s\n' "$address"
+}
+
 vm_ready() {
-  fusion_address=$(fusion getGuestIPAddress "${1:-$fusion_vmx}") || return
-  [[ $fusion_address =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+  fusion_address=$(fusion_guest_address "${1:-$fusion_vmx}") || return
   # The guest shell resolves its own identity and console user.
   # shellcheck disable=SC2016
   vm_exec /bin/sh -c 'test "$(id -u)" != 0 && test "$(id -un)" = "$(stat -f %Su /dev/console)"'

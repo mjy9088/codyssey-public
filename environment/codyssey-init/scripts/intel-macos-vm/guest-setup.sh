@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+media=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+expected_user=$(cat "$media/guest-user")
+[[ $(uname -s) == Darwin && $(id -u) != 0 && $(id -un) == "$expected_user" ]] || {
+  printf 'Run this in the disposable macOS guest as %s.\n' "$expected_user" >&2
+  exit 1
+}
+read -r type blob _ < "$media/host.pub"
+[[ $type == ssh-ed25519 && $blob =~ ^[A-Za-z0-9+/=]+$ ]] || {
+  printf 'The setup media is missing a valid public key.\n' >&2
+  exit 1
+}
+/usr/bin/ssh-keygen -lf "$media/host.pub" >/dev/null
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+authorized="$HOME/.ssh/authorized_keys"
+touch "$authorized"
+chmod 600 "$authorized"
+if ! awk -v type="$type" -v blob="$blob" '$1 == type && $2 == blob { found=1 } END { exit !found }' "$authorized"; then
+  printf '\n%s %s\n' "$type" "$blob" >> "$authorized"
+fi
+
+tools_dir='/Library/Application Support/VMware Tools'
+if ! /usr/bin/pgrep -f "^$tools_dir/vmware-tools-daemon( |$)" >/dev/null; then
+  pkg="$media/VMware Tools.pkg"
+  signature=$(/usr/sbin/pkgutil --check-signature "$pkg")
+  grep -qF '(EG7KH642X6)' <<< "$signature" || {
+    printf 'Expected the VMware-signed Tools package.\n' >&2
+    exit 1
+  }
+  if ! sudo /usr/sbin/installer -pkg "$pkg" -target /; then
+    services="$tools_dir/services.sh"
+    if [[ ! -x $services ]] || ! sudo "$services" --start; then
+      printf 'Review the VMware Tools approval, then run this command again.\n' >&2
+      exit 1
+    fi
+  fi
+fi
+
+if [[ ! -r /etc/ssh/ssh_host_ed25519_key.pub ]]; then
+  sudo /usr/bin/ssh-keygen -A
+fi
+read -r type blob _ < /etc/ssh/ssh_host_ed25519_key.pub
+"$tools_dir/vmware-tools-daemon" --cmd "info-set guestinfo.codyssey.ssh-host-key $type $blob"
+if ! /usr/bin/xcode-select -p >/dev/null 2>&1; then
+  /usr/bin/xcode-select --install
+fi
+printf '\nEnable Remote Login for %s and leave this desktop signed in. The host continues automatically.\n' "$expected_user"

@@ -34,7 +34,8 @@ base_id=$(printf '%s' "$base" | shasum -a 256)
 base_id=${base_id%% *}
 export CODYSSEY_FUSION_GUEST_USER=${CODYSSEY_FUSION_GUEST_USER:-vmuser}
 export CODYSSEY_FUSION_KNOWN_HOSTS=${CODYSSEY_FUSION_KNOWN_HOSTS:-"$credentials/$base_id.known_hosts"}
-export CODYSSEY_FUSION_IDENTITY=${CODYSSEY_FUSION_IDENTITY:-"$credentials/id_ed25519"}
+CODYSSEY_FUSION_IDENTITY=$(fusion_guest_identity)
+export CODYSSEY_FUSION_IDENTITY
 identity=$CODYSSEY_FUSION_IDENTITY
 pin=$CODYSSEY_FUSION_KNOWN_HOSTS
 [[ $identity == /* && $pin == /* ]] || {
@@ -43,13 +44,10 @@ pin=$CODYSSEY_FUSION_KNOWN_HOSTS
 }
 
 if [[ -z $prepare && ( ! -r $identity || ! -r $pin ) ]]; then
-  printf 'Prepare this base first. With its desktop open, rerun with --prepare.\n' >&2
+  printf 'Prepare this base first with scripts/intel-macos-vm/04-checkpoint-and-mount-tools.sh.\n' >&2
   exit 1
 fi
-if [[ ! -e $identity && ! -e $identity.pub && ! -L $identity && ! -L $identity.pub ]]; then
-  ssh-keygen -t ed25519 -C codyssey-fusion-lab -f "$identity"
-fi
-[[ -f $identity && -r $identity ]] || { printf 'Missing private key: %s\n' "$identity" >&2; exit 1; }
+fusion_ensure_guest_identity "$identity"
 
 # A dedicated agent gives the clone one identity and does not change the user's agent.
 if [[ ${codyssey_fusion_agent_pid:-} != "${SSH_AGENT_PID:-unstarted}" ]]; then
@@ -80,45 +78,49 @@ fusion_list_contains "$base" "$running" || {
 }
 temp=$(mktemp -d "$credentials/.prepare.XXXXXX")
 trap 'rm -rf -- "$temp"' EXIT
-if [[ -r $pin ]] && vm_init "$base" prepared-base && vm_ready "$base" 2>/dev/null; then
-  printf 'Using the existing pinned guest connection.\n'
+timeout=${CODYSSEY_FUSION_PREPARE_TIMEOUT:-1800}
+[[ $timeout =~ ^[1-9][0-9]{0,4}$ ]] || { printf 'Use a positive preparation timeout in seconds.\n' >&2; exit 1; }
+deadline=$((SECONDS + timeout))
+new_pin=0
+if [[ ! -e $pin && ! -L $pin ]]; then
+  new_pin=1
+  export CODYSSEY_FUSION_KNOWN_HOSTS="$temp/known_hosts"
+fi
+printf 'Waiting for VMware Tools, Remote Login and Command Line Tools in the selected guest.\n'
+while :; do
+  if (( new_pin )) && [[ ! -s $temp/known_hosts ]]; then
+    # This variable is scoped to the selected VMX through Fusion's guest channel.
+    guest_key=$(fusion readVariable "$base" guestVar codyssey.ssh-host-key 2>/dev/null) || guest_key=
+    if [[ -n $guest_key ]]; then
+      read -r host_type host_blob extra <<< "$guest_key"
+      [[ $guest_key != *$'\n'* && $host_type == ssh-ed25519 &&
+         $host_blob =~ ^[A-Za-z0-9+/=]+$ && -z $extra ]] || {
+        printf 'Invalid Ed25519 host key from the selected VM.\n' >&2
+        exit 1
+      }
+      printf 'codyssey-fusion %s %s\n' "$host_type" "$host_blob" > "$temp/known_hosts"
+      ssh-keygen -lf "$temp/known_hosts" >/dev/null
+    fi
+  fi
+  if [[ -s $CODYSSEY_FUSION_KNOWN_HOSTS ]]; then
+    vm_init "$base" prepared-base
+    if vm_ready "$base" 2>/dev/null && vm_exec /usr/bin/xcode-select -p >/dev/null 2>&1; then
+      break
+    fi
+  fi
+  remaining=$((deadline - SECONDS))
+  if (( remaining <= 0 )); then
+    printf 'Guest preparation timed out. Check the guest screen and resume with step 05.\n' >&2
+    exit 1
+  fi
+  if (( remaining > 15 )); then remaining=15; fi
+  sleep "$remaining"
+done
+if (( new_pin )); then
+  ln "$temp/known_hosts" "$pin"
+  printf 'Verified the SSH host key through Fusion and pinned the connection.\n'
 else
-  public_key=$(ssh-add -L)
-  read -r key_type key_blob _ <<< "$public_key"
-  [[ $key_type == ssh-ed25519 && $key_blob =~ ^[A-Za-z0-9+/=]+$ ]] || {
-    printf 'Base preparation requires an Ed25519 identity.\n' >&2
-    exit 1
-  }
-
-  printf 'Run these two lines in the base VM Terminal as %s.\n\n' "$CODYSSEY_FUSION_GUEST_USER"
-  cat <<EOF
-umask 077; mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && (grep -qxF '$key_type $key_blob' ~/.ssh/authorized_keys || printf '\n%s\n' '$key_type $key_blob' >> ~/.ssh/authorized_keys)
-cat /etc/ssh/ssh_host_ed25519_key.pub
-
-EOF
-  if [[ ! -e $pin && ! -L $pin ]]; then
-    printf 'Paste the public host key printed in the VM console: '
-    read -r host_type host_blob _
-    [[ $host_type == ssh-ed25519 && $host_blob =~ ^[A-Za-z0-9+/=]+$ ]] || {
-      printf 'Expected an Ed25519 public host key.\n' >&2
-      exit 1
-    }
-    printf 'codyssey-fusion %s %s\n' "$host_type" "$host_blob" > "$temp/known_hosts"
-    ssh-keygen -lf "$temp/known_hosts" >/dev/null
-    export CODYSSEY_FUSION_KNOWN_HOSTS="$temp/known_hosts"
-  else
-    printf 'Press Enter after installing the public key in the guest: '
-    read -r _
-  fi
-
-  vm_init "$base" prepared-base
-  vm_ready "$base" || {
-    printf 'Check VMware Tools, Remote Login, the console user and the public keys, then retry.\n' >&2
-    exit 1
-  }
-  if [[ $fusion_known_hosts == "$temp/known_hosts" ]]; then
-    ln "$temp/known_hosts" "$pin"
-  fi
+  printf 'Using the existing pinned guest connection.\n'
 fi
 guest_root=$(vm_exec /usr/bin/mktemp -d /tmp/codyssey-fusion-base.XXXXXX)
 [[ $guest_root =~ ^/tmp/codyssey-fusion-base\.[[:alnum:]]{6}$ ]] || {

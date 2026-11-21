@@ -97,6 +97,13 @@ elif command == "start":
 elif command == "getGuestIPAddress":
     assert len(args) == 1 and pathlib.Path(args[0]).samefile(running.read_text())
     print("192.0.2.42")
+elif command == "readVariable":
+    assert args[1:] == ["guestVar", "codyssey.ssh-host-key"]
+    assert pathlib.Path(args[0]).samefile(running.read_text())
+    if scenario == "quick-prep-invalid-key":
+        print("ssh-rsa INVALIDKEY")
+    elif scenario != "quick-prep-no-key":
+        print("ssh-ed25519 GUESTKEY")
 elif command == "stop":
     assert args[1:] == ["soft"]
     if scenario == "stop-failure":
@@ -138,7 +145,7 @@ with open(os.environ["VM_TEST_LOG"], "a") as stream:
 scenario = os.environ["VM_TEST_SCENARIO"]
 if scenario == "quick-prepare":
     pin = open(os.environ["CODYSSEY_FUSION_KNOWN_HOSTS"]).read()
-    assert pin == "codyssey-fusion ssh-ed25519 CONSOLEKEY\n"
+    assert pin == "codyssey-fusion ssh-ed25519 GUESTKEY\n"
 if scenario == "quick-prep-mismatch":
     sys.exit(255)
 if "--managed" in args and scenario in ("lost-prepare-reply", "unresolved-guest-stop"):
@@ -191,7 +198,7 @@ exec tart "$@"
                 "vmcli": "#!" + sys.executable + "\n" + FAKE_VMCLI,
                 "ssh": "#!" + sys.executable + "\n" + FAKE_SSH,
                 "ssh-agent": '#!/bin/sh\nexport SSH_AGENT_PID=123\nexec "$@"\n',
-                "ssh-add": '#!/bin/sh\nif [ "$1" = -L ]; then echo "ssh-ed25519 CLIENTKEY"; fi\n',
+                "ssh-add": '#!/bin/sh\nexit 0\n',
                 "ssh-keygen": '#!/bin/sh\n[ "$1" = -lf ]\n',
                 "shasum": '#!/bin/sh\ncat >/dev/null\necho "synthetic-hash  -"\n',
             }.items():
@@ -225,7 +232,6 @@ exec tart "$@"
             command = ["bash", str(ROOT / "scripts/create-macos-vm.sh"),
                        "--image", str(base) if arch == "x86_64" else "reviewed-base",
                        "--name", "synthetic-test", *extra]
-            operator_input = None
             if quick:
                 command = ["bash", str(ROOT / "scripts/verify-intel-macos.sh"), str(base), *extra]
                 identity = work / "lab-key"
@@ -237,9 +243,9 @@ exec tart "$@"
                 if "--prepare" in extra:
                     known_hosts.unlink()
                     Path(env["VM_TEST_RUNNING"]).write_text(str(base))
-                    operator_input = "ssh-ed25519 CONSOLEKEY console-comment\n"
+                    env["CODYSSEY_FUSION_PREPARE_TIMEOUT"] = "1"
             result = subprocess.run(
-                command, cwd=work, env=env, input=operator_input, text=True, capture_output=True, timeout=25,
+                command, cwd=work, env=env, stdin=subprocess.DEVNULL, text=True, capture_output=True, timeout=25,
             )
             if quick and "--prepare" in extra:
                 self.assertEqual(known_hosts.exists(), scenario == "quick-prepare")
@@ -341,16 +347,19 @@ test "$(fusion_selected_base)" = "$4"
             self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_intel_base_preparation_pins_only_verified_keys(self):
-        for scenario in ("quick-prepare", "quick-prep-mismatch"):
+        for scenario in ("quick-prepare", "quick-prep-mismatch", "quick-prep-no-key", "quick-prep-invalid-key"):
             with self.subTest(scenario=scenario):
                 result, commands, files = self.run_case(
                     scenario, ("--prepare",), arch="x86_64", quick=True)
                 self.assertEqual(result.returncode == 0, scenario == "quick-prepare", result.stderr)
                 self.assertFalse(any(cmd[0] == "clone" for cmd in commands))
+                self.assertTrue(any(cmd[0] == "readVariable" for cmd in commands))
                 if scenario == "quick-prepare":
                     self.assertIn("scripts/prepare-fusion-base.sh", files)
                 else:
                     self.assertEqual(files, [])
+                if scenario in ("quick-prep-no-key", "quick-prep-invalid-key"):
+                    self.assertFalse(any(cmd[0] == "ssh" for cmd in commands))
 
     def test_intel_clones_transfers_verifies_and_cleans_up_through_fusion(self):
         result, commands, names = self.run_case(arch="x86_64", extra=("--delete-on-success",))

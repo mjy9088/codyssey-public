@@ -29,6 +29,28 @@ APFS with a GUID partition map, and install macOS there. Complete Setup Assistan
 with a disposable local administrator named `vmuser`. Save its unique password
 in your password manager. During long installs, use the [installer watcher](#watch-a-long-installation).
 
+### Format the target from the guest Terminal
+
+In the guest installer or Recovery, open **Utilities > Terminal**. List the disks
+and inspect the whole disk corresponding to the new VMware virtual SATA disk
+(about 86 GB). Replace `diskN` with that disk's identifier.
+
+```sh
+diskutil list
+diskutil info diskN
+```
+
+After confirming the new target, erase only that disk as APFS with a GUID
+partition map:
+
+```sh
+diskutil eraseDisk APFS "Macintosh HD" GPT diskN
+```
+
+Close Terminal and select **Macintosh HD** in the installer. The Recovery Terminal
+runs this command before guest SSH and VMware Tools are available.
+[Apple's Intel Recovery guide](https://support.apple.com/guide/mac-help/use-macos-recovery-on-an-intel-based-mac-mchl338cf9a8/mac).
+
 ### If the automatic installer path fails
 
 Try the numbered scripts first. If Apple no longer offers the pinned release,
@@ -63,7 +85,7 @@ bash scripts/intel-macos-vm/03-boot-target-disk.sh
 This disconnects the installer and starts from the target disk. If Setup
 Assistant already opens, continue directly to step 04.
 
-## 04–05. Prepare the installed base
+## 04. Prepare the installed base
 
 Shut down the guest from its first desktop after Setup Assistant.
 
@@ -71,32 +93,45 @@ Shut down the guest from its first desktop after Setup Assistant.
 bash scripts/intel-macos-vm/04-checkpoint-and-mount-tools.sh
 ```
 
-Step 04 saves the initial desktop checkpoint, disconnects the installer, attaches
-the checksum-verified VMware Tools image, boots the guest, and prints the guest
-Terminal commands for VMware Tools and Command Line Tools.
+Step 04 saves the initial desktop checkpoint, disconnects the installer, and
+boots the guest with a setup disc containing its VMware Tools package and the
+host's public SSH key.
 
-Paste those commands into the guest Terminal. Approve any macOS dialogs and
-restart if prompted. Enable **System Settings > General > Sharing > Remote Login**
-for the lab account only, then leave that user signed in. [Apple Remote Login](https://support.apple.com/guide/mac-help/allow-a-remote-computer-to-access-your-mac-mchlp1066/mac).
+In the guest Terminal, type this one command.
+
+```sh
+bash /Volumes/Codyssey/setup.sh
+```
+
+Approve the VMware Tools and Command Line Tools prompts and restart if macOS
+asks. Rerun the guest command after signing in if macOS restarted. Enable
+**System Settings > General > Sharing > Remote Login** for the lab
+account only, then leave that user signed in. [Apple Remote Login](https://support.apple.com/guide/mac-help/allow-a-remote-computer-to-access-your-mac-mchlp1066/mac).
+
+The host waits for the guest for up to 30 minutes. It reads the SSH host key
+directly from the selected VM through VMware Tools and pins it after a strict
+SSH connection succeeds. It then installs any missing MacPorts, Python, Node.js,
+and Google Chrome, shuts down the base, and disconnects the setup disc. Enter
+the guest administrator password when prompted.
+
+If the host wait is interrupted or an automatic package install fails, leave the
+guest running. If needed, install the missing tool using the
+[MacPorts installer](https://www.macports.org/install.php) or
+[Google Chrome installer](https://www.google.com/chrome/), then resume on the host.
 
 ```sh
 bash scripts/intel-macos-vm/05-prepare-base.sh
 ```
 
-Step 05 prints the one-time guest Terminal commands for SSH registration. Paste the
-public host key displayed in the guest console back into the host prompt. The
-script then installs any missing MacPorts, Python, Node.js, and Google Chrome in
-the guest. Enter the guest administrator password when prompted. Existing tools
-are reused. The script shuts down the base and disconnects its VMware Tools image.
+Pass the VMX when resuming an imported base that has yet to be saved.
+Set `CODYSSEY_FUSION_PREPARE_TIMEOUT` in seconds for a longer wait.
 
-If an automatic package install fails, install the missing tool using the
-[MacPorts installer](https://www.macports.org/install.php) or
-[Google Chrome installer](https://www.google.com/chrome/) and rerun step 05.
-If step 04 cannot attach the Tools image, use **Virtual Machine > Install VMware
-Tools** in Fusion or attach Broadcom's
-[Darwin Tools ISO](https://packages-prod.broadcom.com/tools/frozen/darwin/darwin.iso).
-The host key is stored under `~/.local/share/codyssey/fusion/credentials`.
-For another lab account, set `CODYSSEY_FUSION_GUEST_USER` before steps 05 and 06.
+If step 04 cannot download the Tools image, place Broadcom's published
+[`darwin.iso`](https://packages-prod.broadcom.com/tools/frozen/darwin/darwin.iso) in
+the VM storage directory under `tools/darwin.iso` and rerun step 04. The host
+stores its SSH identity and guest fingerprint pin under
+`~/.local/share/codyssey/fusion/credentials`. For another lab account, set
+`CODYSSEY_FUSION_GUEST_USER` for steps 04–06.
 
 ## 06. Run the workstation verification
 
@@ -116,13 +151,14 @@ To reuse a prepared base, copy its complete powered-off `.vmwarevm` bundle.
 If prompted in Fusion, choose **I moved it**. With the lab identity and verified
 host pin already available, set `CODYSSEY_FUSION_IDENTITY` and
 `CODYSSEY_FUSION_KNOWN_HOSTS` to their absolute paths and give step 06 the VMX
-once. Otherwise start the base and give step 05 the VMX once.
+once. Otherwise give step 04 the powered-off VMX and run the short guest setup
+command when the desktop opens.
 
 ```sh
-bash scripts/intel-macos-vm/05-prepare-base.sh "/path/to/Sequoia.vmwarevm/Sequoia.vmx"
+bash scripts/intel-macos-vm/04-checkpoint-and-mount-tools.sh "/path/to/Sequoia.vmwarevm/Sequoia.vmx"
 ```
 
-A successful explicit run of step 05 or 06 remembers that VMX. Subsequent steps
+A successful explicit run of step 04, 05, or 06 remembers that VMX. Subsequent steps
 can run without arguments.
 
 See [VM check scope and cleanup](verification.md#vm-check-scope-and-cleanup) for

@@ -18,9 +18,28 @@ tools="$storage/tools/darwin.iso"
 checksum=e0c96286f376b30e2c2362bd991709f0f6bc6ebd911be4056a58da8698c49236
 umask 077
 mkdir -p "$storage/tools"
+work=$(mktemp -d "${TMPDIR:-/tmp}/codyssey-setup.XXXXXX")
+mount="$work/darwin"
+mounted=0
+stage=
+cache_stage=
+cleanup() {
+  if [[ -n $stage ]]; then
+    rm -rf -- "$stage"
+  fi
+  if [[ -n $cache_stage ]]; then
+    rm -rf -- "$cache_stage"
+  fi
+  if (( mounted )) && ! hdiutil detach "$mount" >/dev/null; then
+    printf 'Tools image is still mounted at %s.\n' "$mount" >&2
+    return
+  fi
+  rm -rf -- "$work"
+}
+trap cleanup EXIT
 if [[ ! -e $tools && ! -L $tools ]]; then
-  download=$(mktemp "$storage/tools/.darwin.XXXXXX")
-  trap 'rm -f -- "$download"' EXIT
+  cache_stage=$(mktemp -d "$storage/tools/.download.XXXXXX")
+  download="$cache_stage/darwin.iso"
   curl --fail --location --retry 2 --proto '=https' --proto-redir '=https' \
     https://packages-prod.broadcom.com/tools/frozen/darwin/darwin.iso -o "$download"
   digest=$(shasum -a 256 "$download")
@@ -28,8 +47,43 @@ if [[ ! -e $tools && ! -L $tools ]]; then
   ln "$download" "$tools"
 fi
 tools=$(fusion_media_path "$tools")
-digest=$(shasum -a 256 "$tools")
+
+identity=$(fusion_guest_identity)
+fusion_ensure_guest_identity "$identity"
+guest_user=${CODYSSEY_FUSION_GUEST_USER:-vmuser}
+[[ $guest_user =~ ^[A-Za-z_][A-Za-z0-9_.-]*$ ]] || { printf 'Invalid guest account name.\n' >&2; exit 1; }
+mkdir "$mount" "$work/media"
+if [[ -r $identity.pub ]]; then
+  read -r key_type key_blob _ < "$identity.pub"
+else
+  public_key=$(ssh-keygen -y -f "$identity")
+  read -r key_type key_blob _ <<< "$public_key"
+fi
+[[ $key_type == ssh-ed25519 && $key_blob =~ ^[A-Za-z0-9+/=]+$ ]] || {
+  printf 'Expected an Ed25519 public key.\n' >&2
+  exit 1
+}
+printf '%s %s\n' "$key_type" "$key_blob" > "$work/media/host.pub"
+ssh-keygen -lf "$work/media/host.pub" >/dev/null
+printf '%s\n' "$guest_user" > "$work/media/guest-user"
+cp "$scripts/intel-macos-vm/guest-setup.sh" "$work/media/setup.sh"
+# DiskImages requires access to both paths, including when the cache is on removable storage.
+cp "$tools" "$work/darwin.iso"
+digest=$(shasum -a 256 "$work/darwin.iso")
 [[ ${digest%% *} == "$checksum" ]] || { printf 'VMware Tools ISO checksum mismatch: %s\n' "$tools" >&2; exit 1; }
+hdiutil attach -readonly -nobrowse -mountpoint "$mount" "$work/darwin.iso" >/dev/null
+mounted=1
+package=$(find "$mount" -name 'VMware Tools.pkg' -print -quit)
+[[ -n $package ]] || { printf 'VMware Tools package missing from the verified image.\n' >&2; exit 1; }
+ditto "$package" "$work/media/VMware Tools.pkg"
+hdiutil detach "$mount" >/dev/null
+mounted=0
+setup_iso="${base%/*}/Codyssey-Guest-Setup.iso"
+[[ ! -L $setup_iso && ( ! -e $setup_iso || -f $setup_iso ) ]] || exit 1
+stage=$(mktemp -d "${base%/*}/.guest-setup.XXXXXX")
+hdiutil makehybrid -hfs -iso -joliet -default-volume-name Codyssey -o "$stage/setup.iso" "$work/media"
+mv -f "$stage/setup.iso" "$setup_iso"
+setup_iso=$(fusion_media_path "$setup_iso")
 
 fusion_boot_target "$base"
 fusion_disconnect_media "$base" sata0:2
@@ -39,24 +93,17 @@ if ! grep -qxF "$checkpoint" <<< "$snapshots"; then
   fusion snapshot "$base" "$checkpoint"
 fi
 "$fusion_vmcli" "$base" ConfigParams SetEntry sata0:2.deviceType cdrom-image
-"$fusion_vmcli" "$base" ConfigParams SetEntry sata0:2.fileName "$tools"
+"$fusion_vmcli" "$base" ConfigParams SetEntry sata0:2.fileName "$setup_iso"
 "$fusion_vmcli" "$base" ConfigParams SetEntry sata0:2.startConnected TRUE
 "$fusion_vmcli" "$base" ConfigParams SetEntry sata0:2.present TRUE
 fusion start "$base" gui
 cat <<'EOF'
-Paste this block into the guest Terminal:
+In the guest Terminal, run:
 
-pkg=$(find "/Volumes/VMware Tools" -name "VMware Tools.pkg" -print -quit)
-if [ -n "$pkg" ] && signature=$(/usr/sbin/pkgutil --check-signature "$pkg") && printf '%s\n' "$signature" | grep -qF '(EG7KH642X6)'; then
-  if ! sudo /usr/sbin/installer -pkg "$pkg" -target /; then
-    services='/Library/Application Support/VMware Tools/services.sh'
-    if [ -x "$services" ]; then sudo "$services" --start; fi
-  fi
-else
-  printf '%s\n' 'The signed VMware Tools package was not found.'
-fi
-xcode-select -p >/dev/null 2>&1 || xcode-select --install
+bash /Volumes/Codyssey/setup.sh
 
 Approve VMware Tools and Command Line Tools if prompted. Restart the guest if
-requested. Enable Remote Login for the lab account, then run step 05 on the host.
+requested and rerun the command after signing in. Enable Remote Login for the
+lab account. This command waits for the guest and continues automatically.
 EOF
+bash "$scripts/intel-macos-vm/05-prepare-base.sh" "$base"
