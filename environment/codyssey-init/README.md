@@ -726,10 +726,9 @@ and text preferences. The local lab authenticates synthetic nodes only to its ow
 
 ### Build a base with preinstalled applications
 
-Install mise on the host; Tart does not need to be installed or configured globally.
-The host VM scripts select the opt-in `mise.vm.toml` environment using `mise -E vm`,
-install only its pinned Tart 2.40.1, then run Tart through mise. The platform check runs
-before installation and rejects Linux, Intel Macs, and macOS older than 14.
+On Apple Silicon, install mise on the host. The host VM scripts use the opt-in
+`mise.vm.toml` environment and install its pinned Tart 2.40.1 on macOS 14 or newer.
+On Intel, prepare a Fusion Pro base as described under [Create a new macOS VM and run everything](#create-a-new-macos-vm-and-run-everything).
 Ordinary `mise install`, the classroom bootstrap, and non-VM checks use `mise.toml`
 (just only) and do not select Tart. There is no root-level Tart configuration.
 See [mise config environments](https://mise.jdx.dev/configuration.html).
@@ -836,16 +835,22 @@ cd environment/codyssey-init
 bash scripts/verify-macos-vm.sh --disposable
 ```
 
-If the Apple Silicon guest lacks a Docker engine but already has Homebrew, prepare it first:
+If the guest lacks a Docker engine but already has Homebrew, prepare it first:
 
 ```sh
 bash scripts/prepare-macos-vm.sh --disposable
 DOCKER_CONTEXT=colima-codyssey-verify bash scripts/verify-macos-vm.sh --disposable
 ```
 
-Preparation installs Docker CLI, Compose, Buildx, Colima, QEMU, Python, and Chrome when absent. It starts a
-dedicated `codyssey-verify` Colima profile with x86_64 Linux emulated on arm64 using QEMU TCG. This
-avoids nested hardware virtualization, which [Tart does not support for macOS guests](https://tart.run/faq/).
+Preparation installs Docker CLI, Compose, Buildx, Colima, QEMU, Python, and Chrome on
+Homebrew-based guests. On Intel guests with MacPorts, install the tools before running
+preparation using the [Fusion instructions](#intel-with-vmware-fusion-pro). Preparation starts a
+dedicated `codyssey-verify` Colima profile using QEMU TCG. The Linux architecture is x86_64
+inside an Apple Silicon macOS guest and aarch64 inside an Intel macOS guest. Cross-architecture
+emulation avoids nested hardware virtualization.
+On Intel, the preparer allows up to ten minutes for Lima user-v2 address
+resolution because the emulated ARM guest can reach DHCP after the default
+two-minute deadline.
 See [Colima's architecture and QEMU configuration](https://colima.run/docs/configuration/).
 Preparation includes Lima's additional guest agents, required for
 [cross-architecture port forwarding](https://lima-vm.io/docs/config/multi-arch/).
@@ -887,6 +892,10 @@ colima delete --profile codyssey-verify
 
 ### Create a new macOS VM and run everything
 
+The same command selects Tart on Apple Silicon and VMware Fusion Pro on Intel.
+
+#### Apple Silicon with Tart
+
 On an Apple Silicon Mac running macOS 14 or newer, install mise first. The script installs
 the configured Tart version automatically; no separate `mise use` or Tart installation is needed.
 
@@ -907,30 +916,347 @@ bash scripts/create-macos-vm.sh \
   --name codyssey-environment-test
 ```
 
-The host script clones a fresh VM, assigns four CPUs and 8 GiB memory, boots it headlessly, waits up
-to six minutes for Guest Agent, transfers the allowlisted environment files through `tart exec`,
-prepares guest Docker, and runs the same existing-VM verifier. It never shares the host home, sends
-`.env` or user-edited GOST configuration, passes a Tailscale key, or enables a nested hypervisor.
-Tart automatic cache pruning is disabled for this run, and an existing destination VM is never
-overwritten. Allow substantial download time and disk space for the macOS base and emulated Linux
-guest. The published quick-start image is approximately 25 GB before guest provisioning.
+Tart assigns four CPUs and 8 GiB of memory to the clone and keeps its base cache. Allow substantial
+download time and disk space for the base and emulated Linux guest. The published quick-start image
+is approximately 25 GB before guest provisioning.
 
 Every host Tart invocation, including the long-running VM process, uses
 `mise -C <environment-directory> -E vm exec tart -- tart`, independent of the caller's working
 directory. The version is declared only in `mise.vm.toml`. The explicit `mise install tart`
 also works with automatic installation disabled and does not install unrelated tools such as just.
-The host needs no Docker engine or Docker CLI. Docker is installed and used
-only inside the disposable macOS guest for the environment tests.
 
-If guest preparation starts the dedicated Colima profile and a later readiness check fails, the guest
-preparer attempts to stop that owned profile while preserving the original failure status. After
-provisioning, host cleanup shuts down Colima before stopping macOS so the nested Linux disk is
-flushed. A Tart stop failure is reported, prevents deletion, and is never described as stopped. On
-completion or failure the new VM is retained for inspection. Pass
-`--delete-on-success` to delete only this newly created VM after successful verification. Failed VMs
-are always retained; Tart's downloaded base cache is retained too. The script prints commands to open
-or delete its VM after a confirmed stop. Terminal PASS is printed only after required cleanup has
-succeeded. Existing source VMs are never stopped or deleted.
+#### Intel with VMware Fusion Pro
+
+Install a Fusion Pro version compatible with the Intel host and the macOS guest. Broadcom limits
+support for newer macOS guests. Verify that the base boots and VMware Tools reports its IP before
+using it here. [Broadcom macOS guest support policy](https://knowledge.broadcom.com/external/article/301109/vmware-discontinuation-of-latest-macos-a.html).
+
+To create a base from scratch, use a versioned Apple installer. For example, this command
+downloads macOS Sequoia 15.8.3 (build 24H241) to `/Applications` when that version is still
+offered by Apple. It does not upgrade the host.
+
+```sh
+softwareupdate --list-full-installers
+softwareupdate --fetch-full-installer --full-installer-version 15.8.3
+```
+
+Build bootable media with Apple's `createinstallmedia`. The command needs host administrator
+authorization and erases the specified volume. Use a fresh image in a private working
+directory, with room for the installer image and its ISO conversion.
+[Apple bootable installer instructions](https://support.apple.com/en-us/101578).
+
+```sh
+(
+set -eu
+umask 077
+storage="${CODYSSEY_FUSION_STORAGE:-$HOME/.local/share/codyssey/fusion}"
+mkdir -p "$storage/installers" "$storage/runs"
+iso="$storage/installers/Sequoia-24H241.iso"
+if [ -s "$iso" ]; then
+  printf '%s\n' "$iso"
+  exit 0
+fi
+lab=$(mktemp -d "$storage/runs/sequoia.XXXXXX")
+mount="$lab/installer-volume"
+mkdir "$mount"
+hdiutil create -size 18g -type SPARSE -layout SPUD -fs HFS+J \
+  -volname CodysseyInstaller "$lab/sequoia.sparseimage"
+hdiutil attach -nobrowse -mountpoint "$mount" -plist "$lab/sequoia.sparseimage" \
+  > "$lab/attachment.plist"
+device=$(/usr/libexec/PlistBuddy -c 'Print :system-entities:0:dev-entry' "$lab/attachment.plist")
+trap 'if [ -n "$device" ]; then hdiutil detach "$device"; fi' EXIT
+sudo "/Applications/Install macOS Sequoia.app/Contents/Resources/createinstallmedia" \
+  --volume "$mount" --nointeraction
+hdiutil detach "$device"
+device=
+hdiutil convert "$lab/sequoia.sparseimage" -format UDTO -o "$lab/sequoia"
+mv -n "$lab/sequoia.cdr" "$iso"
+printf '%s\n' "$iso"
+)
+```
+
+In Fusion, choose **File > New > Install from disc or image**, then select the ISO
+from the storage directory's `installers/` subdirectory. Choose an Apple macOS guest if prompted and
+let the wizard create its virtual hardware. Set four vCPUs, 8 GiB RAM, and an 80 GiB
+growable disk. The Broadcom community procedure attaches a bootable DMG directly.
+The command above converts the bootable image to UDTO for use as an ISO.
+[Fusion installer-image procedure](https://community.broadcom.com/vmware-cloud-foundation/question/installer-app-not-accepted-for-installing-macos-vm).
+
+Use NAT, disable shared folders and host folder
+mirroring, and keep the base and clone on a volume with room for both virtual disks and
+guest Docker images. Store the VM bundle in a persistent directory such as
+`~/.local/share/codyssey/fusion/bases/` so installation can survive a host restart.
+In the installer, open Disk Utility and choose **View > Show All Devices**.
+Select **VMware Virtual SATA Hard Drive Media**, check that its capacity matches the
+configured guest disk, and erase it as APFS with a GUID partition map. Quit Disk Utility
+and select the resulting volume in the installer. Create a local disposable
+administrator account during Setup Assistant. Use `vmuser` as its short name. Generate
+a unique password per base with a password manager or `openssl rand -hex 24` in a
+private terminal. Save it in the operator's password manager and enter it locally in
+the guest console for Setup Assistant and administrative prompts. Avoid signing in
+to a personal Apple account.
+At the Welcome screen, before installing guest tools, save a checkpoint if you
+want to return to the freshly configured desktop. Shut down the guest first to
+avoid storing its RAM in the snapshot.
+
+```sh
+vmrun="/Applications/VMware Fusion.app/Contents/Library/vmrun"
+vmx="/path/to/guest.vmx"
+"$vmrun" -T fusion snapshot "$vmx" "Sequoia - initial setup complete"
+"$vmrun" -T fusion listSnapshots "$vmx"
+```
+
+This account is created once per base. For an unmanaged Fusion VM, complete Setup
+Assistant in the Fusion console. Apple's unattended Setup Assistant flow uses
+Automated Device Enrollment and a device management service that creates a managed
+administrator account. Start repeatable CLI verification from a prepared base with a
+local account, VMware Tools, Remote Login, and an approved desktop session.
+[Apple's Auto Advance requirements](https://support.apple.com/guide/deployment/automated-device-enrollment-management-dep73069dd57/1/web).
+
+If the installer offers the volume and then reports that the installer is damaged,
+open **Window > Installer Log** and record the failed operation. If the log reports
+`OSISVerifyBaseSystemOperation` or `pkgdmg validation has failed`, keep the guest disk
+and investigate the installer media. On the host, mount the ISO read-only and use
+`hdiutil verify` on `BaseSystem/BaseSystem.dmg` and the installer app's
+`Contents/SharedSupport/SharedSupport.dmg`. These checks validate image checksums.
+The guest installer performs its own package validation.
+
+If the attached installer fails package validation, standalone Apple Recovery offers
+**Reinstall macOS**, which downloads the installation assets through the guest's NAT
+connection. Use a compatible Apple `BaseSystem.dmg` from the host Recovery volume
+and keep the formatted SATA target disk. Use `diskutil apfs list` to identify the
+volume with the Recovery role and `diskutil mount readOnly <recovery-volume-id>`
+to access it if it is unmounted. Find `BaseSystem.dmg` in the volume's system
+directory and select the image for the intended macOS release. Power off the disposable
+VM and run the following from its bundle to wrap the image as a VMware hard disk.
+
+```sh
+hdiutil convert /path/to/BaseSystem.dmg -format UDTO -o RecoveryMedia
+bytes=$(stat -f %z RecoveryMedia.cdr)
+test "$bytes" -gt 0 && test "$((bytes % 512))" -eq 0 || exit 1
+cat > RecoveryMedia.vmdk <<EOF
+# Disk DescriptorFile
+version=1
+encoding="UTF-8"
+CID=fffffffe
+parentCID=ffffffff
+createType="monolithicFlat"
+RW $((bytes / 512)) FLAT "RecoveryMedia.cdr" 0
+ddb.adapterType = "lsilogic"
+ddb.virtualHWVersion = "6"
+EOF
+```
+
+In the powered-off lab VM's VMX, keep the existing target disk on `sata0:0`, replace
+the CD/DVD device's `sata0:1.*` entries with the settings below, and connect the existing
+NAT adapter. Start the VM with Fusion or the CLI.
+
+```text
+sata0:1.present = "TRUE"
+sata0:1.fileName = "RecoveryMedia.vmdk"
+sata0:1.startConnected = "TRUE"
+sata0:1.mode = "independent-nonpersistent"
+bios.hddOrder = "sata0:1,sata0:0"
+```
+
+To start the VM from a terminal, use:
+
+```sh
+"/Applications/VMware Fusion.app/Contents/Library/vmrun" -T fusion \
+  start "/path/to/guest.vmx" gui
+```
+
+In the console, select **Reinstall macOS** and choose the guest's `Macintosh HD`.
+If the installer reboots into the standalone Recovery menu, shut down from the
+guest's Apple menu. With the VM powered off, set `sata0:1.present = "FALSE"` and
+`bios.hddOrder = "sata0:0"` in the VMX, then restart to continue from the staged
+installation on the target disk. Leave the Recovery disk disconnected when using
+the installed guest as a base.
+
+To monitor a running installation from a terminal, use `uv` and Fusion's `vmcli`:
+
+```sh
+storage="${CODYSSEY_FUSION_STORAGE:-$HOME/.local/share/codyssey/fusion}"
+mkdir -p "$storage/runs"
+run=$(mktemp -d "$storage/runs/watch.XXXXXX")
+uv run --no-build scripts/watch-fusion-installer.py \
+  --vmx "/absolute/path/to/base.vmx" --output-dir "$run"
+```
+
+The watcher defaults to one capture per minute for up to one hour. Use `--interval` and
+`--timeout` to change those values in seconds. It keeps the latest `screen.png` and
+`status.json` in the chosen directory. A `menu-candidate` means enough of the frame has changed from
+the black boot background to inspect for the installer menu. Check the screenshot before interacting with it.
+Once installation starts, use a new output directory and add
+`--monitor --interval 180 --timeout 14400` to capture every three minutes for up to four hours.
+In monitor mode, a `menu-candidate` is recorded and capture continues. Check the screenshot
+for Setup Assistant or an installer error, then stop the watcher with Ctrl-C.
+If screen capture fails and Fusion's inventory omits the VM, the watcher emits `not-listed`
+and returns status 1. Confirm the actual power state before restarting or editing the VM.
+A timeout returns 124. Store the watch directory outside
+the repository and use a separate directory for each watcher.
+
+After installation, eject the macOS installer disk and install VMware Tools from Fusion's
+**Virtual Machine** menu. If Fusion lacks the macOS Tools image, attach Broadcom's
+[Darwin Tools ISO](https://packages-prod.broadcom.com/tools/frozen/darwin/darwin.iso)
+as the guest CD/DVD and install the VMware-signed package inside the guest.
+The same package can be installed from a guest terminal. Use the package path
+shown by `find` and authenticate the guest administrator when `sudo` prompts.
+
+```sh
+find "/Volumes/VMware Tools" -name "VMware Tools.pkg" -print
+sudo /usr/sbin/installer -pkg "/path/to/VMware Tools.pkg" -target /
+```
+
+If macOS blocks the signed VMware extension, review the prompt in the guest's
+**Privacy & Security** settings and restart the guest after approval. From the
+host, use `vmrun -T fusion getGuestIPAddress /path/to/guest.vmx` to confirm that
+the VMware Tools service is running.
+
+In an already provisioned automation environment, a secret manager can supply the
+administrator password on standard input to `sudo -S`. Keep that credential
+in the secret manager and use a scoped secret reference. The repeatable
+verification command itself authenticates with the dedicated SSH key.
+Verify the version and architecture inside the guest with
+`sw_vers` and `uname -m`. Install Xcode Command Line Tools with `xcode-select --install`.
+For a new Intel guest, install [MacPorts](https://www.macports.org/install.php) and
+prepare the verification tools as follows:
+
+```sh
+sudo /opt/local/bin/port install lima +additional_guestagents
+sudo /opt/local/bin/port install colima docker docker-compose-plugin docker-buildx-plugin python313 nodejs24
+sudo /opt/local/bin/port select --set python3 python313
+```
+
+Install Google Chrome from Google in `/Applications` or the guest user's
+`~/Applications`. Confirm `docker compose version` and `docker buildx version`
+as the desktop user before running verification. The verifier uses the Intel
+MacPorts tools already installed in the guest. Existing Homebrew-based guests can
+continue to use Homebrew.
+
+The verifier needs an active desktop session. For unattended runs, open
+**System Settings > Users & Groups** in the disposable guest and set
+**Automatically log in as** to the lab account. For attended runs, sign in to the
+clone while the verifier waits for the desktop. Enable Remote Login for the
+disposable account only. Use a dedicated
+host SSH key for the lab and add only its public key to the guest user's
+`~/.ssh/authorized_keys`. The verifier uses SSH public-key authentication and a
+pinned host key. Keep the console password out of the repository, shell arguments,
+and verification logs. The guest and its clones inherit the local account, so use
+the base and its credentials only for this lab.
+
+On the host, create a dedicated key once and load it in the SSH agent before running
+verification. The example prompts for a key passphrase at creation and when adding
+the key to a new agent session.
+
+```sh
+(
+set -eu
+umask 077
+credentials="$HOME/.local/share/codyssey/fusion/credentials"
+mkdir -p "$credentials"
+key="$credentials/id_ed25519"
+if [ ! -e "$key" ] && [ ! -e "$key.pub" ]; then
+  ssh-keygen -t ed25519 -C codyssey-fusion-lab -f "$key"
+fi
+test -f "$key" && test -f "$key.pub"
+ssh-add "$key"
+)
+```
+
+Copy the single line from `id_ed25519.pub` into the guest account's
+`~/.ssh/authorized_keys`. Set `~/.ssh` to mode `0700` and
+`authorized_keys` to `0600` in the guest. Keep the private key on the host.
+
+Before using an existing base, check that it meets the same requirements and has no active
+Docker engine. The script disables shared folders on the clone before boot.
+The runner uses a temporary LaunchAgent in the logged-in user's Aqua session. Before installing
+guest tools, it checks that the Aqua job can see the Dock and that macOS has granted Accessibility
+access to the process running the Swift check. From a copy of this directory in the disposable
+base, use the same Aqua job to ask macOS for access:
+
+```sh
+/usr/bin/python3 scripts/vm-aqua-exec.py 60 \
+  /usr/bin/swift "$PWD/scripts/verify-dock-ui.swift" --request-access
+```
+
+Use the guest's System Settings to grant access when macOS prompts. Rerun the command with
+`--preflight` to check access before shutting down the base. A failed preflight during host
+verification retains the clone for inspection.
+
+Create a dedicated host known-hosts file with the reviewed base's SSH host public key. For example,
+copy the public key from `/etc/ssh/ssh_host_ed25519_key.pub` via the base VM console, then put
+`codyssey-fusion ssh-ed25519 <public-key>` on a line in that file. The clone inherits the base's
+host key. The host uses OpenSSH's default identity files or an SSH agent for authentication.
+
+From a writable directory with room for the full clone, run:
+
+```sh
+CODYSSEY_FUSION_GUEST_USER=vmuser \
+CODYSSEY_FUSION_KNOWN_HOSTS="$HOME/.ssh/codyssey-fusion-known-hosts" \
+bash /path/to/codyssey-public/environment/codyssey-init/scripts/create-macos-vm.sh \
+  --image "/path/to/Reviewed Base.vmwarevm/Reviewed Base.vmx" \
+  --name codyssey-environment-test
+```
+
+The script creates `codyssey-environment-test.vmwarevm` in the current directory. To build a
+preinstalled base, invoke `create-preinstalled-macos-image.sh` with the same Fusion environment
+and source options. For a later `--preinstalled` run, pass the resulting bundle's `.vmx` as
+`--image`. The Fusion adapter uses
+`/Applications/VMware Fusion.app/Contents/Library/vmrun` by default. Set
+`CODYSSEY_FUSION_VMRUN` to the absolute executable path for another installation location.
+Use a Fusion release with `vmcli` next to `vmrun`. The adapter uses `vmcli ConfigParams SetEntry`
+to disable HGFS and set the share count to zero while the clone is powered off.
+[VMware Fusion Pro 13 documentation](https://techdocs2-prod.adobecqms.net/content/dam/broadcom/techdocs/us/en/pdf/vmware/desktop-hypervisors/fusion/vmware-fusion-pro-13.pdf).
+
+#### Reuse the prepared Fusion base
+
+After guest setup and the desktop preflight pass, eject the installer and Tools images,
+turn off any temporary VNC console, and shut down macOS. Keep the entire powered-off VM
+bundle together, including its VMX, virtual disks, and NVRAM. A private location such as
+`~/.local/share/codyssey/fusion/bases/` keeps the base available across host restarts.
+Use the base VMX with `--image` for each run. The verifier creates a full clone and
+applies setup changes inside that clone.
+
+For external storage, use a writable APFS volume and move the complete powered-off
+bundle there. Open the moved VMX in Fusion and choose **I moved it** if prompted,
+then confirm the guest boots and its snapshots are present. Keep the installer and
+watcher output on the same SSD if internal space is limited. Run the verification
+command from a directory on the SSD because it places the full clone in the current
+directory. For example, if the volume is named `Codyssey VM`:
+
+```sh
+export CODYSSEY_FUSION_STORAGE="/Volumes/Codyssey VM/Codyssey-Fusion"
+test -d "$CODYSSEY_FUSION_STORAGE/bases" || exit 1
+mkdir -p "$CODYSSEY_FUSION_STORAGE/verification"
+cd "$CODYSSEY_FUSION_STORAGE/verification" || exit 1
+```
+
+Keep the versioned ISO for reinstalling from scratch. To recover the prepared base after
+host storage loss, copy its complete powered-off bundle to separate storage. Preserve
+the corresponding SSH host-key pin on the host with the lab's connection configuration.
+
+#### Verification and cleanup
+
+Tart boots the clone headlessly. Fusion starts it through the Fusion app so the
+running inventory and guest transport are available, and may show a first-start
+notice in the console. Both backends retry the guest connection for six minutes.
+On Fusion, the desktop preflight has a one-minute job timeout and the full Aqua verification
+has a six-hour job timeout.
+They stream the same allowlisted environment files into the guest, then run the same provisioning
+and verification scripts. Docker runs only inside the disposable guest. The transfer excludes
+`.env`, user-edited GOST configuration, and host credentials. The host script owns sequencing,
+retention policy, and the final exit status. Each adapter owns its VM identifier and translates
+clone, boot, guest execution, file transfer, shutdown, and deletion into hypervisor commands.
+
+The guest refuses an already-running verification profile. For host-managed runs, the guest records
+ownership before starting Colima so teardown can discover it even if the preparation reply is lost.
+Cleanup stops the owned profile before stopping macOS so the nested Linux disk is flushed.
+If Colima shutdown cannot be confirmed, the host leaves the clone available for recovery without
+requesting macOS shutdown. The VM is retained for inspection by default. Pass `--delete-on-success` to delete the new VM
+after verification and shutdown succeed. A failed shutdown prevents
+deletion and terminal PASS. Existing source VMs and destinations are left alone. The script
+prints commands to open or delete a retained VM after a confirmed stop.
 
 Host orchestration tests require only Python and fake commands; they do not create VMs:
 
@@ -939,7 +1265,7 @@ python3 tests/vm-orchestration-test.py
 ```
 
 These orchestration tests do not establish a successful real VM run. The Linux container cannot
-exercise Tart, Colima, Homebrew, macOS defaults, Chrome rendering, Guest Agent timing, or QEMU port
+exercise Tart, Fusion, Colima, Homebrew, macOS defaults, Chrome rendering, guest readiness timing, or QEMU port
 forwarding on a real Mac. Real guest success is reported only when provisioning, Docker checks, both
 bootstrap passes, live preference verification, and cleanup all finish successfully on supported
 macOS hosts.

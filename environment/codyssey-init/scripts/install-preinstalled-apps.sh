@@ -5,8 +5,9 @@ umask 077
 [[ ${1:-} == --disposable && $# == 1 && $(uname -s) == Darwin && $(id -u) != 0 ]] || {
   printf 'Use --disposable as the macOS guest desktop user.\n' >&2; exit 1;
 }
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 . "$root/lib/preparation.sh"
+. "$root/scripts/vm-guest-path.sh"
 # Pinned OrbStack 2.2.4 checksums from Homebrew's official orbstack cask.
 # https://github.com/Homebrew/homebrew-cask/blob/master/Casks/o/orbstack.rb
 case $(uname -m) in

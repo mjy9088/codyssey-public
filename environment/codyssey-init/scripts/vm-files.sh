@@ -5,7 +5,7 @@ vm_files=(
   justfile lib/auth.sh lib/options.sh lib/logging.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh macos-setup.sh enable-korean.swift tailscale-entrypoint.sh mise.toml mise.vm.toml next-script.zsh tailnet.sh
   sdk/setup.mts sdk/cli.mts tests/setup-sdk-test.mts scripts/install-managed-j.sh
   verify-macos-setup.py scripts/check.sh scripts/vm-files.sh
-  scripts/create-macos-vm.sh tests/vm-orchestration-test.py tests/vm-guest-test.py tests/preinstalled-tools-test.py tests/installer-recovery-test.py tests/options-test.py tests/browser-configuration-test.py tests/iterm2-test.py
+  scripts/vm-tart.sh scripts/vm-fusion.sh scripts/vm-aqua-exec.py scripts/verify-tart-input.py scripts/vm-guest-path.sh scripts/create-macos-vm.sh tests/vm-orchestration-test.py tests/vm-guest-test.py tests/preinstalled-tools-test.py tests/installer-recovery-test.py tests/options-test.py tests/browser-configuration-test.py tests/iterm2-test.py
   scripts/prepare-macos-vm.sh scripts/verify-macos-vm.sh scripts/install-preinstalled-apps.sh scripts/create-preinstalled-macos-image.sh scripts/check-preinstalled-apps.py scripts/verify-portable-browser.py
   tests/check.Dockerfile tests/run.sh tests/bootstrap-static.sh
   tests/bootstrap-remote.sh tests/bootstrap-runtime.sh tests/managed-j-runtime.sh tests/startup-overlap-test.sh

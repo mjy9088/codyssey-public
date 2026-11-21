@@ -1,9 +1,13 @@
 import AppKit
 import ApplicationServices
 
-// Read-only VM verification. Production setup never requires Accessibility.
-guard AXIsProcessTrusted() else {
-    fputs("Dock UI verification requires an already-authorized VM Guest Agent; no permission is requested.\n", stderr)
+// Read-only VM verification. Request access only during explicit guest base setup.
+let requestAccess = CommandLine.arguments.dropFirst() == ["--request-access"]
+let hasAccess = requestAccess
+    ? AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+    : AXIsProcessTrusted()
+guard hasAccess else {
+    fputs("Dock UI verification requires Accessibility access in the guest execution context.\n", stderr)
     exit(1)
 }
 
@@ -11,6 +15,15 @@ func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
     return value
+}
+
+if requestAccess || CommandLine.arguments.dropFirst() == ["--preflight"] {
+    guard let dock = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == "com.apple.dock" }),
+          attribute(AXUIElementCreateApplication(dock.processIdentifier), kAXChildrenAttribute) is [AXUIElement] else {
+        fputs("The guest desktop session cannot read the Dock Accessibility tree.\n", stderr)
+        exit(1)
+    }
+    exit(0)
 }
 
 let home = FileManager.default.homeDirectoryForCurrentUser

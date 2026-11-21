@@ -21,6 +21,7 @@ FILES = (
     "sdk/cli.mts",
     "sdk/setup.mts",
     "scripts/verify-macos-vm.sh",
+    "scripts/vm-guest-path.sh",
 )
 LAUNCHER = b"""#!/bin/bash
 cd "$(dirname -- "$0")" || exit 1

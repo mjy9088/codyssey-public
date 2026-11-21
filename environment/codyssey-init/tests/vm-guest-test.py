@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,7 +19,7 @@ class GuestScriptTests(unittest.TestCase):
         fakebin = work / "bin"
         fakebin.mkdir()
         tools = {
-            "uname": '#!/bin/sh\n[ "${1:-}" = -m ] && echo arm64 || echo Darwin\n',
+            "uname": '#!/bin/sh\n[ "${1:-}" = -m ] && echo "${VM_TEST_GUEST_ARCH:-arm64}" || echo Darwin\n',
             "id": "#!/bin/sh\necho 501\n",
             "brew": "#!/bin/sh\nexit 0\n",
             "nc": "#!/bin/sh\nexit 1\n",
@@ -28,9 +29,41 @@ class GuestScriptTests(unittest.TestCase):
 
             "sh": "#!/bin/sh\nexit 0\n",
             "bash": '#!/bin/sh\nif [ "${1:-}" = init.sh ]; then grep -q "^# codyssey-init: mise$" "$HOME/.zshrc" 2>/dev/null || echo "# codyssey-init: mise" >> "$HOME/.zshrc"; fi\nexit 0\n',
-            "python3": '#!/bin/sh\ncase "$*" in *verify-tailnet-runtime.py*) exit "${VM_LAB_STATUS:-0}";; *verify-macos-setup.py*) exit "${VM_LIVE_STATUS:-0}";; esac\ncat >/dev/null || true\nexit 0\n',
+            "python3": f'''#!/bin/sh
+if [ "${{1:-}}" = -c ] && [ "$#" -ge 3 ]; then
+    exec "{sys.executable}" "$@"
+fi
+case "$*" in
+    *verify-tailnet-runtime.py*) exit "${{VM_LAB_STATUS:-0}}";;
+    *verify-macos-setup.py*) exit "${{VM_LIVE_STATUS:-0}}";;
+esac
+cat >/dev/null || true
+exit 0
+''',
             "curl": '#!/bin/sh\ncase "$*" in *18081*) kind=ui; ready=${VM_UI_READY_AT:-1};; *) kind=api; ready=${VM_API_READY_AT:-1};; esac\ncount_file="$VM_CURL_COUNT-$kind"; count=0; [ ! -f "$count_file" ] || count=$(cat "$count_file"); count=$((count + 1)); echo "$count" > "$count_file"; [ "$count" -ge "$ready" ]\n',
-            "colima": '#!/bin/sh\nprintf "%s\\n" "$*" >> "$VM_CALLS"\nif [ "$1" = stop ] && [ "${VM_GUEST_SCENARIO:-}" = docker-and-stop-failure ]; then exit 23; fi\nexit 0\n',
+            "colima": '''#!/bin/sh
+printf '%s\\n' "$*" >> "$VM_CALLS"
+case $1 in
+    list)
+        if [ "$VM_GUEST_SCENARIO" = inherited-running ]; then
+            echo '{"name":"codyssey-verify","status":"Running","arch":"x86_64"}'
+        fi
+        ;;
+    status)
+        case ${VM_TEST_GUEST_ARCH:-arm64} in
+            arm64) arch=x86_64 ;;
+            x86_64) arch=aarch64 ;;
+        esac
+        driver=QEMU
+        [ "$VM_GUEST_SCENARIO" != wrong-driver ] || driver=VZ
+        printf '{"driver":"%s","arch":"%s","runtime":"docker"}\\n' "$driver" "$arch"
+        ;;
+    stop)
+        if [ "$VM_GUEST_SCENARIO" = docker-and-stop-failure ]; then exit 23; fi
+        ;;
+esac
+exit 0
+''',
             "rm": '#!/bin/sh\nprintf "rm %s\\n" "$*" >> "$VM_CALLS"\nif [ "${VM_GUEST_SCENARIO:-}" = removal-failure ]; then case "${1:-}:${2:-}" in -rf:"$HOME"/codyssey-vm-test.*) exit 41;; esac; fi\nexec /bin/rm "$@"\n',
             "docker": "#!" + sys.executable + "\n" + r'''
 import json, os, sys
@@ -67,7 +100,7 @@ sys.exit(0)
             target.chmod(0o755)
         return fakebin
 
-    def run_script(self, script: str, scenario: str = "success", **overrides: str) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    def run_script(self, script: str, scenario: str = "success", managed: bool = False, cancel_before_start: bool = False, **overrides: str) -> tuple[subprocess.CompletedProcess[str], list[str]]:
         with tempfile.TemporaryDirectory(prefix="vm-guest-") as directory:
             work = Path(directory)
             home = work / "home"
@@ -77,12 +110,80 @@ sys.exit(0)
                        VM_CURL_COUNT=str(work / "curl-count"), VM_GUEST_SCENARIO=scenario)
             env.pop("DOCKER_HOST", None)
             env.update(overrides)
-            env["PATH"] = str(self.make_tools(work)) + os.pathsep + os.environ["PATH"]
+            tools = self.make_tools(work)
+            if scenario == "intel-macports":
+                for name in ("port", "limactl", "qemu-system-aarch64", "node"):
+                    shutil.copy(tools / "sh", tools / name)
+                (tools / "brew").write_text("#!/bin/sh\nexit 51\n")
+            env["PATH"] = str(tools) + os.pathsep + os.environ["PATH"]
             # QEMU TCG measured over 25 seconds for full verifier fixtures; keep
             # every assertion while allowing bounded emulated process startup.
-            result = subprocess.run(["/bin/bash", str(ROOT / "scripts" / script), "--disposable"],
-                                    env=env, text=True, capture_output=True, timeout=120)
+            source = ROOT
+            if managed or cancel_before_start:
+                source = work / "guest transfer"
+                (source / "scripts").mkdir(parents=True)
+                (source / "lib").mkdir()
+                for path in (f"scripts/{script}", "scripts/vm-guest-path.sh", "lib/preparation.sh"):
+                    shutil.copy(ROOT / path, source / path)
+            command = ["/bin/bash", str(source / "scripts" / script), "--disposable"]
+            options = dict(env=env, text=True, capture_output=True, timeout=120)
+            if cancel_before_start:
+                cancelled = subprocess.run([*command, "--stop"], **options)
+                self.assertEqual(cancelled.returncode, 0, cancelled.stderr)
+                result = subprocess.run([*command, "--managed"], **options)
+            elif managed:
+                prepared = subprocess.run([*command, "--managed"], **options)
+                self.assertEqual(prepared.returncode, 0, prepared.stderr)
+                # Stop from a new invocation with no parent or preparation status in memory.
+                self.assertTrue((home / ".codyssey-verify-colima/owner").is_file())
+                result = subprocess.run([*command, "--stop"], **options)
+                self.assertFalse((home / ".codyssey-verify-colima").exists())
+                repeated = subprocess.run([*command, "--stop"], **options)
+                self.assertEqual(repeated.returncode, 0, repeated.stderr)
+            else:
+                result = subprocess.run(command, **options)
             return result, calls.read_text().splitlines() if calls.exists() else []
+
+    def test_preparer_uses_foreign_architecture_on_each_mac(self) -> None:
+        for guest, linux in (("arm64", "x86_64"), ("x86_64", "aarch64")):
+            with self.subTest(guest=guest):
+                result, calls = self.run_script("prepare-macos-vm.sh", VM_TEST_GUEST_ARCH=guest)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(any(call.startswith(
+                    f"start --profile codyssey-verify --vm-type qemu --arch {linux} "
+                ) for call in calls))
+
+    def test_preparer_publishes_managed_ownership_for_a_later_stop(self) -> None:
+        result, calls = self.run_script("prepare-macos-vm.sh", managed=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls.count("stop --profile codyssey-verify"), 1)
+
+    def test_intel_preparer_uses_macports_tools_without_running_homebrew(self) -> None:
+        result, calls = self.run_script(
+            "prepare-macos-vm.sh", scenario="intel-macports", VM_TEST_GUEST_ARCH="x86_64"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("docker compose version", calls)
+        self.assertIn("docker buildx version", calls)
+        self.assertTrue(any("--vm-type qemu --arch aarch64" in call for call in calls))
+
+    def test_preparer_cannot_start_after_host_cancels_before_ownership(self) -> None:
+        result, calls = self.run_script("prepare-macos-vm.sh", cancel_before_start=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("preparation was cancelled", result.stderr)
+        self.assertFalse(any(call.startswith(("start ", "stop ")) for call in calls))
+
+    def test_preparer_rejects_inherited_running_profile_without_stopping_it(self) -> None:
+        result, calls = self.run_script("prepare-macos-vm.sh", "inherited-running")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must be stopped", result.stderr)
+        self.assertFalse(any(call.startswith(("start ", "stop ")) for call in calls))
+
+    def test_preparer_rejects_unexpected_running_driver_and_stops_owned_profile(self) -> None:
+        result, calls = self.run_script("prepare-macos-vm.sh", "wrong-driver")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must use QEMU", result.stderr)
+        self.assertIn("stop --profile codyssey-verify", calls)
 
     def test_prepare_stops_owned_colima_after_readiness_failure(self) -> None:
         result, calls = self.run_script("prepare-macos-vm.sh", "docker-readiness-failure")

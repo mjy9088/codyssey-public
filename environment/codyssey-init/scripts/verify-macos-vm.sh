@@ -7,9 +7,9 @@ if [[ ${1:-} == --help ]]; then
 fi
 [[ ${1:-} == --disposable && ( $# == 1 || ( $# == 2 && $2 == --input-desktop ) ) ]] || { printf 'Use --disposable: this changes the VM user shell and preferences.\n' >&2; exit 1; }
 [[ $(uname -s) == Darwin ]] || { printf 'This verifier requires macOS.\n' >&2; exit 1; }
-export PATH="/opt/homebrew/opt/python@3.13/libexec/bin:/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/bin:$PATH"
 [[ $(id -u) != 0 ]] || { printf 'Run as the VM desktop user, not root.\n' >&2; exit 1; }
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+. "$root/scripts/vm-guest-path.sh"
 if [[ ${2:-} == --input-desktop ]]; then
   [[ -t 0 && -t 1 ]] || { printf 'Use Terminal in the disposable VM desktop.\n' >&2; exit 1; }
   unset DEFAULTS_BIN PLISTBUDDY_BIN PLUTIL_BIN UNAME_BIN CODYSSEY_INPUT_SWITCH

@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """Exercise ownership, cleanup, payload isolation, and guest failure propagation."""
+import io
 import json
 import os
 from pathlib import Path
+import plistlib
+import runpy
 import shutil
+import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
+from types import ModuleType
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 FAKE_TART = r'''
@@ -26,6 +33,8 @@ if args[0] == "set" and scenario == "set-failure":
 if args[0] == "run":
     if scenario == "boot-failure":
         sys.exit(1)
+    with open(os.environ["VM_TEST_TART_PID"], "w") as stream:
+        stream.write(str(os.getpid()))
     time.sleep(60)
 if args[0] == "exec":
     if scenario == "boot-failure":
@@ -45,14 +54,15 @@ if args[0] == "exec":
             sys.exit(1)
     elif any("check-preinstalled-apps.py" in item for item in args) and scenario == "preflight-failure":
         sys.exit(21)
+    elif "--stop" in args:
+        if scenario in ("shutdown-failure", "verify-shutdown-failure"):
+            sys.exit(23)
     elif any("prepare-macos-vm.sh" in item for item in args):
         if scenario == "prepare-failure": sys.exit(17)
         if scenario == "prepare-interrupt": sys.exit(130)
         if scenario == "prepare-terminate": sys.exit(143)
     elif any("verify-macos-vm.sh" in item for item in args) and scenario in ("verify-failure", "verify-shutdown-failure", "verify-stop-failure"):
         sys.exit(19)
-    elif "/opt/homebrew/bin/colima" in args and scenario in ("shutdown-failure", "verify-shutdown-failure"):
-        sys.exit(23)
 if args[0] == "stop" and scenario in ("stop-failure", "verify-stop-failure"):
     sys.exit(29)
 if args[0] == "stop":
@@ -60,14 +70,103 @@ if args[0] == "stop":
 '''
 
 
+FAKE_VMRUN = r'''
+import json, os, pathlib, sys
+assert sys.argv[1:3] == ["-T", "fusion"]
+command, *args = sys.argv[3:]
+with open(os.environ["VM_TEST_LOG"], "a") as stream:
+    stream.write(json.dumps([command, *args]) + "\n")
+running = pathlib.Path(os.environ["VM_TEST_RUNNING"])
+scenario = os.environ["VM_TEST_SCENARIO"]
+if command == "list":
+    stopping = running.with_suffix(".stopping")
+    if stopping.exists() and scenario == "shutdown-inventory-failure":
+        sys.exit(30)
+    print("Total running VMs:", int(running.exists()))
+    if running.exists():
+        print(running.read_text())
+        if stopping.exists():
+            running.unlink()
+elif command == "clone":
+    assert pathlib.Path(args[1]).parent.is_dir()
+    assert args[2:] == ["full", "-cloneName=synthetic-test"]
+    pathlib.Path(args[1]).touch()
+elif command == "start":
+    assert args[1:] == ["gui"]
+    running.write_text(args[0])
+elif command == "getGuestIPAddress":
+    print("192.0.2.42")
+elif command == "stop":
+    assert args[1:] == ["soft"]
+    if scenario == "stop-failure":
+        sys.exit(29)
+    if scenario in ("delayed-shutdown", "shutdown-inventory-failure"):
+        running.with_suffix(".stopping").touch()
+    else:
+        running.unlink()
+elif command == "deleteVM":
+    assert not running.exists()
+    pathlib.Path(args[0]).unlink()
+else:
+    sys.exit(98)
+'''
+
+FAKE_VMCLI = r'''
+import json, os, pathlib, sys
+vmx, module, action, key, value = sys.argv[1:]
+assert module == "ConfigParams" and action == "SetEntry"
+assert pathlib.Path(vmx).is_file()
+assert not pathlib.Path(os.environ["VM_TEST_RUNNING"]).exists()
+with open(os.environ["VM_TEST_LOG"], "a") as stream:
+    stream.write(json.dumps(["configure", vmx, key, value]) + "\n")
+if os.environ["VM_TEST_SCENARIO"] == "offline-configuration-failure" and key == "sharedFolder.maxNum":
+    sys.exit(38)
+'''
+
+
+FAKE_SSH = r'''
+import json, os, shlex, sys, tarfile
+options = sys.argv[1:-2]
+assert "StrictHostKeyChecking=yes" in options
+assert "HostKeyAlias=codyssey-fusion" in options
+assert 'UserKnownHostsFile="' + os.environ["CODYSSEY_FUSION_KNOWN_HOSTS"] + '"' in options
+assert sys.argv[-2] == "192.0.2.42"
+args = shlex.split(sys.argv[-1])
+with open(os.environ["VM_TEST_LOG"], "a") as stream:
+    stream.write(json.dumps(["ssh", *args]) + "\n")
+scenario = os.environ["VM_TEST_SCENARIO"]
+if "--managed" in args and scenario in ("lost-prepare-reply", "unresolved-guest-stop"):
+    sys.exit(255)
+if "--stop" in args and scenario == "unresolved-guest-stop":
+    print("Guest Colima preparation is still running.", file=sys.stderr)
+    sys.exit(1)
+if args[:2] == ["/bin/sh", "-c"]:
+    if args[2].startswith("mktemp"):
+        print("/Users/synthetic/guest's work")
+elif args[0] == "/usr/bin/tar":
+    assert args[1:] == ["-xf", "-", "-C", "/Users/synthetic/guest's work"]
+    with tarfile.open(fileobj=sys.stdin.buffer, mode="r|*") as archive:
+        names = [item.name for item in archive]
+    with open(os.environ["VM_TEST_PAYLOAD"], "w") as stream:
+        json.dump(names, stream)
+elif len(args) > 1 and args[1].endswith("/vm-aqua-exec.py"):
+    scenario = os.environ["VM_TEST_SCENARIO"]
+    if args[-1] == "--preflight":
+        if scenario == "desktop-preflight-failure":
+            sys.exit(21)
+    elif scenario == "verify-failure":
+        sys.exit(19)
+'''
+
+
 class OrchestrationTests(unittest.TestCase):
-    def run_case(self, scenario="success", extra=()):
+    def run_case(self, scenario="success", extra=(), arch="arm64"):
         with tempfile.TemporaryDirectory(prefix="vm-orchestration-") as directory:
             work = Path(directory)
             fakebin = work / "bin"
             fakebin.mkdir()
             for name, script in {
-                "uname": '#!/bin/sh\ncase "$1" in -s) echo "${VM_TEST_PLATFORM:-Darwin}";; -m) echo arm64;; esac\n',
+                "uname": '#!/bin/sh\ncase "$1" in -s) echo "${VM_TEST_PLATFORM:-Darwin}";; -m) echo "$VM_TEST_ARCH";; esac\n',
                 "sw_vers": "#!/bin/sh\necho 15.0\n",
                 "mise": '''#!/bin/sh
 printf '%s\\n' "$*" >> "$VM_MISE_LOG"
@@ -82,6 +181,9 @@ shift 4
 exec tart "$@"
 ''',
                 "tart": "#!" + sys.executable + "\n" + FAKE_TART,
+                "vmrun": "#!" + sys.executable + "\n" + FAKE_VMRUN,
+                "vmcli": "#!" + sys.executable + "\n" + FAKE_VMCLI,
+                "ssh": "#!" + sys.executable + "\n" + FAKE_SSH,
             }.items():
                 target = fakebin / name
                 target.write_text(script)
@@ -89,19 +191,34 @@ exec tart "$@"
             log = work / "commands.jsonl"
             payload = work / "payload.json"
             ready = work / "ready-count"
+            tart_pid = work / "tart.pid"
             env = dict(os.environ, PATH=str(fakebin) + os.pathsep + os.environ["PATH"],
-                        VM_TEST_LOG=str(log), VM_TEST_PAYLOAD=str(payload),
+                        TMPDIR=str(work), VM_TEST_TART_PID=str(tart_pid), VM_TEST_LOG=str(log), VM_TEST_PAYLOAD=str(payload),
                         VM_MISE_LOG=str(work / "mise.log"), VM_TOOL_ROOT=str(ROOT),
                         VM_TEST_READY=str(ready), VM_TEST_SCENARIO=scenario,
                         VM_TEST_PLATFORM="Linux" if scenario == "linux" else "Darwin",
                         TS_AUTHKEY="synthetic-secret-must-not-transfer")
+            base = work / "base VM.vmx"
+            base.touch()
+            known_hosts = work / "known hosts"
+            known_hosts.write_text("codyssey-fusion synthetic-key\n")
+            if arch == "x86_64":
+                env.update(CODYSSEY_FUSION_VMRUN=str(fakebin / "vmrun"),
+                           CODYSSEY_FUSION_GUEST_USER="synthetic",
+                           CODYSSEY_FUSION_KNOWN_HOSTS=str(known_hosts),
+                           VM_TEST_RUNNING=str(work / "running"))
+                if scenario == "collision":
+                    (work / "synthetic-test.vmwarevm").mkdir()
+                if scenario == "offline-configuration-failure":
+                    env["fusion_isolated"] = "1"
+            env["VM_TEST_ARCH"] = arch
             result = subprocess.run(
                 ["bash", str(ROOT / "scripts/create-macos-vm.sh"),
-                 "--image", "reviewed-base", "--name", "synthetic-test", *extra],
+                 "--image", str(base) if arch == "x86_64" else "reviewed-base", "--name", "synthetic-test", *extra],
                 cwd=work, env=env, text=True, capture_output=True, timeout=25,
             )
             mise_calls = (work / "mise.log").read_text().splitlines() if (work / "mise.log").exists() else []
-            if scenario == "linux":
+            if scenario == "linux" or arch == "x86_64":
                 self.assertEqual(mise_calls, [])
             elif mise_calls:
                 self.assertTrue(mise_calls[0].endswith("-E vm install tart"))
@@ -110,13 +227,19 @@ exec tart "$@"
                 self.assertNotEqual(result.returncode, 0)
             commands = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
             names = json.loads(payload.read_text()) if payload.exists() else []
+            if tart_pid.exists() and not any(cmd[0] == "stop" for cmd in commands):
+                # A retained fake runner would otherwise outlive the fixture.
+                try:
+                    os.kill(int(tart_pid.read_text()), signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
             return result, commands, names
 
     def test_success_keeps_stopped_vm_and_transfers_only_environment(self):
         result, commands, names = self.run_case()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(["stop", "synthetic-test"], commands)
-        shutdown = ["exec", "synthetic-test", "/opt/homebrew/bin/colima", "stop", "--profile", "codyssey-verify"]
+        shutdown = ["exec", "synthetic-test", "/bin/bash", "/Users/synthetic/guest work/scripts/prepare-macos-vm.sh", "--disposable", "--stop"]
         self.assertLess(commands.index(shutdown), commands.index(["stop", "synthetic-test"]))
         self.assertFalse(any(cmd[0] == "delete" for cmd in commands))
         self.assertIn("init.sh", names)
@@ -131,6 +254,75 @@ exec tart "$@"
         self.assertTrue(any("DOCKER_CONTEXT=colima-codyssey-verify" in cmd for cmd in commands))
         self.assertTrue(any("/Users/synthetic/guest work/scripts/verify-macos-vm.sh" in cmd for cmd in commands))
         self.assertLess(result.stdout.index("TART_STOP_COMPLETE"), result.stdout.index("PASS:"))
+
+    def test_intel_clones_transfers_verifies_and_cleans_up_through_fusion(self):
+        result, commands, names = self.run_case(arch="x86_64", extra=("--delete-on-success",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        lifecycle = [cmd[0] for cmd in commands if cmd[0] != "list"]
+        self.assertEqual(lifecycle, ["clone", "configure", "configure", "start", "getGuestIPAddress", "ssh", "ssh",
+                                     "ssh", "ssh", "ssh", "ssh", "ssh", "stop", "deleteVM"])
+        destination = next(cmd[2] for cmd in commands if cmd[0] == "clone")
+        self.assertEqual([cmd[1:] for cmd in commands if cmd[0] == "configure"],
+                         [[destination, "isolation.tools.hgfs.disable", "TRUE"],
+                          [destination, "sharedFolder.maxNum", "0"]])
+        self.assertIn("scripts/vm-guest-path.sh", names)
+        self.assertIn("scripts/vm-aqua-exec.py", names)
+        preflight = next(cmd for cmd in commands if "--preflight" in cmd)
+        verify = next(cmd for cmd in commands if "DOCKER_CONTEXT=colima-codyssey-verify" in cmd)
+        self.assertTrue(preflight[2].endswith("/vm-aqua-exec.py"))
+        self.assertTrue(verify[2].endswith("/vm-aqua-exec.py"))
+        self.assertNotIn(".env", names)
+        self.assertNotIn("gost/gost.yaml", names)
+        self.assertIn("PASS:", result.stdout)
+
+    def test_fusion_lost_preparation_reply_still_checks_guest_ownership(self):
+        result, commands, _ = self.run_case("lost-prepare-reply", arch="x86_64")
+        self.assertEqual(result.returncode, 255, result.stderr)
+        self.assertTrue(any("--stop" in cmd for cmd in commands))
+        self.assertFalse(any("DOCKER_CONTEXT=colima-codyssey-verify" in cmd for cmd in commands))
+
+    def test_fusion_leaves_vm_running_when_guest_shutdown_is_unresolved(self):
+        result, commands, _ = self.run_case("unresolved-guest-stop", ("--delete-on-success",), arch="x86_64")
+        self.assertEqual(result.returncode, 255, result.stderr)
+        self.assertTrue(any("--stop" in cmd for cmd in commands))
+        self.assertFalse(any(cmd[0] in ("stop", "deleteVM") for cmd in commands))
+        self.assertIn("retained without requesting shutdown", result.stderr)
+
+    def test_fusion_offline_configuration_failure_keeps_the_clone_powered_off(self):
+        result, commands, _ = self.run_case("offline-configuration-failure", arch="x86_64")
+        self.assertEqual(result.returncode, 38, result.stderr)
+        self.assertFalse(any(cmd[0] in ("start", "ssh", "deleteVM") for cmd in commands))
+        self.assertIn("Offline clone retained for inspection", result.stdout)
+        self.assertNotIn("Open:", result.stdout)
+        self.assertNotIn("PASS:", result.stdout)
+
+    def test_fusion_waits_for_shutdown_before_deleting(self):
+        result, commands, _ = self.run_case("delayed-shutdown", ("--delete-on-success",), arch="x86_64")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        verbs = [cmd[0] for cmd in commands]
+        self.assertEqual(verbs[verbs.index("stop"):], ["stop", "list", "list", "deleteVM"])
+
+    def test_fusion_desktop_preflight_failure_prevents_provisioning(self):
+        result, commands, _ = self.run_case("desktop-preflight-failure", arch="x86_64")
+        self.assertEqual(result.returncode, 21, result.stderr)
+        self.assertFalse(any("--managed" in cmd for cmd in commands))
+        self.assertTrue(any(cmd[0] == "stop" for cmd in commands))
+
+    def test_fusion_collision_does_not_modify_existing_bundle(self):
+        result, commands, _ = self.run_case("collision", ("--delete-on-success",), arch="x86_64")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(commands, [["list"]])
+
+    def test_fusion_verification_or_stop_failure_retains_owned_vm(self):
+        for scenario, code in (("verify-failure", 19), ("stop-failure", 1), ("shutdown-inventory-failure", 1)):
+            with self.subTest(scenario=scenario):
+                result, commands, _ = self.run_case(scenario, ("--delete-on-success",), arch="x86_64")
+                self.assertEqual(result.returncode, code, result.stderr)
+                self.assertTrue(any(cmd[0] == "stop" for cmd in commands))
+                self.assertFalse(any(cmd[0] == "deleteVM" for cmd in commands))
+                self.assertNotIn("PASS:", result.stdout)
+                if scenario == "stop-failure":
+                    self.assertIn("stop was not confirmed", result.stdout)
 
     def test_linux_does_not_install_or_execute_tart(self):
         result, commands, _ = self.run_case("linux")
@@ -212,7 +404,11 @@ exec tart "$@"
             with self.subTest(scenario=scenario):
                 result, commands, _ = self.run_case(scenario, ("--delete-on-success",))
                 self.assertEqual(result.returncode, code, result.stderr)
-                self.assertIn(["stop", "synthetic-test"], commands)
+                if scenario == "shutdown-failure":
+                    self.assertNotIn(["stop", "synthetic-test"], commands)
+                    self.assertIn("retained without requesting shutdown", result.stderr)
+                else:
+                    self.assertIn(["stop", "synthetic-test"], commands)
                 self.assertFalse(any(cmd[0] == "delete" for cmd in commands))
                 if scenario == "prepare-failure":
                     self.assertFalse(any(any("verify-macos-vm.sh" in arg for arg in cmd) for cmd in commands))
@@ -258,6 +454,87 @@ exec tart "$@"
                                     text=True, capture_output=True, timeout=5)
             self.assertEqual(result.returncode, 0)
             self.assertIn("Usage:", result.stdout)
+
+
+class DesktopTransportTests(unittest.TestCase):
+    def test_aqua_job_preserves_arguments_result_and_cleanup(self):
+        run_in_aqua = runpy.run_path(str(ROOT / "scripts/vm-aqua-exec.py"))["run_in_aqua"]
+        real_run = subprocess.run
+        domains = []
+        work = None
+
+        def launchctl(argv, **kwargs):
+            nonlocal work
+            domains.append(argv[:3])
+            if argv[1] == "bootstrap":
+                file = Path(argv[3])
+                work = file.parent
+                job = plistlib.loads(file.read_bytes())
+                self.assertEqual(job["LimitLoadToSessionType"], "Aqua")
+                with Path(job["StandardOutPath"]).open("ab") as output:
+                    real_run(job["ProgramArguments"], stdout=output, stderr=output, check=True)
+            return subprocess.CompletedProcess(argv, 0)
+
+        output = io.TextIOWrapper(io.BytesIO())
+        with mock.patch.object(subprocess, "run", side_effect=launchctl), mock.patch.object(sys, "stdout", output):
+            status = run_in_aqua(
+                ["/bin/sh", "-c", 'printf "%s" "$1"; exit 17', "test", "guest's work"], 2
+            )
+        self.assertEqual(status, 17)
+        self.assertEqual(output.buffer.getvalue(), b"guest's work")
+        self.assertEqual([call[1] for call in domains], ["bootstrap", "bootout"])
+        self.assertFalse(work.exists())
+
+    def test_aqua_bootstrap_interruption_still_unregisters_the_job(self):
+        run_in_aqua = runpy.run_path(str(ROOT / "scripts/vm-aqua-exec.py"))["run_in_aqua"]
+        work = None
+        target = None
+        calls = []
+
+        def launchctl(argv, **kwargs):
+            nonlocal work, target
+            calls.append(argv[1])
+            if argv[1] == "bootstrap":
+                file = Path(argv[3])
+                work = file.parent
+                target = f'{argv[2]}/{plistlib.loads(file.read_bytes())["Label"]}'
+                raise SystemExit(143)
+            self.assertEqual(argv[2], target)
+            self.assertTrue(work.is_dir())
+            return subprocess.CompletedProcess(argv, 0)
+
+        with mock.patch.object(subprocess, "run", side_effect=launchctl):
+            with self.assertRaises(SystemExit) as interrupted:
+                run_in_aqua(["/usr/bin/true"], 2)
+        self.assertEqual(interrupted.exception.code, 143)
+        self.assertEqual(calls, ["bootstrap", "bootout"])
+        self.assertFalse(work.exists())
+
+    def test_tart_input_driver_transfers_the_verifier_path_helper(self):
+        vnc = ModuleType("vncdotool")
+        vnc.api = mock.Mock()
+        with mock.patch.dict(sys.modules, {"vncdotool": vnc}):
+            driver = runpy.run_path(str(ROOT / "scripts/verify-tart-input.py"))
+        payload = None
+
+        def guest(argv, **kwargs):
+            nonlocal payload
+            if "/usr/bin/mktemp" in argv:
+                return subprocess.CompletedProcess(argv, 0, b"/tmp/codyssey-input.synthetic\n")
+            if "/usr/bin/tar" in argv:
+                payload = kwargs["input"]
+            return subprocess.CompletedProcess(argv, 0, b"")
+
+        with mock.patch.object(subprocess, "check_output", return_value="/fake/tart"), \
+             mock.patch.object(subprocess, "run", side_effect=guest):
+            with self.assertRaisesRegex(RuntimeError, "Expected one VNC endpoint"):
+                with tempfile.TemporaryDirectory() as directory:
+                    log = Path(directory) / "tart.log"
+                    log.touch()
+                    driver["run_check"]("synthetic", log)
+        with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
+            self.assertIn("scripts/verify-macos-vm.sh", archive.getnames())
+            self.assertIn("scripts/vm-guest-path.sh", archive.getnames())
 
 
 if __name__ == "__main__":
