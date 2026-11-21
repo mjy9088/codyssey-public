@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: bash scripts/create-fusion-installer.sh INSTALLER.app OUTPUT.dmg\n'
+  printf 'Usage: bash scripts/create-fusion-installer.sh INSTALLER.app OUTPUT.dmg|OUTPUT.iso\n'
   printf '       bash scripts/create-fusion-installer.sh --recovery BaseSystem.dmg OUTPUT.vmdk\n'
 }
 [[ ${1:-} != --help ]] || { usage; exit 0; }
@@ -12,7 +12,7 @@ if [[ ${1:-} == --recovery ]]; then
   shift
   [[ $# == 2 && $1 == *.dmg && $2 == *.vmdk && -f $1 ]] || { usage >&2; exit 2; }
 else
-  [[ $# == 2 && $1 == *.app && $2 == *.dmg ]] || { usage >&2; exit 2; }
+  [[ $# == 2 && $1 == *.app && ( $2 == *.dmg || $2 == *.iso ) ]] || { usage >&2; exit 2; }
 fi
 [[ $(uname -s) == Darwin && $(uname -m) == x86_64 ]] || {
   printf 'Build this VMware Fusion installer on an Intel Mac.\n' >&2
@@ -85,6 +85,11 @@ device=${BASH_REMATCH[1]}
 sudo "$installer" --volume "$mount" --nointeraction
 hdiutil detach "$device"
 attached=0
-hdiutil convert "$work/installer.sparseimage" -format UDRW -o "$work/installer.dmg"
-ln "$work/installer.dmg" "$output"
+if [[ $output == *.iso ]]; then
+  hdiutil convert "$work/installer.sparseimage" -format UDTO -o "$work/installer"
+  ln "$work/installer.cdr" "$output"
+else
+  hdiutil convert "$work/installer.sparseimage" -format UDRW -o "$work/installer.dmg"
+  ln "$work/installer.dmg" "$output"
+fi
 printf 'In Fusion, select File > New > Install from disc or image and choose:\n%s\n' "$output"

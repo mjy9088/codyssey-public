@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # Fusion owns the VMX lifecycle. VMware Tools supplies the address; SSH
 # supplies command status, output, and archive input without guest passwords.
+fusion_require_intel() {
+  [[ $(uname -s) == Darwin && $(uname -m) == x86_64 ]] || {
+    printf 'This command requires an Intel Mac with VMware Fusion Pro.\n' >&2
+    return 1
+  }
+}
+
 fusion_tools() {
   fusion_vmrun=${CODYSSEY_FUSION_VMRUN:-/Applications/VMware Fusion.app/Contents/Library/vmrun}
   [[ $fusion_vmrun == /* && -x $fusion_vmrun ]] || {
@@ -17,12 +24,99 @@ fusion_tools() {
 fusion_source_path() {
   local image=$1
   [[ $image == *.vmx && -f $image && ! -L $image && $image != *$'\n'* ]] || {
-    printf 'Fusion requires a reviewed, powered-off local .vmx.\n' >&2
+    printf 'Choose the local .vmx of the disposable Fusion VM.\n' >&2
     return 1
   }
   local directory
   directory=$(CDPATH='' cd -- "$(dirname -- "$image")" && pwd -P) || return
   printf '%s/%s\n' "$directory" "$(basename -- "$image")"
+}
+
+fusion_storage_path() {
+  local config="$HOME/.local/share/codyssey/fusion" stored
+  if [[ -n ${CODYSSEY_FUSION_STORAGE:-} ]]; then
+    printf '%s\n' "$CODYSSEY_FUSION_STORAGE"
+  elif [[ -e $config/storage-path || -L $config/storage-path ]]; then
+    if stored=$(fusion_read_selection "$config/storage-path") && [[ $stored == /* ]]; then
+      printf '%s\n' "$stored"
+    else
+      printf 'Invalid Fusion storage selection. Run step 01 with --set-storage.\n' >&2
+      return 1
+    fi
+  else
+    printf '%s\n' "$config"
+  fi
+}
+
+fusion_read_selection() {
+  local file=$1 value
+  [[ -f $file && ! -L $file ]] || return 1
+  value=$(cat -- "$file") || return
+  [[ -n $value && $value != *$'\n'* && $value != *$'\r'* ]] || return 1
+  printf '%s\n' "$value"
+}
+
+fusion_write_selection() (
+  local file=$1 value=$2 temporary
+  umask 077
+  mkdir -p "${file%/*}" || return
+  [[ ! -L $file && ( ! -e $file || -f $file ) ]] || {
+    printf 'Cannot save the selection in %s.\n' "$file" >&2
+    return 1
+  }
+  temporary=$(mktemp "${file%/*}/.selection.XXXXXX") || return
+  trap 'rm -f -- "$temporary"' EXIT
+  printf '%s\n' "$value" > "$temporary" && mv -f "$temporary" "$file"
+)
+
+fusion_select_storage() {
+  local directory=$1
+  [[ $directory != *$'\n'* && $directory != *$'\r'* && -n $directory ]] || return 1
+  mkdir -p -- "$directory" || return
+  directory=$(CDPATH='' cd -- "$directory" && pwd -P) || return
+  fusion_write_selection "$HOME/.local/share/codyssey/fusion/storage-path" "$directory" || return
+  printf 'Fusion storage: %s\n' "$directory"
+}
+
+fusion_selected_media() {
+  local storage media
+  storage=$(fusion_storage_path) || return
+  media=$(fusion_read_selection "$storage/current-installer") || {
+    printf 'No saved installer. Run step 01 or pass an ISO to step 02.\n' >&2
+    return 1
+  }
+  [[ $media == /* ]] || media="$storage/$media"
+  fusion_media_path "$media"
+}
+
+fusion_remember_media() {
+  local media storage
+  media=$(fusion_media_path "$1") || return
+  storage=$(fusion_storage_path) || return
+  storage=$(CDPATH='' cd -- "$storage" && pwd -P) || return
+  fusion_write_selection "$storage/current-installer" "${media#"$storage/"}"
+}
+
+fusion_selected_base() {
+  local base=${1:-} storage
+  if [[ -z $base ]]; then
+    storage=$(fusion_storage_path) || return
+    base=$(fusion_read_selection "$storage/current-base") || {
+      printf 'No saved base. Run step 02 or pass the path to a base VMX.\n' >&2
+      return 1
+    }
+    [[ $base == /* ]] || base="$storage/$base"
+  fi
+  fusion_source_path "$base"
+}
+
+fusion_remember_base() {
+  local base storage
+  base=$(fusion_source_path "$1") || return
+  storage=$(fusion_storage_path) || return
+  mkdir -p "$storage" || return
+  storage=$(CDPATH='' cd -- "$storage" && pwd -P) || return
+  fusion_write_selection "$storage/current-base" "${base#"$storage/"}"
 }
 
 vm_init() {
@@ -44,13 +138,54 @@ vm_init() {
 
 fusion() { "$fusion_vmrun" -T fusion "$@"; }
 
-vm_clone() {
-  local running
+fusion_media_path() {
+  local image=$1 directory result
+  [[ -s $image && -f $image ]] || { printf 'Missing media: %s\n' "$image" >&2; return 1; }
+  directory=$(CDPATH='' cd -- "$(dirname -- "$image")" && pwd -P) || return
+  result="$directory/$(basename -- "$image")"
+  [[ $result != *['"|']* && $result != *$'\n'* && $result != *$'\r'* ]] || {
+    printf 'Use a media path without quotes, vertical bars, or line breaks.\n' >&2
+    return 1
+  }
+  printf '%s\n' "$result"
+}
+
+fusion_require_stopped() {
+  local vmx=$1 running suspended
   running=$(fusion list) || return
-  if fusion_list_contains "$fusion_source" "$running"; then
-    printf 'Shut down the Fusion base VM before cloning.\n' >&2
+  if fusion_list_contains "$vmx" "$running"; then
+    printf 'Shut down the Fusion VM first: %s\n' "$vmx" >&2
     return 1
   fi
+  # A suspended VM can be absent from the running inventory.
+  for suspended in "${vmx%/*}"/*.vmss; do
+    [[ -f $suspended ]] || continue
+    printf 'Resume and shut down the suspended Fusion VM first: %s\n' "$vmx" >&2
+    return 1
+  done
+}
+
+fusion_disconnect_media() {
+  local vmx=$1 slot=$2 backing
+  backing=$(awk -F'"' -v key="$slot.filename" 'NF >= 2 {
+    field=tolower($1); sub(/^[[:blank:]]+/, "", field); sub(/[[:blank:]]*=.*$/, "", field);
+    if (field == key) print $2;
+  }' "$vmx") || return
+  case $backing in
+    ''|*.iso|*.dmg|RecoveryMedia.vmdk) ;;
+    *) printf 'The %s slot contains another disk: %s\n' "$slot" "$backing" >&2; return 1 ;;
+  esac
+  "$fusion_vmcli" "$1" ConfigParams SetEntry "$2.present" FALSE
+}
+
+fusion_boot_target() {
+  fusion_disconnect_media "$1" sata0:1 &&
+    "$fusion_vmcli" "$1" ConfigParams SetEntry bios.hddOrder sata0:0 &&
+    "$fusion_vmcli" "$1" ConfigParams SetEntry efi.bootOrder hdd,cdrom
+}
+
+vm_clone() {
+  fusion_require_stopped "$fusion_source" || return
   # Reserve the bundle atomically and never act on a pre-existing destination.
   (umask 077; mkdir "$fusion_bundle") || return
   if ! fusion clone "$fusion_source" "$fusion_vmx" full "-cloneName=$name"; then
@@ -121,9 +256,9 @@ vm_desktop_exec() {
 }
 
 vm_stop() {
-  local running deadline
+  local running deadline vmx=${1:-$fusion_vmx}
   running=$(fusion list) || return
-  if ! fusion_list_contains "$fusion_vmx" "$running"; then
+  if ! fusion_list_contains "$vmx" "$running"; then
     # Without a soft stop response, disappearance from the running list
     # cannot distinguish a clean shutdown from suspension or a crash.
     if [[ $fusion_started == 0 ]]; then
@@ -131,11 +266,11 @@ vm_stop() {
     fi
     return 1
   fi
-  fusion stop "$fusion_vmx" soft || return
+  fusion stop "$vmx" soft || return
   deadline=$((SECONDS + 60))
   while (( SECONDS < deadline )); do
     running=$(fusion list) || return
-    if ! fusion_list_contains "$fusion_vmx" "$running"; then
+    if ! fusion_list_contains "$vmx" "$running"; then
       return 0
     fi
     sleep 2

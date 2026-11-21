@@ -23,7 +23,7 @@ fusion_tools
 base=$(fusion_source_path "$1")
 prepare=${2:-}
 umask 077
-storage=${CODYSSEY_FUSION_STORAGE:-"$HOME/.local/share/codyssey/fusion"}
+storage=$(fusion_storage_path)
 mkdir -p "$storage"
 storage=$(CDPATH='' cd -- "$storage" && pwd -P)
 credentials=${CODYSSEY_FUSION_CREDENTIALS:-"$HOME/.local/share/codyssey/fusion/credentials"}
@@ -129,4 +129,4 @@ tar -C "$root" -cf "$temp/payload.tar" scripts/prepare-fusion-base.sh scripts/vm
 vm_transfer "$guest_root" "$temp/payload.tar"
 fusion_ssh_terminal=-t fusion_ssh /bin/bash "$guest_root/scripts/prepare-fusion-base.sh"
 vm_exec /bin/rm -rf -- "$guest_root"
-printf 'Base ready. Eject any installer images and shut down the guest, then run this command without --prepare.\n'
+printf 'Guest tools are ready.\n'

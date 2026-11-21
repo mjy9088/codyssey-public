@@ -300,6 +300,46 @@ exec tart "$@"
         self.assertTrue(any(cmd[-1] == "--workstation" for cmd in commands))
         self.assertFalse(any("prepare-macos-vm.sh" in arg for cmd in commands for arg in cmd))
 
+    def test_intel_numbered_steps_remember_a_base_when_storage_moves(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary).resolve()
+            storage = work / "external storage"
+            stored_base = storage / "bases" / "Base.vmwarevm" / "Base.vmx"
+            stored_base.parent.mkdir(parents=True)
+            stored_base.touch()
+            external_base = work / "Other.vmx"
+            external_base.touch()
+            installer = storage / "Sequoia.iso"
+            installer.write_text("synthetic installer\n")
+            script = """
+set -euo pipefail
+. "$1"
+export HOME="$5"
+unset CODYSSEY_FUSION_STORAGE
+fusion_select_storage "$2"
+test "$(fusion_storage_path)" = "$2"
+fusion_remember_media "$6"
+test "$(cat "$2/current-installer")" = "Sequoia.iso"
+test "$(fusion_selected_media)" = "$6"
+fusion_remember_base "$3"
+test "$(cat "$2/current-base")" = "bases/Base.vmwarevm/Base.vmx"
+test "$(fusion_selected_base)" = "$3"
+mv "$2" "$2-moved"
+fusion_select_storage "$2-moved"
+test "$(fusion_selected_media)" = "$2-moved/Sequoia.iso"
+test "$(CODYSSEY_FUSION_STORAGE="$2" fusion_storage_path)" = "$2"
+test "$(fusion_selected_base)" = "$2-moved/bases/Base.vmwarevm/Base.vmx"
+test "$(fusion_selected_base "$4")" = "$4"
+fusion_remember_base "$4"
+test "$(fusion_selected_base)" = "$4"
+"""
+            result = subprocess.run(
+                ["bash", "-c", script, "fusion-selection", str(ROOT / "scripts/vm-fusion.sh"),
+                 str(storage), str(stored_base), str(external_base), str(work / "home"), str(installer)],
+                text=True, capture_output=True, timeout=10,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_intel_base_preparation_pins_only_verified_keys(self):
         for scenario in ("quick-prepare", "quick-prep-mismatch"):
             with self.subTest(scenario=scenario):
