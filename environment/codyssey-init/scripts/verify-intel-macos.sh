@@ -90,7 +90,18 @@ elif [[ ! -s $pin ]]; then
   printf 'The saved SSH host key file is empty or missing: %s\n' "$pin" >&2
   exit 1
 fi
-printf 'Keep this host command running while you prepare the guest (up to %s seconds).\n' "$timeout"
+printf 'Waiting for guest preparation (up to %s seconds).\n' "$timeout"
+if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 ]]; then
+  address_status='Waiting for Fusion to report a guest IPv4 address.'
+  clt_status='SSH is connected. Waiting for Command Line Tools.'
+  ssh_status='Waiting for an SSH connection with the pinned host key.'
+  console_status="SSH is connected. Waiting for the $CODYSSEY_FUSION_GUEST_USER desktop session."
+else
+  address_status='Fusion has not reported a guest IPv4 address. Finish VMware Tools setup and check the guest network.'
+  clt_status='SSH is connected. Finish the Command Line Tools installation in the guest.'
+  ssh_status="SSH could not connect with the pinned key. Check Remote Login and access for $CODYSSEY_FUSION_GUEST_USER in the guest."
+  console_status="SSH is connected. Sign in to the guest desktop as $CODYSSEY_FUSION_GUEST_USER and leave that session open."
+fi
 previous_status=
 while :; do
   if (( new_pin )) && [[ ! -s $temp/known_hosts ]]; then
@@ -108,7 +119,9 @@ while :; do
     fi
   fi
   if [[ ! -s $CODYSSEY_FUSION_KNOWN_HOSTS ]]; then
-    if [[ ${CODYSSEY_FUSION_SETUP_OPENED:-0} == 1 ]]; then
+    if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 ]]; then
+      status='Waiting for the guest to publish its SSH host key.'
+    elif [[ ${CODYSSEY_FUSION_SETUP_OPENED:-0} == 1 ]]; then
       status='Waiting for the guest SSH key. Check the setup Terminal for an approval or administrator prompt.'
     else
       status='Waiting for the guest SSH key. In the guest Finder, open the Codyssey disc and double-click Start Setup.command (or run bash /Volumes/Codyssey/setup.sh in the guest Terminal).'
@@ -116,16 +129,16 @@ while :; do
   else
     vm_init "$base" prepared-base
     if ! fusion_address=$(fusion_guest_address "$base" 2>/dev/null); then
-      status='Fusion has not reported a guest IPv4 address. Finish VMware Tools setup and check the guest network.'
+      status=$address_status
     elif fusion_console_ready >/dev/null 2>&1; then
       if [[ -n ${CODYSSEY_FUSION_GUEST_PASSWORD_FILE:-} ]] || vm_exec /usr/bin/xcode-select -p >/dev/null 2>&1; then
         break
       fi
-      status='SSH is connected. Finish the Command Line Tools installation in the guest.'
+      status=$clt_status
     elif [[ $? == 255 ]]; then
-      status="SSH could not connect with the pinned key. Check Remote Login and access for $fusion_user in the guest."
+      status=$ssh_status
     else
-      status="SSH is connected. Sign in to the guest desktop as $fusion_user and leave that session open."
+      status=$console_status
     fi
   fi
   if [[ $status != "$previous_status" ]]; then

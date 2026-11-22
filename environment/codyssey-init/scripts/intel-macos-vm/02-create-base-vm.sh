@@ -83,7 +83,13 @@ mkdir -p "$storage/bases"
 bundle="$(CDPATH='' cd -- "$storage/bases" && pwd -P)/$name.vmwarevm"
 mkdir "$bundle" || { printf 'Choose a new base name. Existing path: %s\n' "$bundle" >&2; exit 1; }
 printf 'Creating base: %s\n' "$bundle"
-"$vdiskmanager" -c -s 80GB -a lsilogic -t 0 "$bundle/Target.vmdk"
+console_port=${CODYSSEY_FUSION_INSTALL_CONSOLE_PORT:-}
+if [[ -n $console_port ]]; then
+  [[ $console_port =~ ^[1-9][0-9]{3,4}$ ]] && (( console_port <= 65535 )) || exit 2
+  bash "$scripts/intel-macos-vm/create-install-target.sh" "$bundle" "$vdiskmanager"
+else
+  "$vdiskmanager" -c -s 80GB -a lsilogic -t 0 "$bundle/Target.vmdk"
+fi
 
 vmx="$bundle/$name.vmx"
 cat > "$vmx" <<EOF
@@ -116,6 +122,13 @@ for bridge in 4 5 6 7; do
     "$bridge" "$bridge" "$bridge" >> "$vmx"
 done
 printf 'pciBridge0.present = "TRUE"\n' >> "$vmx"
+if [[ -n $console_port ]]; then
+  cat >> "$vmx" <<EOF
+RemoteDisplay.vnc.ip = "127.0.0.1"
+RemoteDisplay.vnc.port = "$console_port"
+RemoteDisplay.vnc.enabled = "TRUE"
+EOF
+fi
 if [[ $2 == --recovery ]]; then
   bash "$scripts/create-fusion-installer.sh" --recovery "$media" "$bundle/RecoveryMedia.vmdk"
   cat >> "$vmx" <<'EOF'

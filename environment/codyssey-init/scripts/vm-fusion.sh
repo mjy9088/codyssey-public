@@ -55,9 +55,15 @@ fusion_guest_identity() {
 
 fusion_ensure_guest_identity() {
   local identity=$1
+  local -a key_options
+  key_options=(-t ed25519 -C codyssey-fusion-lab -f "$identity")
+  if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 ]]; then
+    # This disposable key lives in the private run directory.
+    key_options+=(-N '')
+  fi
   [[ $identity == /* ]] || { printf 'Use an absolute SSH identity path.\n' >&2; return 1; }
   if [[ ! -e $identity && ! -e $identity.pub && ! -L $identity && ! -L $identity.pub ]]; then
-    (umask 077; mkdir -p "${identity%/*}" && ssh-keygen -t ed25519 -C codyssey-fusion-lab -f "$identity") || return
+    (umask 077; mkdir -p "${identity%/*}" && ssh-keygen "${key_options[@]}") || return
   fi
   [[ -f $identity && -r $identity ]] || { printf 'Missing private key: %s\n' "$identity" >&2; return 1; }
 }
@@ -136,6 +142,8 @@ fusion_remember_base() {
 vm_init() {
   local image=$1 name=$2
   fusion_isolated=0 fusion_started=0
+  fusion_project_root=${3:-}
+  fusion_console_pid='' fusion_console_enabled=0
   fusion_tools || return
   fusion_source=$(fusion_source_path "$image") || return
   fusion_user=${CODYSSEY_FUSION_GUEST_USER:-}
@@ -219,7 +227,7 @@ fusion_list_contains() {
 }
 
 vm_start() {
-  local mode=${CODYSSEY_FUSION_START_MODE:-gui}
+  local mode=${CODYSSEY_FUSION_START_MODE:-gui} port
   [[ $mode == gui || $mode == nogui ]] || {
     printf 'Set CODYSSEY_FUSION_START_MODE to gui or nogui.\n' >&2
     return 1
@@ -227,11 +235,26 @@ vm_start() {
   "$fusion_vmcli" "$fusion_vmx" ConfigParams SetEntry isolation.tools.hgfs.disable TRUE || return
   "$fusion_vmcli" "$fusion_vmx" ConfigParams SetEntry sharedFolder.maxNum 0 || return
   fusion_isolated=1
+  if [[ -n ${CODYSSEY_FUSION_VERIFY_RECOGNIZER:-} ]]; then
+    [[ -x $CODYSSEY_FUSION_VERIFY_RECOGNIZER && -n $fusion_project_root ]] || return 1
+    port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])') || return
+    "$fusion_vmcli" "$fusion_vmx" ConfigParams SetEntry RemoteDisplay.vnc.ip 127.0.0.1 || return
+    "$fusion_vmcli" "$fusion_vmx" ConfigParams SetEntry RemoteDisplay.vnc.port "$port" || return
+    "$fusion_vmcli" "$fusion_vmx" ConfigParams SetEntry RemoteDisplay.vnc.enabled TRUE || return
+    fusion_console_enabled=1
+    mode=gui
+  fi
   if [[ $mode == nogui ]]; then
     printf 'Open the guest console if needed: open %q\n' "$fusion_vmx"
   fi
   fusion start "$fusion_vmx" "$mode" || return
   fusion_started=1
+  if (( fusion_console_enabled )); then
+    python3 "$fusion_project_root/scripts/intel-macos-vm/watch-workstation-console.py" \
+      "$fusion_vmcli" "$fusion_vmx" "$CODYSSEY_FUSION_VERIFY_RECOGNIZER" "$port" "$fusion_user" \
+      "$fusion_bundle/.verification-console.png" &
+    fusion_console_pid=$!
+  fi
 }
 
 vm_running() {
@@ -320,26 +343,51 @@ vm_desktop_exec() {
 }
 
 vm_stop() {
-  local running deadline vmx=${1:-$fusion_vmx}
+  local running deadline vmx=${1:-$fusion_vmx} mode=${2:-soft}
+  if [[ -n ${fusion_console_pid:-} ]]; then
+    kill "$fusion_console_pid" 2>/dev/null || :
+    wait "$fusion_console_pid" 2>/dev/null || :
+    fusion_console_pid=
+    rm -f -- "$fusion_bundle/.verification-console.png"
+  fi
   running=$(fusion list) || return
   if ! fusion_list_contains "$vmx" "$running"; then
     # Without a soft stop response, disappearance from the running list
     # cannot distinguish a clean shutdown from suspension or a crash.
     if [[ $fusion_started == 0 ]]; then
+      if (( ${fusion_console_enabled:-0} )); then
+        "$fusion_vmcli" "$vmx" ConfigParams SetEntry RemoteDisplay.vnc.enabled FALSE || return
+      fi
       return 0
     fi
     return 1
   fi
-  fusion stop "$vmx" soft || return
+  # A guest dialog can block the vmrun RPC before it returns a stop result.
+  /usr/bin/perl -e 'alarm 60; exec @ARGV or die "$!\n";' "$fusion_vmrun" -T fusion stop "$vmx" "$mode" || return
   deadline=$((SECONDS + 60))
   while (( SECONDS < deadline )); do
     running=$(fusion list) || return
     if ! fusion_list_contains "$vmx" "$running"; then
+      if (( ${fusion_console_enabled:-0} )); then
+        "$fusion_vmcli" "$vmx" ConfigParams SetEntry RemoteDisplay.vnc.enabled FALSE || return
+      fi
       return 0
     fi
     sleep 2
   done
   return 1
+}
+
+vm_stop_disposable() {
+  local vmx=$1 running
+  if vm_stop "$vmx"; then
+    return 0
+  fi
+  running=$(fusion list) || return
+  if fusion_list_contains "$vmx" "$running"; then
+    printf 'Forcing shutdown of the disposable VM after a failed soft stop.\n' >&2
+    vm_stop "$vmx" hard
+  fi
 }
 
 vm_delete() {

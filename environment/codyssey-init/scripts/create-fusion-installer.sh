@@ -29,12 +29,14 @@ output="$directory/$(basename -- "$2")"
 
 work=$(mktemp -d "$directory/.fusion-installer.XXXXXX")
 device=''
+mount_work=''
 attached=0
 cleanup() {
   if (( attached )) && { [[ -z $device ]] || ! hdiutil detach "$device" >&2; }; then
     printf 'Installer volume is still attached. Temporary image: %s\n' "$work" >&2
     return
   fi
+  [[ -z $mount_work ]] || rm -rf -- "$mount_work"
   rm -rf -- "$work"
 }
 trap cleanup EXIT
@@ -70,19 +72,31 @@ fi
 
 installer=$(CDPATH='' cd -- "$1" && pwd -P)/Contents/Resources/createinstallmedia
 [[ -x $installer ]] || { printf 'Use a full macOS installer app from Apple.\n' >&2; exit 1; }
-mount="$work/volume"
+# Disk Arbitration may refuse a private mount point nested on removable storage.
+mount_work=$(mktemp -d /private/tmp/codyssey-media-mount.XXXXXX)
+mount="$mount_work/volume"
 mkdir "$mount"
 hdiutil create -size 18g -type SPARSE -layout SPUD -fs HFS+J \
   -volname CodysseyInstaller "$work/installer.sparseimage"
-attached=1
 hdiutil attach -nobrowse -mountpoint "$mount" -plist "$work/installer.sparseimage" > "$work/attachment.plist"
+attached=1
 candidate=$(/usr/libexec/PlistBuddy -c 'Print :system-entities:0:dev-entry' "$work/attachment.plist")
 [[ $candidate =~ ^(/dev/disk[0-9]+)(s[0-9]+)*$ ]] || {
   printf 'Could not identify the attached installer image.\n' >&2
   exit 1
 }
 device=${BASH_REMATCH[1]}
-sudo "$installer" --volume "$mount" --nointeraction
+if [[ ${CODYSSEY_FUSION_HOST_AUTH:-terminal} == dialog ]]; then
+  /usr/bin/osascript - "$installer" "$mount" <<'APPLESCRIPT'
+on run arguments
+  set installer to quoted form of item 1 of arguments
+  set targetVolume to quoted form of item 2 of arguments
+  do shell script (installer & " --volume " & targetVolume & " --nointeraction") with administrator privileges
+end run
+APPLESCRIPT
+else
+  sudo "$installer" --volume "$mount" --nointeraction
+fi
 hdiutil detach "$device"
 attached=0
 if [[ $output == *.iso ]]; then

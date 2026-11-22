@@ -39,7 +39,11 @@ cleanup() {
     running=$(fusion list) || return 1
     if (( started )) && fusion_list_contains "$base" "$running"; then
       fusion_started=1
-      vm_stop "$base" || return 1
+      if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 ]]; then
+        vm_stop_disposable "$base" || return 1
+      else
+        vm_stop "$base" || return 1
+      fi
       printf 'Stopped the guest to close its temporary console. Run step 04 again to resume.\n' >&2
     fi
     "$fusion_vmcli" "$base" ConfigParams SetEntry RemoteDisplay.vnc.enabled FALSE || return 1
@@ -136,6 +140,7 @@ snapshots=$(fusion listSnapshots "$base")
 if ! grep -qxF "$checkpoint" <<< "$snapshots"; then
   fusion snapshot "$base" "$checkpoint"
 fi
+printf 'Saved first-desktop snapshot: %s\n' "$checkpoint"
 "$fusion_vmcli" "$base" ConfigParams SetEntry sata0:2.deviceType cdrom-image
 "$fusion_vmcli" "$base" ConfigParams SetEntry sata0:2.fileName "$setup_iso"
 "$fusion_vmcli" "$base" ConfigParams SetEntry sata0:2.startConnected TRUE
@@ -159,12 +164,24 @@ started=1
 fusion start "$base" gui
 setup_opened=0
 if (( vnc_enabled )); then
-  printf 'Waiting for Finder to show the guest setup file. Sign in to the guest if needed.\n'
+  if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 ]]; then
+    printf 'Opening the guest setup disc and handling the lab account prompts.\n'
+  else
+    printf 'Waiting for Finder to show the guest setup file. Sign in to the guest if needed.\n'
+  fi
   if python3 "$launcher/open-guest-setup.py" "$fusion_vmcli" "$base" "$work/recognize" "$work/screen.png" "$port" "$guest_user" "$prompt_id"; then
     setup_opened=1
   fi
 fi
 if (( ! setup_opened )); then
+  if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 ]]; then
+    if [[ -f $work/screen.txt ]]; then
+      cp "$work/screen.txt" "$storage/setup-screen.txt"
+      printf 'Last setup OCR: %s/setup-screen.txt\n' "$storage" >&2
+    fi
+    printf 'Could not open the setup disc automatically in the selected VM.\n' >&2
+    exit 1
+  fi
   cat <<'EOF'
 If Terminal did not open, double-click Start Setup.command on the Codyssey disc.
 If needed, you can also start it from the guest Terminal:
@@ -173,10 +190,12 @@ bash /Volumes/Codyssey/setup.sh
 
 EOF
 fi
-cat <<'EOF'
+if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} != 1 ]]; then
+  cat <<'EOF'
 Approve VMware Tools and Command Line Tools if prompted. Restart the guest if
 requested and rerun the command after signing in. Enable Remote Login for the
 lab account. This command waits for the guest and continues automatically.
 EOF
+fi
 CODYSSEY_FUSION_NAT_FALLBACK=1 CODYSSEY_FUSION_SETUP_OPENED=$setup_opened \
   bash "$scripts/intel-macos-vm/05-prepare-base.sh" "$base"

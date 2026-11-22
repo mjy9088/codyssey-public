@@ -179,6 +179,25 @@ elif len(args) > 1 and args[1].endswith("/vm-aqua-exec.py"):
 
 
 class OrchestrationTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("ssh-keygen"), "OpenSSH is required")
+    def test_unattended_guest_key_is_usable_without_terminal_input(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            identity = Path(temporary) / "credentials" / "id_ed25519"
+            result = subprocess.run(
+                ["bash", "-c", '. "$1"; fusion_ensure_guest_identity "$2"',
+                 "test-fusion-key", str(ROOT / "scripts/vm-fusion.sh"), str(identity)],
+                env=dict(os.environ, CODYSSEY_FUSION_UNATTENDED="1"),
+                stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(identity.stat().st_mode & 0o777, 0o600)
+            public_key = subprocess.run(
+                ["ssh-keygen", "-y", "-f", str(identity)],
+                stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                check=True, timeout=10,
+            )
+            self.assertEqual(public_key.stdout, identity.with_suffix(".pub").read_text())
+
     def run_case(self, scenario="success", extra=(), arch="arm64", quick=False):
         with tempfile.TemporaryDirectory(prefix="vm-orchestration-") as directory:
             work = Path(directory)
