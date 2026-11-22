@@ -179,6 +179,26 @@ elif len(args) > 1 and args[1].endswith("/vm-aqua-exec.py"):
 
 
 class OrchestrationTests(unittest.TestCase):
+    def test_fusion_stop_request_times_out_and_reaps_unresponsive_vmrun(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            vmrun = Path(temporary) / "vmrun"
+            vmrun.write_text(
+                f"#!{sys.executable}\n"
+                "import os, sys, time\n"
+                "assert sys.argv[1:] == ['-T', 'fusion', 'stop', 'test VM.vmx', 'soft']\n"
+                "print(os.getpid(), flush=True)\n"
+                "time.sleep(30)\n"
+            )
+            vmrun.chmod(0o755)
+            result = subprocess.run(
+                ["bash", "-c", '. "$1"; fusion_vmrun=$2; fusion_request_stop "test VM.vmx" soft 1',
+                 "test-fusion-stop", str(ROOT / "scripts/vm-fusion.sh"), str(vmrun)],
+                stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10,
+            )
+            self.assertNotEqual(result.returncode, 0, result.stderr)
+            with self.assertRaises(ProcessLookupError):
+                os.kill(int(result.stdout), 0)
+
     @unittest.skipUnless(shutil.which("ssh-keygen"), "OpenSSH is required")
     def test_unattended_guest_key_is_usable_without_terminal_input(self):
         with tempfile.TemporaryDirectory() as temporary:

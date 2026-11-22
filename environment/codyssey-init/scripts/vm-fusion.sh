@@ -342,6 +342,29 @@ vm_desktop_exec() {
   vm_exec /usr/bin/python3 "$guest_files/scripts/vm-aqua-exec.py" "$@"
 }
 
+fusion_request_stop() {
+  local vmx=$1 mode=$2 timeout=$3
+  # A guest dialog can block the vmrun RPC before it returns a stop result.
+  if [[ -x /usr/bin/perl ]]; then
+    /usr/bin/perl -e 'alarm shift; exec @ARGV or die "$!\n";' "$timeout" "$fusion_vmrun" -T fusion stop "$vmx" "$mode"
+    return
+  fi
+  python3 -c '
+import subprocess
+import sys
+
+timeout, *command = sys.argv[1:]
+try:
+    result = subprocess.run(command, timeout=float(timeout))
+except subprocess.TimeoutExpired:
+    print(f"Timed out waiting for Fusion to acknowledge shutdown ({timeout}s).", file=sys.stderr)
+    sys.exit(124)
+except OSError as error:
+    sys.exit(f"Could not request Fusion shutdown: {error}")
+sys.exit(result.returncode if result.returncode >= 0 else 128 - result.returncode)
+' "$timeout" "$fusion_vmrun" -T fusion stop "$vmx" "$mode"
+}
+
 vm_stop() {
   local running deadline vmx=${1:-$fusion_vmx} mode=${2:-soft}
   if [[ -n ${fusion_console_pid:-} ]]; then
@@ -362,8 +385,7 @@ vm_stop() {
     fi
     return 1
   fi
-  # A guest dialog can block the vmrun RPC before it returns a stop result.
-  /usr/bin/perl -e 'alarm 60; exec @ARGV or die "$!\n";' "$fusion_vmrun" -T fusion stop "$vmx" "$mode" || return
+  fusion_request_stop "$vmx" "$mode" 60 || return
   deadline=$((SECONDS + 60))
   while (( SECONDS < deadline )); do
     running=$(fusion list) || return
