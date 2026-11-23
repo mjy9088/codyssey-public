@@ -27,7 +27,7 @@ RUN terraform -chdir=infrastructure/deployment init -backend=false -lockfile=rea
 
 FROM alpine@sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412 AS cloud-init-payload
 
-RUN apk add --no-cache cloud-init=24.3.1-r2
+RUN apk add --no-cache cloud-init
 COPY infrastructure/deployment/cloud-init.yaml /tmp/cloud-init.yaml
 COPY verify/cloud-init-bin/ /usr/local/lib/cloud-init-test-bin/
 RUN chmod 0755 /usr/local/lib/cloud-init-test-bin/* \

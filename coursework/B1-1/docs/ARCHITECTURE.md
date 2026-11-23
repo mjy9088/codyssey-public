@@ -157,9 +157,9 @@ human review.
   the verification network.
 - The default Compose network is internal. Only the preview overlay publishes a host port.
 - The VM uses its own Linux kernel under QEMU TCG without expanding host privileges.
-- npm lockfile and image-digest updates should be made together with the relevant Docker and VM test
-  updates. A disappeared pinned Alpine package should fail the build rather than silently select a
-  newer version. Pinning is not a substitute for planned security updates.
+- The visual verifier locks npm dependencies and the Chromium image for deterministic PNGs.
+  QEMU build packages come from the Alpine 3.22 repositories; the guest kernel and its
+  modules are extracted from the same signed package rather than pinned to an exact revision.
 
 ## Verification boundaries
 

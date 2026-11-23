@@ -30,19 +30,14 @@ Docker mode runs the deterministic structure, cache, policy, and REPL tests, the
 real CLI with piped commands. VM mode boots an x86_64 Alpine kernel under QEMU TCG and runs the
 same tests inside the guest. Docker must support `linux/amd64` containers for VM mode. The guest
 needs no KVM, privileged container, host socket mount, parent path, or credentials. The first
-build needs network access for pinned images, packages, and the kernel download.
+build needs network access for container images and Alpine packages.
 
 ### VM kernel source
 
-The guest uses Alpine's `virt` kernel from the Linux 6.12 longterm branch. Longterm
-support covers maintenance of that kernel branch. Alpine's update repository advances
-its package index as newer builds replace older ones, so an exact APK revision can become
-unavailable while the branch still receives updates. The VM Dockerfile pins the Alpine
-3.22.8 netboot release URL and verifies its kernel with SHA-256. The release archive
-retains versioned downloads independently of the package index. When updating the
-kernel, update the release URL and checksum together and run `sh scripts/verify.sh vm`
-to boot and test it. [Linux longterm releases](https://cdn.kernel.org/releases.html) ·
-[Alpine release archive](https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/x86_64/)
+The VM build uses `apk` to install the signed `linux-virt` package from Alpine 3.22.
+Alpine replaces superseded revisions in its package index, so the build follows the
+supported release branch rather than requiring a specific kernel patch or netboot archive.
+Run `sh scripts/verify.sh vm` to boot and test the selected kernel.
 
 Memory is the UTF-8 byte length of keys plus values; container and node overhead is intentionally
 excluded. Expiry is cleaned from the heap before store operations observe live state.
