@@ -7,11 +7,10 @@ WORKDIR /work
 RUN apk fetch --no-cache --arch x86_64 linux-virt \
     && apk verify linux-virt-*.apk \
     && mkdir kernel root \
-    && tar -xzf linux-virt-*.apk -C kernel \
+    && tar -xzf linux-virt-*.apk -C kernel boot/vmlinuz-virt \
     && cp kernel/boot/vmlinuz-virt /work/vmlinuz-virt \
     && cp -a /bin /sbin /lib /usr /etc root/ \
-    && cp -a kernel/lib/modules root/lib/ \
-    && mkdir -p root/app/budget_app root/app/tests root/dev root/proc root/sys root/tmp root/run root/www
+    && mkdir -p root/app/budget_app root/app/tests root/dev root/proc root/sys root/tmp
 COPY budget_app/ /work/root/app/budget_app/
 COPY tests/ /work/root/app/tests/
 COPY verify/vm/guest-init /work/root/init
@@ -25,7 +24,4 @@ COPY --from=initramfs-builder /work/vmlinuz-virt /opt/vm/vmlinuz-virt
 COPY --from=initramfs-builder /work/initramfs.cpio.gz /opt/vm/initramfs.cpio.gz
 COPY verify/vm/launch-vm.sh /usr/local/bin/launch-vm
 RUN chmod 0755 /usr/local/bin/launch-vm
-EXPOSE 8080
-HEALTHCHECK --interval=3s --timeout=2s --start-period=60s --retries=30 \
-  CMD wget -q -T 1 -O - http://127.0.0.1:8080/result.json | grep -q '"status":"pass"'
 ENTRYPOINT ["/usr/local/bin/launch-vm"]

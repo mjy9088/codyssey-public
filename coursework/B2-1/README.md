@@ -81,10 +81,11 @@ sh scripts/verify.sh all
 
 Docker mode runs deterministic model, persistence, CSV, corruption, and real CLI
 subprocess tests. VM mode boots a real x86_64 Linux kernel under software-emulated
-QEMU and runs that same suite inside the guest; its guest-generated JSON status is
-the host-visible pass/fail contract. It requires Docker Engine, Compose v2, network
-access for the first pinned-image/artifact build, roughly 1 GiB RAM, and no KVM or
-privileged container. These local checks do not establish a public deployment.
+QEMU and runs that same suite inside the guest. A bounded one-shot run checks
+separate boot and test-completion markers on the serial console, then the guest
+shuts down. It requires Docker Engine, Compose v2, network access for the initial
+image build, roughly 1 GiB RAM, and no KVM or privileged container. Neither
+verification mode starts an application service or proves a public deployment.
 
 No generated run reports are tracked: they become stale, duplicate executable
 verification, grow history, and may disclose local data.

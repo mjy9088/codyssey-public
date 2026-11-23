@@ -26,6 +26,7 @@ services:
       context: .
       dockerfile: verify/vm/Dockerfile
     user: "1000:1000"
+    network_mode: none
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]

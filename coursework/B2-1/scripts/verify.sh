@@ -14,7 +14,11 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 sh "$root/verify/test-source-contract.sh" "$root"
 project="ledger-$mode-$$"
 compose() { docker compose -p "$project" -f "$root/compose.yaml" "$@"; }
-cleanup() { compose --profile verify --profile vm down --volumes --remove-orphans >/dev/null 2>&1 || true; }
+vm_log=
+cleanup() {
+  [ -z "$vm_log" ] || rm -f "$vm_log"
+  compose --profile verify --profile vm down --volumes --remove-orphans >/dev/null 2>&1 || true
+}
 trap cleanup EXIT INT TERM
 
 docker version >/dev/null
@@ -25,9 +29,18 @@ if [ "$mode" = docker ]; then
   compose --profile verify run --rm verify
 else
   compose --profile vm build vm
-  compose --profile vm up -d --wait --wait-timeout 180 vm
-  compose --profile vm logs --no-color vm
-  result=$(compose --profile vm exec -T vm wget -q -O - http://127.0.0.1:8080/result.json)
-  printf '%s\n' "$result"
-  printf '%s' "$result" | grep -q '"status":"pass"'
+  vm_log=$(mktemp)
+  status=0
+  compose --profile vm run --rm -T --no-deps vm >"$vm_log" 2>&1 || status=$?
+  cat "$vm_log"
+  if [ "$status" -ne 0 ]; then
+    printf 'QEMU verification exited with status %s.\n' "$status" >&2
+    exit "$status"
+  fi
+  if ! grep -Eq '^VM-BOOT-READY kernel=[^[:space:]]+[[:space:]]*$' "$vm_log" ||
+     ! grep -Eq '^VM-TEST-PASS[[:space:]]*$' "$vm_log" ||
+     grep -q '^VM-TEST-FAIL:' "$vm_log"; then
+    printf 'Missing successful guest boot and test completion proof.\n' >&2
+    exit 1
+  fi
 fi
