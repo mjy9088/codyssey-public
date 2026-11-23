@@ -17,7 +17,7 @@ export COMPOSE_PROJECT_NAME="e1-1-verify-$(basename "$stage" | tr '[:upper:].' '
 export COMPOSE_FILE=docker-compose.yml:verify-compose.yml
 export LAB_GIT_NAME=workstation-student LAB_GIT_EMAIL=student@example.invalid
 
-mkdir -p app scripts tests/expected "$stage/git-home"
+mkdir -p app scripts tests/expected .local/evidence/actual .local/evidence/diff "$stage/git-home"
 cp "$root/.dockerignore" "$root/Dockerfile" "$root/docker-compose.yml" "$root/lab.bash" .
 cp "$root/app/Dockerfile" "$root/app/index.html" app/
 chmod 0644 app/index.html

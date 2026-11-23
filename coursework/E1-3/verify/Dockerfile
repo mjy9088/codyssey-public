@@ -4,5 +4,6 @@ WORKDIR /work
 ENV HOME=/tmp
 COPY main.py data.json ./
 COPY tests/test_*.py tests/
+RUN chmod -R a+rX /work
 USER 65532:65532
 CMD ["python", "-B", "-m", "unittest", "discover", "-s", "tests", "-v"]
