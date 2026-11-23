@@ -16,11 +16,12 @@ Remote mode stages the complete reusable runtime, including `init.sh`, `verify-m
 runtime libraries, before copying anything into
 `${CODYSSEY_INIT_DIR:-$HOME/.local/share/codyssey-init}`. It replaces a prior managed file only if
 its SHA-256 matches a supported old release at the same path. A project-directory lock serializes
-remote runs through activation. The installer stages every replacement beside its destination, then
-rechecks all paths and Docker state before the first rename. Failed downloads, preparation failures,
-and conflicts detected in preflight leave existing managed bytes untouched. Existing `.env` and
-`gost/gost.yaml` files are preserved. A local checkout runs in place and rejects a different
-`CODYSSEY_INIT_DIR`.
+remote runs through activation. The installer stages every replacement beside its destination,
+finishes the Docker checks, and then rechecks the whole install before publication. It checks each
+destination again immediately before renaming a known file or creating a missing one without
+overwriting an existing path. Failed downloads, preparation failures, and conflicts detected before
+publication leave existing managed bytes untouched. Existing `.env` and `gost/gost.yaml` files are
+preserved. A local checkout runs in place and rejects a different `CODYSSEY_INIT_DIR`.
 
 ## Optional features
 
@@ -93,10 +94,12 @@ starting it. If the legacy stack is still present, save pending changes and run 
 with the old Compose file before retrying. The installer leaves that file in place and never stops
 the legacy stack itself; see [Codyssey tunnels](tailnet.md#codyssey-tunnels).
 
-If publication was interrupted, rerun the normal remote command to finish. The incomplete marker
-blocks startup until all replacements are installed. Do not remove the marker or the lock file.
-If a customized or unrecognized path is refused, back it up and review it, then restore its exact
-supported original or move it aside before retrying. Do not move `.env` or `gost/gost.yaml`.
+The lock serializes installer runs, not external editors. Avoid editing managed files during an update.
+If publication is interrupted or stops at a conflict, earlier replacements may already be installed.
+The incomplete marker blocks startup until a normal remote retry finishes. Do not remove the marker
+or lock file. Back up and review the conflicting path, then restore the exact current or supported
+prior installer file, or move the conflicting path aside before retrying. Do not move `.env` or
+`gost/gost.yaml`.
 
 From a checkout containing the accepted Git object, run
 `sh environment/codyssey-init/scripts/check.sh --remote-upgrade` to exercise the preflight,

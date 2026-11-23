@@ -64,6 +64,13 @@ case "$*" in
     case ${UPGRADE_CASE:-} in
       legacy) printf 'tailnet-forward-gost\ntailnet-forward-ui\n' ;;
       unavailable) exit 1 ;;
+      query-edit)
+        if [ -e "$UPGRADE_EVENTS/first-query" ]; then
+          : >"$UPGRADE_EVENTS/second-query-ready"
+          timeout 20 sh -c 'read -r _ <"$1"' sh "$UPGRADE_EVENTS/second-query-gate" || exit 74
+        else
+          : >"$UPGRADE_EVENTS/first-query"
+        fi ;;
     esac ;;
   info|'compose build tailscale tunnel-ui'|'compose pull gost') exit 0 ;;
   'compose up -d --no-build')
@@ -91,16 +98,31 @@ exec /usr/bin/install "$@"
 EOF
   cat >"$transport/mv" <<'EOF'
 #!/bin/sh
-if [ "${UPGRADE_CASE:-}" = interruption ] && [ "$3" = "$CODYSSEY_INIT_DIR/docker-compose.yml" ]; then
-  kill -TERM "$PPID"
-  exit 143
+if [ "$3" = "$CODYSSEY_INIT_DIR/docker-compose.yml" ]; then
+  case ${UPGRADE_CASE:-} in
+    interruption) kill -TERM "$PPID"; exit 143 ;;
+    path-type)
+      /bin/mv "$@" || exit $?
+      destination="$CODYSSEY_INIT_DIR/scripts/prepare-startup.sh"
+      /bin/mv "$destination" "$UPGRADE_EVENTS/displaced-prepare" || exit $?
+      mkdir "$destination" || exit $?
+      printf 'custom directory\n' >"$destination/owner.txt"
+      exit $? ;;
+  esac
 fi
 exec /bin/mv "$@"
 EOF
-  chmod 0755 "$transport/docker" "$transport/install" "$transport/mv"
+  cat >"$transport/ln" <<'EOF'
+#!/bin/sh
+if [ "${UPGRADE_CASE:-}" = appears ] && [ "$3" = "$CODYSSEY_INIT_DIR/tunnel-ui/package.json" ]; then
+  printf 'new owner file\n' >"$3" || exit $?
+fi
+exec /bin/ln "$@"
+EOF
+  chmod 0755 "$transport/docker" "$transport/install" "$transport/mv" "$transport/ln"
   events="$tmp/events"
   mkdir "$events"
-  mkfifo "$events/staging-gate" "$events/activation-gate"
+  mkfifo "$events/staging-gate" "$events/activation-gate" "$events/second-query-gate"
   started="$tmp/activation.log"
   : >"$started"
   run_blocked_upgrade() {
@@ -118,9 +140,18 @@ EOF
       kill -0 "$upgrade_pid" 2>/dev/null || break
       sleep 0.05
     done
-    cat "$tmp/overlap.log" >&2
+    cat "$upgrade_log" >&2
     printf 'upgrade did not reach %s\n' "$event" >&2
     return 1
+  }
+  assert_pending_cannot_start() {
+    local destination=$1
+    [[ -d $destination/.codyssey-install-pending ]]
+    if zsh "$destination/next-script.zsh" --prepared >"$tmp/blocked.log" 2>&1; then
+      printf 'incomplete install activated: %s\n' "$destination" >&2; exit 1
+    fi
+    grep -Fq 'An installer update is incomplete' "$tmp/blocked.log"
+    [[ ! -s $started ]]
   }
   run_release() {
     local source=$1 destination=$2
@@ -182,6 +213,47 @@ EOF
   [[ ! -s $started ]]
   printf 'PASS: failed preparation and a conflict introduced during staging do not publish earlier files\n'
 
+  query_edit="$tmp/query-edit"
+  cp -a "$old" "$query_edit"
+  upgrade_log="$tmp/query-edit.log"
+  run_release "$root" "$query_edit" UPGRADE_CASE=query-edit CODYSSEY_TAILNET_SETUP=1 TS_AUTHKEY='' >"$upgrade_log" 2>&1 &
+  upgrade_pid=$!
+  wait_for_event second-query-ready
+  printf '\n# edited during final engine query\n' >>"$query_edit/scripts/prepare-startup.sh"
+  printf '\n' >"$events/second-query-gate"
+  if wait "$upgrade_pid"; then printf 'engine-query edit was accepted\n' >&2; exit 1; fi
+  grep -Fq "refusing to overwrite modified $query_edit/scripts/prepare-startup.sh" "$upgrade_log" || { cat "$upgrade_log" >&2; exit 1; }
+  query_expected="$tmp/query-expected"
+  cp -a "$snapshot" "$query_expected"
+  printf '\n# edited during final engine query\n' >>"$query_expected/scripts/prepare-startup.sh"
+  diff -qr "$query_expected" "$query_edit"
+  [[ ! -s $started ]]
+  printf 'PASS: edit during the second engine query survives; no files published or services started\n'
+
+  path_type="$tmp/path-type"
+  cp -a "$old" "$path_type"
+  destination="$path_type/scripts/prepare-startup.sh"
+  run_blocked_upgrade path-type "$path_type" "refusing to overwrite modified $destination"
+  cmp "$path_type/docker-compose.yml" "$root/docker-compose.yml"
+  [[ $(ls -A "$destination") == owner.txt ]]
+  printf 'custom directory\n' | cmp - "$destination/owner.txt"
+  assert_pending_cannot_start "$path_type"
+  run_blocked_upgrade '' "$path_type" "refusing to overwrite modified $destination"
+  printf 'custom directory\n' | cmp - "$destination/owner.txt"
+  mv "$destination" "$tmp/reconciled-copy"
+  cp -p "$events/displaced-prepare" "$destination"
+  run_release "$root" "$path_type"
+  diff -qr "$fresh" "$path_type"
+  printf 'PASS: late directory conflict preserves owner data and requires explicit reconciliation before retry\n'
+
+  appears="$tmp/appears"
+  cp -a "$old" "$appears"
+  destination="$appears/tunnel-ui/package.json"
+  run_blocked_upgrade appears "$appears" "could not publish $destination safely"
+  printf 'new owner file\n' | cmp - "$destination"
+  assert_pending_cannot_start "$appears"
+  printf 'PASS: no-clobber publication preserves a file that appeared after the last check\n'
+
   interrupted="$tmp/interrupted"
   cp -a "$old" "$interrupted"
   if run_release "$root" "$interrupted" UPGRADE_CASE=interruption CODYSSEY_TAILNET_SETUP=1; then
@@ -189,18 +261,15 @@ EOF
   fi
   cmp "$interrupted/docker-compose.yml" "$legacy/docker-compose.yml"
   cmp "$interrupted/next-script.zsh" "$root/next-script.zsh"
-  if zsh "$interrupted/next-script.zsh" --prepared >"$tmp/blocked.log" 2>&1; then
-    printf 'interrupted install activated\n' >&2; exit 1
-  fi
-  grep -Fq 'An installer update is incomplete' "$tmp/blocked.log"
-  [[ ! -s $started ]]
+  assert_pending_cannot_start "$interrupted"
   run_release "$root" "$interrupted"
   diff -qr "$fresh" "$interrupted"
   printf 'PASS: interrupted publication cannot activate and is repaired by a normal retry\n'
 
   overlap="$tmp/overlap"
   cp -a "$old" "$overlap"
-  run_release "$root" "$overlap" UPGRADE_CASE=concurrent CODYSSEY_TAILNET_SETUP=1 TS_AUTHKEY='' >"$tmp/overlap.log" 2>&1 &
+  upgrade_log="$tmp/overlap.log"
+  run_release "$root" "$overlap" UPGRADE_CASE=concurrent CODYSSEY_TAILNET_SETUP=1 TS_AUTHKEY='' >"$upgrade_log" 2>&1 &
   upgrade_pid=$!
   wait_for_event staging-ready
   run_blocked_upgrade '' "$overlap" 'another installer is using'
@@ -210,11 +279,10 @@ EOF
   wait_for_event activation-ready
   run_blocked_upgrade '' "$overlap" 'another installer is using'
   printf '\n' >"$events/activation-gate"
-  if ! wait "$upgrade_pid"; then cat "$tmp/overlap.log" >&2; exit 1; fi
+  if ! wait "$upgrade_pid"; then cat "$upgrade_log" >&2; exit 1; fi
   [[ $(cat "$started") == startup ]]
   diff -qr "$fresh" "$overlap"
   printf 'PASS: concurrent runs cannot publish or activate during staging or activation\n'
-
 
   for file in docker-compose.yml sdk/setup.mts; do
     custom="$tmp/custom"

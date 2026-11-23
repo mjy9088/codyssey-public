@@ -58,7 +58,7 @@ legacy_remote_digest() {
 }
 
 refuse_remote_replacement() {
-  die "refusing to overwrite modified $1. Back up and review this path, then restore the exact prior installer version or move the conflicting path aside before retrying. Keep .env and gost/gost.yaml in place."
+  die "refusing to overwrite modified $1. Back up and review this path, then restore the exact current or supported prior installer file, or move the conflicting path aside before retrying. Keep .env and gost/gost.yaml in place."
 }
 
 # Observe ownership for the entire manifest without changing target paths.
@@ -150,6 +150,27 @@ stage_remote_file() {
   install -m "$mode" "$staging/$file" "$temp" || die "could not stage $destination"
 }
 
+require_remote_file_state() {
+  local observed
+  observed=$(remote_file_state "$1" "$2" "$3") || exit 1
+  [[ $observed == "$4" ]] || refuse_remote_replacement "$1/$3"
+}
+
+publish_remote_file() {
+  local temp=$1 destination=$2 expected=$3
+  # Address the exact path even if it becomes a directory. Creating a name must
+  # fail if another process has already created it, not replace its contents.
+  if [[ $OSTYPE == darwin* ]]; then
+    perl -e 'my ($state, $src, $dst) = @ARGV;
+      ($state eq "missing" ? link($src, $dst) : rename($src, $dst)) or die "$dst: $!\n";' \
+      "$expected" "$temp" "$destination"
+  elif [[ $expected == missing ]]; then
+    ln -T "$temp" "$destination"
+  else
+    mv -fT "$temp" "$destination"
+  fi || die "could not publish $destination safely. Back up and review any changes before rerunning the remote installer."
+}
+
 apply_remote_release() {
   local target=$1 staging=$2 pending="$1/.codyssey-install-pending"
   local index file replacing=0 writing=0
@@ -170,13 +191,11 @@ apply_remote_release() {
     esac
   done
 
-  # Check the complete set again after staging, not one target at a time during rename.
-  for index in "${!remote_files[@]}"; do
-    file=${remote_files[index]}
-    [[ $(remote_file_state "$target" "$staging" "$file") == "${states[index]}" ]] ||
-      die "$target/$file changed during staging. Review it and retry."
-  done
+  # The engine query can block. Finish it before checking the complete set again.
   if (( replacing )); then check_remote_tunnel_upgrade "$target" "$staging"; fi
+  for index in "${!remote_files[@]}"; do
+    require_remote_file_state "$target" "$staging" "${remote_files[index]}" "${states[index]}"
+  done
 
   # Persist the incomplete state until every rename succeeds. Enable the new
   # entry-point guards first so an interrupted upgrade cannot start a mixed release.
@@ -184,7 +203,8 @@ apply_remote_release() {
   for index in "${!remote_files[@]}"; do
     [[ ${remote_publish_temps[index]+x} ]] || continue
     file=${remote_files[index]}
-    mv -f "${remote_publish_temps[index]}" "$target/$file" || die "could not publish $target/$file; rerun the remote installer to finish."
+    require_remote_file_state "$target" "$staging" "$file" "${states[index]}"
+    publish_remote_file "${remote_publish_temps[index]}" "$target/$file" "${states[index]}"
   done
   if [[ -d $pending ]]; then rmdir "$pending"; fi
 }
