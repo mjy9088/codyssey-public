@@ -16,7 +16,7 @@ cp "$root/.gitignore" "$tmp/repo/"
 cd "$tmp/repo"
 git init -q
 course=coursework/B2-1
-printf '%s\n' 'demo:' '    @echo first-revision' >"$course/workflow.just"
+printf '%s\n' 'demo:' '    @cat example.txt' >"$course/workflow.just"
 printf '%s\n' 'tracked-public-input' >"$course/example.txt"
 git add .
 git commit -qm source
@@ -37,8 +37,8 @@ if grep -q '^!local.txt$' "$tmp/context"; then exit 1; fi
 
 # A dirty checkout or newer template must not affect an explicitly selected revision.
 printf '%s\n' 'newer-template' >>coursework-tools/justfile
-printf '%s\n' 'demo:' '    @echo second-revision' >"$course/workflow.just"
-git add coursework-tools "$course/workflow.just"
+printf '%s\n' 'newer-public-input' >"$course/example.txt"
+git add coursework-tools "$course/example.txt"
 git commit -qm newer
 head=$(git rev-parse HEAD)
 out=$(sh scripts/publish-coursework.sh --prepare --source "$source" B2-1)
@@ -57,5 +57,5 @@ test ! -e local.txt
 test ! -e scripts/coursework.sh
 if grep -q 'newer-template' justfile; then exit 1; fi
 cmp "$tmp/context" .coursework-dev/Dockerfile.dockerignore
-if command -v just >/dev/null 2>&1; then test "$(just demo)" = first-revision; fi
+if command -v just >/dev/null 2>&1; then test "$(just demo)" = tracked-public-input; fi
 printf '%s\n' 'Coursework materialization and standalone submission checks passed.'
