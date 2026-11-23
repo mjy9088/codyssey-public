@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+fixture=${LAB_RESOURCE_FIXTURE:-$root/bin/resource-fixture}
 output_base=${LAB_OUTPUT_DIR:-/tmp/b4-2-artifacts}
 mkdir -p "$output_base"
 out=$(mktemp -d "$output_base/run.XXXXXX")
@@ -87,8 +88,8 @@ run_monitored() {
   printf '%s\n' "$status" >"$out/$name.status"
 }
 
-run_monitored memory-before env MEMORY_LIMIT=50 "$root/bin/resource-fixture" memory
-run_monitored memory-after env MEMORY_LIMIT=80 "$root/bin/resource-fixture" memory
+run_monitored memory-before env MEMORY_LIMIT=50 "$fixture" memory
+run_monitored memory-after env MEMORY_LIMIT=80 "$fixture" memory
 echo "MEMORY-RUN-STATUS before=$(cat "$out/memory-before.status") after=$(cat "$out/memory-after.status")"
 grep -q 'SELF-TERMINATED: application MemoryGuard policy (not kernel OOM)' "$out/memory-before.app.log" || {
   cat "$out/memory-before.app.log" >&2
@@ -116,8 +117,8 @@ test "$mem_after_max" -gt "$mem_after_first"
 test "$mem_after_samples" -gt "$mem_before_samples"
 echo "MEMORY-CHECK before-rss-kb=$mem_before_first..$mem_before_max after-rss-kb=$mem_after_first..$mem_after_max samples-before=$mem_before_samples samples-after=$mem_after_samples target-policy-exit=yes"
 
-run_monitored cpu-before env CPU_MAX_OCCUPY=25 "$root/bin/resource-fixture" cpu
-run_monitored cpu-after env CPU_MAX_OCCUPY=100 "$root/bin/resource-fixture" cpu
+run_monitored cpu-before env CPU_MAX_OCCUPY=25 "$fixture" cpu
+run_monitored cpu-after env CPU_MAX_OCCUPY=100 "$fixture" cpu
 grep -q 'WATCHDOG SIGTERM observed; application stopped by policy' "$out/cpu-before.app.log"
 grep -q 'WATCHDOG threshold exceeded' "$out/cpu-before.app.log"
 grep -q 'CPU_CONTROL_COMPLETED' "$out/cpu-after.app.log"
@@ -127,7 +128,7 @@ cpu_peak=$(awk '{ for (i=1; i<=NF; i++) if ($i ~ /^cpu_pct=/) { split($i, value,
 awk -v peak="$cpu_peak" 'BEGIN {exit !(peak >= 50)}'
 echo "CPU-CHECK peak_pct=$cpu_peak threshold-before=25 watchdog-exit=yes threshold-after=100 control-completed=yes"
 
-env MULTI_THREAD_ENABLE=true "$root/bin/resource-fixture" deadlock >"$out/deadlock-before.app.log" 2>&1 &
+env MULTI_THREAD_ENABLE=true "$fixture" deadlock >"$out/deadlock-before.app.log" 2>&1 &
 deadlock_pid=$!
 sleep 0.5
 kill -0 "$deadlock_pid"
@@ -163,7 +164,7 @@ awk '
 kill "$deadlock_pid"
 wait "$deadlock_pid" 2>/dev/null || true
 deadlock_pid=
-env MULTI_THREAD_ENABLE=false "$root/bin/resource-fixture" deadlock >"$out/deadlock-after.app.log" 2>&1
+env MULTI_THREAD_ENABLE=false "$fixture" deadlock >"$out/deadlock-after.app.log" 2>&1
 grep -q 'SINGLE_THREAD_CONTROL_COMPLETED without circular wait' "$out/deadlock-after.app.log"
 echo "DEADLOCK-CHECK pid-persisted=yes blocked-log-pairs=2 metrics-stable=yes thread-set-stable=yes log-stable=yes control-completed=yes"
 echo 'SYNTHETIC-LAB-SUCCESS'

@@ -11,6 +11,9 @@ export default defineConfig({
   workers: 1,
   reporter: "line",
   outputDir: "/tmp/playwright-results",
+  ...(process.env.COURSEWORK_NATIVE_BROWSER === "1"
+    ? { webServer: { command: "just demo", url: baseURL } }
+    : {}),
   use: {
     baseURL,
     trace: "retain-on-failure",

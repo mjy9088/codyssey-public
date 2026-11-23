@@ -1,5 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
+const native = process.env.COURSEWORK_NATIVE_BROWSER === "1";
+const baseURL = native ? "http://127.0.0.1:8000" : process.env.BASE_URL || "http://127.0.0.1:8080";
+
 export default defineConfig({
   testDir: "./tests",
   testMatch: "**/*.spec.mjs",
@@ -13,8 +16,9 @@ export default defineConfig({
   snapshotPathTemplate: "{testDir}/../docs/screenshots/{arg}{ext}",
   updateSnapshots: "none",
   reporter: [["list"], ["json", { outputFile: "artifacts/results.json" }]],
+  ...(native ? { webServer: { command: "just demo", url: baseURL } } : {}),
   use: {
-    baseURL: process.env.BASE_URL || "http://127.0.0.1:8080",
+    baseURL,
     browserName: "chromium",
     locale: "en-US",
     timezoneId: "UTC",

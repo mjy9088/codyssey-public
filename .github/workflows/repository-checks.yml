@@ -28,6 +28,7 @@ jobs:
         run: |
           sh tests/publish-coursework-test.sh
           sh tests/pages-package-test.sh
+          sh tests/coursework-workflow-test.sh
       - name: Check verifier lifecycle contracts
         run: |
           for project in B1-2 B4-1 B4-2 B5-1; do

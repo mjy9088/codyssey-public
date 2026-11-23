@@ -28,11 +28,11 @@ public monorepo history.
 
 Use `scripts/publish-coursework.sh` when the approved destination requires both a
 standalone repository root and the public monorepo history. The script resolves a
-local committed revision, verifies that the selected path is a directory in that
-revision, creates a detached temporary worktree, removes every tracked path, moves
-the selected coursework subtree to the repository root, and creates one
-submission-layout commit. It never applies those deletion or move operations to
-the normal working tree.
+local commit and a course name, then creates a detached temporary worktree. It
+materializes the development files from that revision's templates and tracked
+course content, moves the resulting course tree to the repository root, and
+creates one submission-layout commit. Revisions predating the templates export
+the original course tree. The normal working tree is not reshaped.
 
 Record the verified source commit and coursework identifier, then run the script
 through `sh`:
@@ -55,12 +55,13 @@ The destination defaults to
 defaults to `main`. Pass `DESTINATION` and, if needed, `TARGET_BRANCH` after the
 coursework identifier to override those defaults.
 
-The script displays the prepared commit and its root entries, then asks for
-confirmation on the terminal. Answering `y` force-pushes the prepared commit;
-pressing Enter or answering anything else cancels without changing the
-destination. With no interactive terminal, the script only prepares and reports
-the commit. A confirmed run overwrites a diverged destination branch, so inspect
-the displayed destination and branch before confirming.
+`just submit B2-1` prepares from `HEAD` locally and never prompts or pushes. Use
+`sh scripts/publish-coursework.sh --prepare --source REVISION B2-1` without Just
+or to prepare a specific revision. Inspect the reported commit before transfer.
+Without `--prepare`, the script asks for explicit confirmation on a terminal
+before force-pushing; a noninteractive invocation does not push. A confirmed
+run overwrites a diverged destination branch, so verify the approved destination
+and branch before confirming.
 
 Exercise the local preparation, validation, force-push confirmation, and cleanup
 paths with synthetic repositories and a simulated push:
@@ -69,10 +70,10 @@ paths with synthetic repositories and a simulated push:
 sh tests/publish-coursework-test.sh
 ```
 
-The destination's tip contains only the selected coursework files, but its
-parent commits retain the complete public monorepo history. Therefore this
-method is suitable only when the public history reachable from the selected
-source revision is acceptable at the destination.
+The destination's tip contains the selected coursework and its materialized
+tooling, but its parent commits retain the complete public monorepo history.
+Use this method only when the public history reachable from the selected source
+revision is acceptable at the destination.
 
 The script intentionally creates the submission-layout commit in a disposable
 worktree. Make fixes in the canonical coursework subtree, verify and commit them
@@ -80,21 +81,18 @@ on `public`, and then run the publication procedure again.
 
 ## History-free standalone archive
 
-Use an archive instead when the destination must not receive any Git history:
+Use an archive instead when the destination must not receive any Git history.
+Prepare locally and copy the reported **submission** commit ID (not the source
+commit ID). Archive that commit's standalone tree:
 
 ```sh
-revision=$(git rev-parse --verify HEAD)
-coursework_id=YOUR_COURSEWORK_ID
-subtree=coursework/$coursework_id
-staging=$(mktemp -d)
-git archive "$revision" -- "$subtree" \
-  | tar -x -C "$staging" --strip-components=2
+sh scripts/publish-coursework.sh --prepare --source HEAD B2-1
+git archive --format=tar --output=coursework-submission.tar PREPARED_COMMIT_ID
 ```
 
-Replace the example subtree with the project being submitted. Record the source
-revision outside the exported tree or in destination metadata if traceability is
-required; do not add a repository status or provenance inventory. This output
-contains files only and cannot preserve commits.
+The archive contains the course files and generated development utilities, not
+the parent history. Record the source revision outside the exported tree or in
+destination metadata if traceability is required.
 
 ## Guardrails
 

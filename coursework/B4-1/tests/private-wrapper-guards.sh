@@ -45,7 +45,10 @@ set -e
 create_line=$(grep -n '^create ' "$tmp/docker.log" | cut -d: -f1)
 copy_line=$(grep -n '^cp ' "$tmp/docker.log" | cut -d: -f1)
 [[ $create_line -lt $copy_line ]]
-grep -q '^build -f .*/verify/private/Dockerfile -t .* .*/coursework/B4-1$' "$tmp/docker.log"
+case $(grep '^build ' "$tmp/docker.log") in
+  "build -f $root/verify/private/Dockerfile -t "*" $root") ;;
+  *) printf 'Unexpected private build command\n' >&2; exit 1 ;;
+esac
 grep -q '^create .*--network none .*--memory 1536m .*--cpus 1.0 .*--pids-limit 256 .*--cap-drop ALL ' "$tmp/docker.log"
 grep -q '^create .*--cap-add DAC_OVERRIDE ' "$tmp/docker.log"
 [[ $(stat -c %a "$tmp/evidence") == 700 ]]

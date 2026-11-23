@@ -1,0 +1,58 @@
+export PLAYWRIGHT_BROWSERS_PATH := env_var_or_default('PLAYWRIGHT_BROWSERS_PATH', '0')
+
+# List the available coursework workflows.
+default:
+    @just --list
+
+import 'workflow.just'
+
+# Install locked dependencies after the runtime tools are available.
+install:
+    #!/bin/sh
+    set -eu
+    if [ -f uv.lock ]; then uv sync --locked; fi
+    if [ -f package-lock.json ]; then npm ci --ignore-scripts --no-audit --no-fund; fi
+    if [ -f ops/firebase/package-lock.json ]; then
+      npm --prefix ops/firebase ci --ignore-scripts --no-audit --no-fund
+      home=$(mktemp -d)
+      trap 'rm -rf "$home"' EXIT
+      mkdir -p artifacts/native-emulator-cache
+      env -i PATH="$PATH" HOME="$home" FIREBASE_CLI_DISABLE_UPDATE_CHECK=true \
+        FIREBASE_CLI_DISABLE_USAGE_STATS=true FIREBASE_EMULATORS_PATH="$PWD/artifacts/native-emulator-cache" \
+        node ops/firebase/node_modules/firebase-tools/lib/bin/firebase.js setup:emulators:firestore
+    fi
+    if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; fi
+    case $(cat package.json 2>/dev/null || :) in
+      *'"@playwright/test"'*)
+        if [ -f pnpm-lock.yaml ]; then pnpm exec playwright install chromium
+        else npx --no-install playwright install chromium; fi ;;
+    esac
+    if [ -f infrastructure/deployment/.terraform.lock.hcl ]; then sh scripts/terraform-local.sh init; fi
+
+# Install Chromium's system libraries (Debian/Ubuntu; requires root or sudo).
+_browser-deps:
+    #!/bin/sh
+    set -eu
+    case $(cat package.json 2>/dev/null || :) in
+      *'"@playwright/test"'*)
+        if [ -f pnpm-lock.yaml ]; then pnpm exec playwright install-deps chromium
+        else npx --no-install playwright install-deps chromium; fi ;;
+    esac
+
+_python-check:
+    uv run --locked ruff format --check .
+    uv run --locked ruff check .
+    uv run --locked basedpyright
+    uv run --locked python -m pytest
+
+# Run the course's isolated Docker verification.
+verify-docker:
+    sh scripts/verify.sh docker
+
+# Run the course's QEMU guest verification (requires Docker).
+verify-vm:
+    sh scripts/verify.sh vm
+
+# Open a disposable Docker development shell; no host tools besides Docker and sh.
+shell:
+    sh .coursework-dev/shell.sh

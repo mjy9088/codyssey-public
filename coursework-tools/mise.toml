@@ -1,0 +1,7 @@
+
+[settings]
+all_compile = false
+
+[tasks.setup]
+description = "Install the coursework toolchain and locked dependencies"
+run = "mise install && mise exec -- just install"
