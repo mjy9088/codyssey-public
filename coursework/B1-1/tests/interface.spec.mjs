@@ -61,7 +61,7 @@ test("identity copy is neutral and aspiration-oriented", async ({ page }) => {
   );
 });
 
-test("semantic page, local assets, responsive layout and screenshot", async ({ page }, info) => {
+test("semantic page, local assets and responsive layout", async ({ page }, info) => {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const response = await page.goto("/");
@@ -84,16 +84,6 @@ test("semantic page, local assets, responsive layout and screenshot", async ({ p
   expect(layout).toEqual({ overflow: false, images: true, inlineStyles: 0, inlineEvents: false });
   expect(errors).toEqual([]);
   await page.evaluate(() => document.fonts.ready);
-  if (info.project.name !== "tablet") {
-    await expect(page).toHaveScreenshot(`${info.project.name}.png`, {
-      fullPage: true,
-      animations: "disabled",
-      caret: "hide",
-      scale: "css",
-      threshold: 0,
-      maxDiffPixels: 0,
-    });
-  }
   await mkdir("artifacts/screenshots", { recursive: true });
   await page.screenshot({
     path: `artifacts/screenshots/${info.project.name}.png`,

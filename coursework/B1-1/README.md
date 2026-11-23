@@ -52,6 +52,11 @@ after success, failure, or interruption. Docker image and build caches remain av
 runs. Runtime results, logs, traces, and non-submission screenshots belong in ignored local output or
 CI artifacts rather than Git.
 
+After installing the materialized coursework tools, `just check` runs the static checks,
+the functional Chromium suite and the real Python preview backend without Docker. It produces
+responsive screenshot artifacts but leaves pixel-exact comparison to the packaged checks,
+which use the same pinned Chromium and system fonts as the tracked baselines.
+
 ## Preview the site
 
 ```sh

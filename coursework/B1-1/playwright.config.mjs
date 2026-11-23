@@ -1,11 +1,18 @@
 import { defineConfig } from "@playwright/test";
 
-const native = process.env.COURSEWORK_NATIVE_BROWSER === "1";
+const verificationMode = process.env.VERIFY_MODE ?? "docker";
+if (!["native", "docker", "vm"].includes(verificationMode)) {
+  throw new Error(`Unknown portfolio verification mode: ${verificationMode}`);
+}
+const native = verificationMode === "native";
+const referenceScreenshots = "**/reference-screenshots.spec.mjs";
 const baseURL = native ? "http://127.0.0.1:8000" : process.env.BASE_URL || "http://127.0.0.1:8080";
 
 export default defineConfig({
   testDir: "./tests",
   testMatch: "**/*.spec.mjs",
+  ...(native ? { testIgnore: referenceScreenshots } : {}),
+  metadata: { verificationMode },
   fullyParallel: false,
   forbidOnly: true,
   retries: 0,
@@ -29,7 +36,11 @@ export default defineConfig({
   projects: [
     { name: "desktop", use: { viewport: { width: 1280, height: 900 }, colorScheme: "light" } },
     { name: "mobile", use: { viewport: { width: 375, height: 812 }, colorScheme: "light" } },
-    { name: "tablet", use: { viewport: { width: 768, height: 1024 }, colorScheme: "light" } },
+    {
+      name: "tablet",
+      testIgnore: referenceScreenshots,
+      use: { viewport: { width: 768, height: 1024 }, colorScheme: "light" },
+    },
     { name: "dark", use: { viewport: { width: 1280, height: 900 }, colorScheme: "dark" } },
   ],
 });
