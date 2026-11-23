@@ -9,6 +9,7 @@ fi
 scripts=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 # shellcheck source=scripts/vm-fusion.sh
 . "$scripts/vm-fusion.sh"
+. "$scripts/vm-progress.sh"
 fusion_require_intel
 fusion_tools
 base=$(fusion_selected_base "${1:-}")
@@ -114,7 +115,7 @@ mounted=0
 setup_iso="${base%/*}/Codyssey-Guest-Setup.iso"
 [[ ! -L $setup_iso && ( ! -e $setup_iso || -f $setup_iso ) ]] || exit 1
 stage=$(mktemp -d "${base%/*}/.guest-setup.XXXXXX")
-hdiutil makehybrid -hfs -iso -joliet -default-volume-name Codyssey -o "$stage/setup.iso" "$work/media"
+vm_progress "Creating the VMware Tools and setup image" hdiutil makehybrid -hfs -iso -joliet -default-volume-name Codyssey -o "$stage/setup.iso" "$work/media"
 mv -f "$stage/setup.iso" "$setup_iso"
 setup_iso=$(fusion_media_path "$setup_iso")
 
@@ -133,8 +134,7 @@ printf 'Saved first-desktop snapshot: %s\n' "$checkpoint"
 launcher="$scripts/intel-macos-vm"
 if command -v python3 >/dev/null && xcrun --find swiftc >/dev/null 2>&1 &&
    ! grep -qiE '^RemoteDisplay\.vnc\.enabled[[:blank:]]*=[[:blank:]]*"TRUE"' "$base"; then
-  printf 'Preparing the Finder screen recognizer.\n'
-  if xcrun swiftc -module-cache-path "$storage/tools/swift-cache" "$launcher/recognize-screen.swift" -o "$work/recognize"; then
+  if vm_progress "Preparing the Finder screen recognizer" xcrun swiftc -module-cache-path "$storage/tools/swift-cache" "$launcher/recognize-screen.swift" -o "$work/recognize"; then
     port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
     "$fusion_vmcli" "$base" ConfigParams SetEntry RemoteDisplay.vnc.ip 127.0.0.1
     "$fusion_vmcli" "$base" ConfigParams SetEntry RemoteDisplay.vnc.port "$port"
@@ -155,7 +155,7 @@ if (( vnc_enabled )); then
     printf 'Waiting for Finder to show the guest setup file. Sign in to the guest if needed.\n'
   fi
   if CODYSSEY_FUSION_USE_LAB_PASSWORD=$lab_password \
-    python3 "$launcher/open-guest-setup.py" "$fusion_vmcli" "$base" "$work/recognize" "$work/screen.png" "$port" "$guest_user" "$prompt_id"; then
+    vm_progress "Waiting for the guest setup to report ready" python3 "$launcher/open-guest-setup.py" "$fusion_vmcli" "$base" "$work/recognize" "$work/screen.png" "$port" "$guest_user" "$prompt_id"; then
     setup_opened=1
   fi
 fi

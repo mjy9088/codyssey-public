@@ -53,6 +53,17 @@ the ISO path. The script stages it for the new VM.
 Set `CODYSSEY_FUSION_HOST_AUTH=dialog` to use the macOS host authorization
 dialog.
 
+Step 01 asks the host's Install macOS app to quit after the download, or
+before using a supplied installer or cached copy. If the app refuses to quit,
+use Command-Q in the host installer window and confirm Quit if prompted. The
+script leaves the installer available for the next run. [Apple's installer download instructions](https://support.apple.com/en-us/102662).
+
+The terminal shows native percentages for disk-image conversion and download
+progress when the tool reports a total. Full Fusion clones report the bytes
+written and elapsed time about every ten seconds. Steps that cannot estimate
+completion, such as waiting for SSH or checking signatures, report elapsed
+time. Follow the guest installer window for the macOS installation itself.
+
 ### Store VMs on an external disk
 
 The scripts use `~/.local/share/codyssey/fusion` by default. To use an external
@@ -190,8 +201,10 @@ progresses. If it is waiting for the guest SSH key, run the setup command in the
 guest Terminal and finish any VMware Tools prompts. If it is waiting for SSH or
 Command Line Tools, check Remote Login or finish the Apple installer in the
 guest. It installs Python from the pinned macOS installer if the harness
-needs it, and installs Google Chrome for the live Dock check if it is missing.
-It then shuts down the base and disconnects the setup disc. Step 06 runs
+needs it. It prepares Google Chrome, OrbStack, Gureum, and iTerm2 in the guest
+before shutting down the base and disconnecting the setup disc. Existing valid
+bundles are reused. OrbStack is installed without onboarding or starting its
+virtualization engine, and Gureum is activated during verification. Step 06 runs
 `init.sh`, which installs Node.js through mise when needed. In
 manual mode, enter the guest administrator password when prompted. Close the
 installer or setup console with Command-W once the base has shut down.
@@ -222,18 +235,20 @@ bash scripts/intel-macos-vm/06-verify-workstation.sh
 ```
 
 Step 06 creates a full clone under `verification/`, writes a private log under
-`runs/`, and stops and retains the clone. It checks macOS preferences, the Dock
-launcher, and live shortcut settings without Docker. It starts the clone in the
-background without opening a Fusion window. If the guest needs a login or first
-Gureum approval, use the printed `open` command to show its console. Close that
-console when the run finishes. A base with lab auto-login and prior Gureum
-approval supports unattended runs. Use the separate
-[Terminal typing check](verification.md#terminal-typing-check) to test actual
-Hangul and Latin input.
+`runs/`, and stops and retains the clone. It checks the installed application
+bundles and OrbStack's bundled CLI versions, then runs workstation setup
+without starting an engine. In the clone's Terminal, the host sends actual
+key events over a temporary loopback Fusion console. The guest must compose
+`한`, switch to Latin with Control-Space and enter `abc`, then switch back
+with Control-Space and compose `한` again. It also checks the active input
+source, macOS preferences, and Dock launcher.
 
-If an imported base cannot connect in the background, run step 06 with
-`CODYSSEY_FUSION_START_MODE=gui`. The background connection supports Fusion's
-default NAT network when VMware Tools cannot report the guest address.
+Keep any Fusion window opened by the script available while verification runs.
+The lab path uses auto-login and handles the known Gureum approval. A custom
+guest account may need a sign-in before verification can start. If reusing
+an older base that lacks the apps, run step 05 on the running base first.
+The [manual Terminal typing check](verification.md#terminal-typing-check)
+is available for troubleshooting.
 
 To reuse a prepared base, copy its complete powered-off `.vmwarevm` bundle.
 If prompted in Fusion, choose **I moved it**. With the lab identity and verified

@@ -52,6 +52,7 @@ case $(uname -m) in
 esac
 vm_init "$image" "$name" "$root"
 . "$root/scripts/vm-files.sh"
+. "$root/scripts/vm-progress.sh"
 . "$root/lib/preparation.sh"
 created=0 prepare_requested=0 transfer='' cleaned=0
 cleanup() {
@@ -104,11 +105,17 @@ trap 'exit 143' TERM
 vm_clone
 created=1
 vm_start
+printf 'Waiting for the guest desktop connection…\n'
 ready=0
+next_report=$((SECONDS + 10))
 deadline=$((SECONDS + 360))
 while (( SECONDS < deadline )); do
   vm_running || { printf '%s exited before guest readiness.\n' "$backend_label" >&2; exit 1; }
   if vm_ready 2>/dev/null; then ready=1; break; fi
+  if (( SECONDS >= next_report )); then
+    printf 'Waiting for the guest desktop connection… %ss elapsed\n' "$((360 - deadline + SECONDS))"
+    next_report=$((SECONDS + 10))
+  fi
   sleep 2
 done
 (( ready )) || { printf '%s guest connection did not become ready within six minutes.\n' "$backend_label" >&2; exit 1; }

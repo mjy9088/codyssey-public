@@ -5,7 +5,8 @@ if [[ ${1:-} == --help ]]; then
   printf 'Usage: bash scripts/verify-macos-vm.sh --disposable [--workstation | --input-desktop]\n--workstation runs the live macOS setup and preferences checks without Docker.\n--input-desktop runs the interactive Gureum and Control-Space check.\nThe default also runs the keyless Docker bootstrap.\n'
   exit 0
 fi
-[[ ${1:-} == --disposable && ( $# == 1 || ( $# == 2 && ( $2 == --workstation || $2 == --input-desktop ) ) ) ]] || { printf 'Use --disposable: this changes the VM user shell and preferences.\n' >&2; exit 1; }
+[[ ${1:-} == --disposable && ( $# == 1 ||
+  ( $# == 2 && ( $2 == --workstation || $2 == --input-desktop || $2 == --input-from-console ) ) ) ]] || { printf 'Use --disposable: this changes the VM user shell and preferences.\n' >&2; exit 1; }
 [[ $(uname -s) == Darwin ]] || { printf 'This verifier requires macOS.\n' >&2; exit 1; }
 [[ $(id -u) != 0 ]] || { printf 'Run as the VM desktop user, not root.\n' >&2; exit 1; }
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
@@ -18,40 +19,99 @@ if [[ ${2:-} == --workstation ]]; then
   export TS_AUTHKEY='' CODYSSEY_TAILNET_SETUP=0 CODYSSEY_INSTALL_J=1 CODYSSEY_MACOS_SETUP=1
   export CODYSSEY_DOCK_SETUP=1 CODYSSEY_OPEN_BROWSER=0 CODYSSEY_INTERACTIVE_SHELL=0
   vm_guest_python_ready || { printf 'Python 3.10+ required.\n' >&2; exit 1; }
-  bash init.sh
+  . "$root/scripts/vm-progress.sh"
+  if [[ ${CODYSSEY_FUSION_TEST_TYPING:-0} == 1 ]]; then
+    vm_progress "Checking the preinstalled workstation apps" python3 scripts/check-preinstalled-apps.py --workstation
+  fi
+  vm_progress "Running workstation initialization" bash init.sh
   mise trust "$root/mise.toml"
   mise install
-  CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 python3 verify-macos-setup.py
+  CODYSSEY_ALLOW_DESTRUCTIVE_MACOS_TEST=1 vm_progress "Checking the live macOS preferences" python3 verify-macos-setup.py
   /bin/zsh "$HOME/Library/Application Support/codyssey-init/Codyssey j.command" --list
   /usr/bin/swift enable-korean.swift --verify-shortcuts
   [[ $(/usr/bin/swift enable-korean.swift --current-source) == org.youknowone.inputmethod.Gureum.han2 ]]
+  if [[ ${CODYSSEY_FUSION_TEST_TYPING:-0} == 1 ]]; then
+    (
+      work=$(mktemp -d "$root/.input-desktop.XXXXXX")
+      transcript_pid=
+      trap '
+        if [[ -n $transcript_pid ]]; then
+          kill "$transcript_pid" 2>/dev/null || :
+          wait "$transcript_pid" 2>/dev/null || :
+        fi
+        rm -rf -- "$work"
+      ' EXIT
+      mkfifo "$work/transcript"
+      /bin/cat "$work/transcript" &
+      transcript_pid=$!
+      cat > "$work/Verify Input.command" <<'COMMAND'
+#!/bin/bash
+cd "$(dirname "$0")" || exit 1
+umask 077
+clear
+/usr/bin/script -qF transcript /bin/bash ../scripts/verify-macos-vm.sh --disposable --input-from-console
+result=$?
+printf '%s\n' "$result" > status.tmp && mv status.tmp status
+COMMAND
+      chmod 700 "$work/Verify Input.command"
+      printf 'Checking actual Hangul and Latin typing through the Fusion console.\n'
+      /usr/bin/open -a Terminal "$work/Verify Input.command"
+      deadline=$((SECONDS + 420))
+      while [[ ! -f $work/status && $SECONDS -lt $deadline ]]; do sleep 2; done
+      [[ -f $work/status ]] || { printf 'Timed out waiting for the Terminal typing check.\n' >&2; exit 1; }
+      wait "$transcript_pid"
+      transcript_pid=
+      [[ $(cat "$work/status") == 0 ]]
+    )
+  else
+    printf 'To verify typing in the guest Terminal, run: bash %q --disposable --input-desktop\n' "$0"
+  fi
   printf 'PASS: macOS workstation setup, repeated preferences, Dock launcher and live shortcuts.\n'
-  printf 'To verify typing in the guest Terminal, run: bash %q --disposable --input-desktop\n' "$0"
   exit 0
 fi
-if [[ ${2:-} == --input-desktop ]]; then
+if [[ ${2:-} == --input-desktop || ${2:-} == --input-from-console ]]; then
   [[ -t 0 && -t 1 ]] || { printf 'Use Terminal in the disposable VM desktop.\n' >&2; exit 1; }
   unset DEFAULTS_BIN PLISTBUDDY_BIN PLUTIL_BIN UNAME_BIN CODYSSEY_INPUT_SWITCH
   helper="$root/enable-korean.swift"
   hangul=org.youknowone.inputmethod.Gureum.han2
-  . "$root/lib/bootstrap-tools.sh"
-  node_bin=${CODYSSEY_VERIFY_NODE:-node}
-  if [[ -z ${CODYSSEY_VERIFY_NODE:-} ]] && ! node_runs_setup_sdk "$root"; then
-    node_bin=$(mise_setup_node_path) || {
-      printf 'Run the workstation verification first to install the Node.js runtime through mise.\n' >&2
-      exit 1
-    }
+  input_mode=$2
+  vm_guest_desktop_prompt() {
+    if [[ $input_mode == --input-from-console ]]; then
+      local foreground
+      foreground=$(/usr/bin/osascript -l JavaScript -e '
+        ObjC.import("AppKit");
+        ObjC.unwrap($.NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier);
+      ')
+      [[ $foreground == com.apple.Terminal ]] || {
+        printf 'Terminal lost focus during the typing check.\n' >&2
+        exit 1
+      }
+      printf '\nCodyssey typing %s\n' "$1"
+    fi
+  }
+  if [[ $2 == --input-desktop ]]; then
+    . "$root/lib/bootstrap-tools.sh"
+    node_bin=${CODYSSEY_VERIFY_NODE:-node}
+    if [[ -z ${CODYSSEY_VERIFY_NODE:-} ]] && ! node_runs_setup_sdk "$root"; then
+      node_bin=$(mise_setup_node_path) || {
+        printf 'Run the workstation verification first to install the Node.js runtime through mise.\n' >&2
+        exit 1
+      }
+    fi
+    "$node_bin" "$root/sdk/cli.mts" configure-input
   fi
-  "$node_bin" "$root/sdk/cli.mts" configure-input
   [[ $(/usr/bin/swift "$helper" --current-source) == "$hangul" ]]
   # The first activation may leave a separate Input Monitoring dialog to dismiss.
   # Space commits the Hangul composition and can also insert a trailing space.
+  vm_guest_desktop_prompt A
   printf 'With Gureum selected, type gks, then press Space and Return (expected 한): '
   IFS= read -r -t 120 typed || { printf 'Timed out waiting for desktop input.\n' >&2; exit 1; }
   [[ $typed == 한 || $typed == '한 ' ]] || { printf 'Hangul composition failed.\n' >&2; exit 1; }
 
+  vm_guest_desktop_prompt B
   printf 'Press Control-Space to switch to Latin input.\n'
   /usr/bin/swift "$helper" --wait-for-source is-not "$hangul"
+  vm_guest_desktop_prompt C
   printf 'Type abc and press Return: '
   IFS= read -r -t 60 typed || { printf 'Timed out waiting for desktop input.\n' >&2; exit 1; }
   latin=$(/usr/bin/swift "$helper" --current-source)
@@ -59,8 +119,10 @@ if [[ ${2:-} == --input-desktop ]]; then
     printf 'Control-Space did not switch to Latin input.\n' >&2; exit 1;
   }
 
+  vm_guest_desktop_prompt D
   printf 'Press Control-Space again to switch to Hangul.\n'
   /usr/bin/swift "$helper" --wait-for-source is "$hangul"
+  vm_guest_desktop_prompt E
   printf 'Type gks, then press Space and Return: '
   IFS= read -r -t 60 typed || { printf 'Timed out waiting for desktop input.\n' >&2; exit 1; }
   [[ ( $typed == 한 || $typed == '한 ' ) && $(/usr/bin/swift "$helper" --current-source) == "$hangul" ]] || {

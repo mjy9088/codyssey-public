@@ -101,8 +101,10 @@ bash scripts/verify-macos-vm.sh --disposable --input-desktop
 Choose Allow when prompted, then follow the typing prompts. The check requires Hangul composition,
 Latin input after Control-Space, and Hangul composition after switching back. It checks the active
 source in addition to the text typed into Terminal.
-In Fusion, focus the guest Terminal and wait for the menu bar input indicator
-and the next Terminal prompt before entering each sample.
+The [Intel Fusion workstation verification](intel-macos-vm.md#06-run-the-workstation-verification)
+runs this typing check automatically over the clone's loopback console.
+For a manual Fusion run, focus Terminal and wait for each prompt before entering
+the next sample.
 
 From `environment/codyssey-init`, run the same check from the host CLI against a stopped local
 Tart base with a logged-in desktop, Guest Agent, and Swift. Install `uv` on the host and use the
@@ -176,8 +178,8 @@ bash scripts/create-preinstalled-macos-image.sh \
   --image reviewed-stopped-base --name codyssey-preinstalled
 ```
 
-The builder clones the source and changes only that new VM. It installs checksum-pinned OrbStack
-2.2.4 in `~/Applications` and ensures iTerm2 and Gureum are present. When absent, the builder
+The builder clones the source and changes only that new VM. It reuses a valid OrbStack bundle or
+installs checksum-pinned OrbStack 2.2.4 in `~/Applications`, and ensures iTerm2 and Gureum are present. When absent, the builder
 installs the pinned iTerm2 3.7.7 or Gureum 1.13.2 package. It completes this without launching onboarding,
 activating input sources, sudo, or a Homebrew installation. The OrbStack archive pins come from the
 [official Homebrew cask](https://github.com/Homebrew/homebrew-cask/blob/master/Casks/o/orbstack.rb).

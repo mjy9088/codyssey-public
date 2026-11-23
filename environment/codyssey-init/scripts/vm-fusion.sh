@@ -147,7 +147,7 @@ vm_init() {
   local image=$1 name=$2
   fusion_isolated=0 fusion_started=0
   fusion_project_root=${3:-}
-  fusion_console_pid='' fusion_console_enabled=0
+  fusion_console_pid='' fusion_console_enabled=0 fusion_console_port=''
   fusion_tools || return
   fusion_source=$(fusion_source_path "$image") || return
   fusion_user=${CODYSSEY_FUSION_GUEST_USER:-}
@@ -214,7 +214,7 @@ vm_clone() {
   fusion_require_stopped "$fusion_source" || return
   # Reserve the bundle atomically and never act on a pre-existing destination.
   (umask 077; mkdir "$fusion_bundle") || return
-  if ! fusion clone "$fusion_source" "$fusion_vmx" full "-cloneName=$name"; then
+  if ! vm_progress_path="$fusion_bundle" vm_progress "Creating a full Fusion clone" fusion clone "$fusion_source" "$fusion_vmx" full "-cloneName=$name"; then
     printf 'Fusion clone failed. Inspect the reserved bundle at %s.\n' "$fusion_bundle" >&2
     return 1
   fi
@@ -246,6 +246,7 @@ vm_start() {
     "$fusion_vmcli" "$fusion_vmx" ConfigParams SetEntry RemoteDisplay.vnc.port "$port" || return
     "$fusion_vmcli" "$fusion_vmx" ConfigParams SetEntry RemoteDisplay.vnc.enabled TRUE || return
     fusion_console_enabled=1
+    fusion_console_port=$port
     mode=gui
   fi
   if [[ $mode == nogui ]]; then
@@ -345,7 +346,25 @@ vm_transfer() { fusion_ssh /usr/bin/tar -xf - -C "$1" <"$2"; }
 vm_desktop_exec() {
   local guest_files=$1
   shift
-  vm_exec /usr/bin/python3 "$guest_files/scripts/vm-aqua-exec.py" "$@"
+  local timeout=$1
+  shift
+  if (( fusion_console_enabled )) && [[ ${*: -1} == --workstation ]]; then
+    local -a result
+    {
+      vm_exec /usr/bin/python3 "$guest_files/scripts/vm-aqua-exec.py" "$timeout" \
+        /usr/bin/env CODYSSEY_FUSION_TEST_TYPING=1 "$@" |
+        python3 "$fusion_project_root/scripts/intel-macos-vm/drive-workstation-input.py" \
+          "$fusion_vmx" "$fusion_console_port"
+      result=("${PIPESTATUS[@]}")
+    } || :
+    # A relay error can close the pipe and give SSH a SIGPIPE status.
+    if (( result[0] != 0 && (result[0] != 141 || result[1] == 0) )); then
+      return "${result[0]}"
+    fi
+    return "${result[1]}"
+  else
+    vm_exec /usr/bin/python3 "$guest_files/scripts/vm-aqua-exec.py" "$timeout" "$@"
+  fi
 }
 
 fusion_request_stop() {

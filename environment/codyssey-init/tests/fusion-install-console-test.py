@@ -2,10 +2,13 @@
 """Test install and verification console rules with synthetic OCR labels."""
 
 import importlib.util
+import io
 from pathlib import Path
+import struct
 import sys
 import tempfile
 import unittest
+from unittest.mock import MagicMock, Mock, patch
 
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts/intel-macos-vm"
@@ -21,6 +24,7 @@ def load_script(filename):
 
 installer = load_script("install-guest.py")
 workstation = load_script("watch-workstation-console.py")
+input_driver = load_script("drive-workstation-input.py")
 
 
 class InstallerScreenTests(unittest.TestCase):
@@ -159,6 +163,37 @@ class WorkstationScreenTests(unittest.TestCase):
         ] + labels[2:]
         self.assertEqual(workstation.action_for(ocr_labels, "vmuser", True),
                          ("gureum", (0.57, 0.64), 1))
+
+    def test_typing_relays_ordered_checkpoints_only_after_console_confirmation(self):
+        transcript = b"Verified shortcuts.\n" + b"".join(
+            b"Codyssey typing " + bytes([letter]) + b"\r\n" for letter in b"ABCDE"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            vmx = Path(temporary) / "guest.vmx"
+            vmx.with_name("vmware.log").write_text("Started VNC server, listening at 127.0.0.1:49999\n")
+            output = io.BytesIO()
+            with (
+                patch.object(input_driver, "console", return_value=MagicMock()) as open_console,
+                patch.object(input_driver, "send_typing") as send,
+            ):
+                input_driver.relay(io.BytesIO(transcript), output, vmx, 49999)
+                self.assertEqual(output.getvalue(), transcript)
+                self.assertEqual([call.args[-1] for call in send.call_args_list], ["gks ", None, "abc", None, "gks "])
+                self.assertEqual(open_console.call_count, 5)
+                send.reset_mock()
+                with self.assertRaisesRegex(RuntimeError, "Unexpected"):
+                    input_driver.relay(io.BytesIO(b"Codyssey typing D\n"), io.BytesIO(), vmx, 49999)
+                with self.assertRaisesRegex(RuntimeError, "loopback"):
+                    input_driver.relay(io.BytesIO(b"Codyssey typing A\n"), io.BytesIO(), vmx, 49998)
+                with self.assertRaisesRegex(RuntimeError, "before completing"):
+                    input_driver.relay(io.BytesIO(b"Guest timeout\n"), io.BytesIO(), vmx, 49999)
+                send.assert_not_called()
+
+    def test_input_switch_sends_a_control_space_chord(self):
+        connection = Mock()
+        input_driver.send_typing(connection, None)
+        events = [struct.unpack(">BBHI", call.args[0]) for call in connection.sendall.call_args_list]
+        self.assertEqual(events, [(4, 1, 0, 0xffe3), (4, 1, 0, 32), (4, 0, 0, 32), (4, 0, 0, 0xffe3)])
 
     def test_ambient_text_cannot_approve_an_unrelated_dialog(self):
         labels = [

@@ -59,7 +59,7 @@ def same_target(target, previous, size):
 
 
 @contextmanager
-def console(port, size):
+def console(port, size=None):
     with socket.create_connection(("127.0.0.1", port), timeout=5) as connection:
         with connection.makefile("rb") as reader:
             if reader.read(12) != b"RFB 003.008\n":
@@ -72,8 +72,11 @@ def console(port, size):
                 raise ValueError("console handshake failed")
             connection.sendall(b"\x01")
             header = reader.read(24)
-            if struct.unpack(">HH", header[:4]) != size:
-                raise ValueError("guest display changed size")
+            if len(header) != 24:
+                raise ValueError("incomplete Fusion framebuffer header")
+            framebuffer = struct.unpack(">HH", header[:4])
+            if min(framebuffer) <= 2 or (size is not None and framebuffer != size):
+                raise ValueError("guest display is unavailable or changed size")
             name_length = int.from_bytes(header[20:], "big")
             if name_length > 4096 or len(reader.read(name_length)) != name_length:
                 raise ValueError("invalid Fusion console name")
@@ -92,10 +95,14 @@ def click(connection, size, point, count):
         time.sleep(0.08)
 
 
+def key_event(connection, keysym, down):
+    connection.sendall(struct.pack(">BBHI", 4, down, 0, keysym))
+    time.sleep(0.035)
+
+
 def key(connection, keysym):
-    for down in (1, 0):
-        connection.sendall(struct.pack(">BBHI", 4, down, 0, keysym))
-        time.sleep(0.035)
+    key_event(connection, keysym, 1)
+    key_event(connection, keysym, 0)
 
 
 def type_text(connection, text):

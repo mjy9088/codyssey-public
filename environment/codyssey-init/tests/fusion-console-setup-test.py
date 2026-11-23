@@ -4,8 +4,10 @@ import importlib.util
 import os
 from pathlib import Path
 import sys
+import tempfile
+from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts/intel-macos-vm"
@@ -71,6 +73,32 @@ class ConsoleSetupTests(unittest.TestCase):
             console.approval_target(labels, True, "12ab34cd", "vmuser", set()),
             ("terminal-admin", (0.56, 0.41), 1),
         )
+
+    def test_handled_settings_prompt_does_not_hide_guest_readiness(self):
+        finder = [
+            (0.10, 0.02, "Finder"),
+            (0.30, 0.22, "Start Setup.command"),
+            (0.50, 0.22, "VMware Tools.pkg"),
+        ]
+        extension = [
+            (0.50, 0.32, "System Extension Blocked"),
+            (0.50, 0.37, 'extension(s) signed by "VMware, Inc."'),
+            (0.50, 0.50, "Open System Settings"),
+        ]
+        frames = [(800, 600), finder], [(800, 600), extension]
+        with tempfile.TemporaryDirectory() as temporary:
+            vmx = Path(temporary) / "base.vmx"
+            vmx.with_name("vmware.log").write_text("Started VNC server, listening at 127.0.0.1:49999\n")
+            with (
+                patch.object(console, "guest_password", return_value="disposable"),
+                patch.object(console, "read_frame", side_effect=[frames[0]] * 2 + [frames[1]] * 4),
+                patch.object(console, "console", return_value=MagicMock()),
+                patch.object(console, "click") as click,
+                patch.object(console.time, "sleep"),
+                patch.object(console.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="ready")),
+            ):
+                console.open_setup("/fake/vmcli", vmx, "/fake/ocr", vmx.with_suffix(".png"), 49999, "vmuser", "1234")
+            self.assertEqual([entry.args[-1] for entry in click.call_args_list], [2, 1])
 
     def test_vmware_authorization_after_the_extension_prompt_can_omit_the_account_label(self):
         labels = [
