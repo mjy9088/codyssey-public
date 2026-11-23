@@ -1,13 +1,18 @@
 #!/usr/bin/env zsh
 
 check_tunnel_upgrade() {
-  local control
-  if control=$(docker container inspect --format '{{index .Config.Labels "org.codyssey.tunnel-control"}}' tailnet-forward-gost 2>/dev/null) \
-    && [[ $control != unix-v1 ]] \
-    || docker container inspect --format '{{.Id}}' tailnet-forward-ui >/dev/null 2>&1; then
-    printf 'Legacy GOST containers found. Save pending changes in the old UI and run docker compose down from the previous installation before retrying.\n' >&2
+  local containers name control
+  if ! containers=$(docker container ls --all --filter 'name=^/tailnet-forward-(gost|ui)$' \
+      --format '{{.Names}} {{.Label "org.codyssey.tunnel-control"}}' 2>/dev/null); then
+    printf 'Cannot check for legacy GOST containers. Make the selected Docker engine reachable and retry.\n' >&2
     return 1
   fi
+  while read -r name control; do
+    if [[ $name == tailnet-forward-ui || ( $name == tailnet-forward-gost && $control != unix-v1 ) ]]; then
+      printf 'Legacy GOST containers found. Save pending changes in the old UI and run docker compose down with the old Compose file before retrying.\n' >&2
+      return 1
+    fi
+  done <<< "$containers"
 }
 
 read_tailnet_backend() {

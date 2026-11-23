@@ -84,7 +84,7 @@ case "$*" in
     ;;
   'compose pull gost') : >"$PULL_COMPLETED" ;;
   'compose up -d --no-build') : >"$SERVICES_STARTED" ;;
-  'container inspect '*) exit 1 ;;
+  'container ls --all '*) exit 0 ;;
   'compose ps --status running --services') printf 'tailscale\ngost\ntunnel-ui\n' ;;
   'compose exec -T tailscale tailscale status --json') printf '{"BackendState":"Running"}\n' ;;
 esac

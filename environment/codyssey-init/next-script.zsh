@@ -4,6 +4,13 @@ setopt pipe_fail
 
 root=${0:A:h}
 cd "$root"
+require_complete_install() {
+  if [[ -e .codyssey-install-pending || -L .codyssey-install-pending ]]; then
+    printf 'An installer update is incomplete. Rerun the normal remote installer before starting Codyssey.\n' >&2
+    exit 1
+  fi
+}
+require_complete_install
 . "$root/lib/logging.sh"
 init_run_log
 . "$root/lib/auth.sh"
@@ -50,6 +57,7 @@ if (( prepared == 0 )); then
 fi
 eval "$(mise env -s zsh)"
 service_status=0
+require_complete_install
 check_tunnel_upgrade || exit 1
 if run_quiet_step "Starting services" docker compose up -d --no-build; then :; else
   service_status=1

@@ -8,8 +8,8 @@ die() {
 }
 
 remote_files=(
-  .dockerignore .env.example Dockerfile README.md docker-compose.yml init.sh justfile
-  macos-setup.sh mise.toml next-script.zsh tailnet.sh verify-macos-setup.py
+  init.sh next-script.zsh .dockerignore .env.example Dockerfile README.md docker-compose.yml justfile
+  macos-setup.sh mise.toml tailnet.sh verify-macos-setup.py
   lib/auth.sh lib/options.sh lib/logging.sh lib/preparation.sh lib/readiness.zsh lib/bootstrap-tools.sh gost/gost.yaml enable-korean.swift tailscale-entrypoint.sh
   chrome-extension/manifest.json chrome-extension/background.mjs chrome-extension/proxy.mjs
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs
@@ -25,10 +25,17 @@ remote_files=(
   tunnel-ui/server/gost.mjs tunnel-ui/server/config-file.mjs tunnel-ui/server/policy.mjs
 )
 remote_staging=
-remote_publish_temp=
+remote_publish_temps=()
+remote_created_dirs=()
 
 cleanup_remote_staging() {
-  [[ -z $remote_publish_temp ]] || rm -f "$remote_publish_temp"
+  local temp
+  for temp in ${remote_publish_temps[@]+"${remote_publish_temps[@]}"}; do
+    rm -f "$temp"
+  done
+  for temp in ${remote_created_dirs[@]+"${remote_created_dirs[@]}"}; do
+    rmdir "$temp" 2>/dev/null || true
+  done
   [[ -z $remote_staging ]] || rm -rf "$remote_staging"
 }
 
@@ -54,20 +61,29 @@ refuse_remote_replacement() {
   die "refusing to overwrite modified $1. Back up and review this path, then restore the exact prior installer version or move the conflicting path aside before retrying. Keep .env and gost/gost.yaml in place."
 }
 
-# Success means a write is needed; return 1 for an unchanged file or preserved user state.
-remote_file_needs_publish() {
+# Observe ownership for the entire manifest without changing target paths.
+remote_file_state() {
   local target=$1 staging=$2 file=$3
   local destination="$target/$file" parent=$file expected digest
-  if [[ $file == gost/gost.yaml && ( -e $destination || -L $destination ) ]]; then return 1; fi
+  if [[ $file == gost/gost.yaml && ( -e $destination || -L $destination ) ]]; then
+    printf '%s\n' preserved
+    return
+  fi
   while [[ $parent == */* ]]; do
     parent=${parent%/*}
     if [[ -L $target/$parent || ( -e $target/$parent && ! -d $target/$parent ) ]]; then
       refuse_remote_replacement "$target/$parent"
     fi
   done
-  if [[ ! -e $destination && ! -L $destination ]]; then return 0; fi
+  if [[ ! -e $destination && ! -L $destination ]]; then
+    printf '%s\n' missing
+    return
+  fi
   [[ -f $destination && ! -L $destination ]] || refuse_remote_replacement "$destination"
-  if cmp -s "$staging/$file" "$destination"; then return 1; fi
+  if cmp -s "$staging/$file" "$destination"; then
+    printf '%s\n' current
+    return
+  fi
   expected=$(legacy_remote_digest "$file") || refuse_remote_replacement "$destination"
   if command -v sha256sum >/dev/null 2>&1; then
     digest=$(sha256sum <"$destination") || die "could not hash $destination"
@@ -77,32 +93,110 @@ remote_file_needs_publish() {
     die "install sha256sum or shasum to identify the prior installer file $destination"
   fi
   [[ ${digest%% *} == "$expected" ]] || refuse_remote_replacement "$destination"
+  printf '%s\n' predecessor
 }
 
-publish_remote_file() {
-  local target=$1 staging=$2 file=$3
-  local destination="$target/$file" mode=0644
+lock_remote_install() {
+  local lock="$1/.codyssey-installer.lock" mask
+  [[ ! -L $lock && ( ! -e $lock || -f $lock ) ]] || refuse_remote_replacement "$lock"
+  mask=$(umask)
+  umask 077
+  exec 9>>"$lock" || die "could not open installer lock $lock"
+  umask "$mask"
+  # Keep ownership on the open descriptor, not on a PID or removable path.
+  if command -v flock >/dev/null 2>&1; then
+    flock -n 9 || die "another installer is using $1, or its filesystem does not support locking. Retry after it exits."
+  elif command -v perl >/dev/null 2>&1; then
+    perl -MFcntl=:flock -e 'open my $lock, ">&=9" or exit 1; flock($lock, LOCK_EX | LOCK_NB) or exit 1' ||
+      die "another installer is using $1, or its filesystem does not support locking. Retry after it exits."
+  else
+    die 'remote installation requires flock or system Perl for the installer lock.'
+  fi
+}
+
+check_remote_tunnel_upgrade() (
+  cd "$1"
+  . "$2/lib/readiness.zsh"
+  export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+  if ! command -v docker >/dev/null 2>&1 && [[ $(uname -s) == Darwin && -z ${DOCKER_HOST:-} && -z ${DOCKER_CONTEXT:-} ]]; then
+    local app
+    for app in "${CODYSSEY_APPLICATIONS_DIR:-/Applications}/OrbStack.app" "$HOME/Applications/OrbStack.app"; do
+      [[ -x $app/Contents/MacOS/xbin/docker ]] || continue
+      export PATH="$PATH:$app/Contents/MacOS/xbin"
+      break
+    done
+  fi
+  check_tunnel_upgrade
+)
+
+prepare_remote_directory() {
+  local directory=$1
+  [[ ! -L $directory ]] || refuse_remote_replacement "$directory"
+  if [[ -d $directory ]]; then return; fi
+  prepare_remote_directory "${directory%/*}"
+  mkdir "$directory" || die "could not prepare $directory"
+  remote_created_dirs=("$directory" ${remote_created_dirs[@]+"${remote_created_dirs[@]}"})
+}
+
+stage_remote_file() {
+  local target=$1 staging=$2 file=$3 index=$4
+  local destination="$target/$file" mode=0644 temp
   case $file in
     init.sh|next-script.zsh|tailnet.sh|macos-setup.sh|verify-macos-setup.py|lib/auth.sh) mode=0755 ;;
   esac
-  mkdir -p "${destination%/*}"
-  remote_publish_temp=$(mktemp "${destination%/*}/.codyssey-init.XXXXXX") || die "could not stage $destination"
-  install -m "$mode" "$staging/$file" "$remote_publish_temp" || die "could not stage $destination"
-  # Recheck ownership before the same-filesystem rename.
-  if remote_file_needs_publish "$target" "$staging" "$file"; then
-    mv -f "$remote_publish_temp" "$destination" || die "could not publish $destination"
-  else
-    rm -f "$remote_publish_temp"
-  fi
-  remote_publish_temp=
+  prepare_remote_directory "${destination%/*}"
+  temp=$(mktemp "${destination%/*}/.codyssey-init.XXXXXX") || die "could not stage $destination"
+  remote_publish_temps[index]=$temp
+  install -m "$mode" "$staging/$file" "$temp" || die "could not stage $destination"
+}
+
+apply_remote_release() {
+  local target=$1 staging=$2 pending="$1/.codyssey-install-pending"
+  local index file replacing=0 writing=0
+  local -a states=()
+  [[ ! -L $pending && ( ! -e $pending || -d $pending ) ]] || refuse_remote_replacement "$pending"
+  for index in "${!remote_files[@]}"; do
+    states[index]=$(remote_file_state "$target" "$staging" "${remote_files[index]}")
+    if [[ ${states[index]} == predecessor ]]; then replacing=1; fi
+  done
+  if (( replacing )); then check_remote_tunnel_upgrade "$target" "$staging"; fi
+
+  for index in "${!remote_files[@]}"; do
+    case ${states[index]} in
+      missing|predecessor)
+        stage_remote_file "$target" "$staging" "${remote_files[index]}" "$index"
+        writing=1
+        ;;
+    esac
+  done
+
+  # Check the complete set again after staging, not one target at a time during rename.
+  for index in "${!remote_files[@]}"; do
+    file=${remote_files[index]}
+    [[ $(remote_file_state "$target" "$staging" "$file") == "${states[index]}" ]] ||
+      die "$target/$file changed during staging. Review it and retry."
+  done
+  if (( replacing )); then check_remote_tunnel_upgrade "$target" "$staging"; fi
+
+  # Persist the incomplete state until every rename succeeds. Enable the new
+  # entry-point guards first so an interrupted upgrade cannot start a mixed release.
+  if (( writing )) && [[ ! -d $pending ]]; then mkdir "$pending"; fi
+  for index in "${!remote_files[@]}"; do
+    [[ ${remote_publish_temps[index]+x} ]] || continue
+    file=${remote_files[index]}
+    mv -f "${remote_publish_temps[index]}" "$target/$file" || die "could not publish $target/$file; rerun the remote installer to finish."
+  done
+  if [[ -d $pending ]]; then rmdir "$pending"; fi
 }
 
 install_remote_files() {
   local target=$1 staging file
-  local -a publish=()
   staging=$(mktemp -d) || die 'could not create a staging directory.'
   remote_staging=$staging
   trap cleanup_remote_staging EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
   for file in "${remote_files[@]}"; do
     mkdir -p "$staging/$(dirname -- "$file")"
     curl --fail --location --silent --show-error \
@@ -115,15 +209,11 @@ install_remote_files() {
   for file in next-script.zsh lib/readiness.zsh; do
     zsh -n "$staging/$file"
   done
-  for file in "${remote_files[@]}"; do
-    if remote_file_needs_publish "$target" "$staging" "$file"; then publish+=("$file"); fi
-  done
-  # Complete preflight for the whole release before publishing any file.
-  # Bash 3.2 with nounset needs the guarded expansion when there are no writes.
-  for file in ${publish[@]+"${publish[@]}"}; do
-    publish_remote_file "$target" "$staging" "$file"
-  done
-  rm -rf "$staging"
+  mkdir -p "$target"
+  target=$(CDPATH= cd -- "$target" && pwd -P)
+  lock_remote_install "$target"
+  apply_remote_release "$target" "$staging"
+  cleanup_remote_staging
   remote_staging=
   trap - EXIT
 }
@@ -135,12 +225,20 @@ else
   source_dir=
 fi
 
+remote_install=0
 if [[ -n $source_dir && -f $source_dir/next-script.zsh ]]; then
   init_dir=${CODYSSEY_INIT_DIR:-$source_dir}
   [[ $init_dir == "$source_dir" ]] || die 'a local checkout must run in place; unset CODYSSEY_INIT_DIR.'
+  if [[ -e $init_dir/.codyssey-installer.lock || -L $init_dir/.codyssey-installer.lock ]]; then
+    lock_remote_install "$init_dir"
+    remote_install=1
+  fi
+  [[ ! -e $init_dir/.codyssey-install-pending && ! -L $init_dir/.codyssey-install-pending ]] ||
+    die 'an installer update is incomplete. Rerun the normal remote installer to finish before starting Codyssey.'
 else
   init_dir=${CODYSSEY_INIT_DIR:-"$HOME/.local/share/codyssey-init"}
   command -v curl >/dev/null 2>&1 || die 'remote mode requires curl.'
+  remote_install=1
   install_remote_files "$init_dir"
 fi
 init_dir=$(CDPATH= cd -- "$init_dir" && pwd -P)
@@ -279,10 +377,23 @@ fi
 configure_tailscale_auth
 wait_startup_preparation
 export CODYSSEY_WORKSTATION_INCOMPLETE=$workstation_incomplete
+start_installed_services() {
+  if (( ! remote_install )); then exec "$sdk_node" "$init_dir/sdk/cli.mts" start-prepared; fi
+  local status=0
+  CODYSSEY_INTERACTIVE_SHELL=0 run_sdk start-prepared || status=$?
+  # The installed startup (including readiness) has finished. An interactive
+  # shell is not part of the installer transaction.
+  exec 9>&-
+  if (( status )); then
+    trap - EXIT # The continuation already owns runtime failure diagnostics.
+    exit "$status"
+  fi
+  if [[ -t 0 && -t 1 && ${CODYSSEY_INTERACTIVE_SHELL:-1} != 0 ]]; then exec zsh -i; fi
+}
 if [[ -t 0 ]]; then
-  exec "$sdk_node" "$init_dir/sdk/cli.mts" start-prepared
+  start_installed_services
+elif { true </dev/tty; } 2>/dev/null; then
+  start_installed_services </dev/tty
+else
+  start_installed_services </dev/null
 fi
-if { true </dev/tty; } 2>/dev/null; then
-  exec "$sdk_node" "$init_dir/sdk/cli.mts" start-prepared </dev/tty
-fi
-exec "$sdk_node" "$init_dir/sdk/cli.mts" start-prepared </dev/null

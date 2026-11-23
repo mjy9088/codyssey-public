@@ -46,7 +46,7 @@ printf '<docker>' >>"$TEST_LOG"
 for argument in "$@"; do printf '<%s>' "$argument" >>"$TEST_LOG"; done
 printf '<auth=%s><mise=%s>\n' "${TS_AUTHKEY:-}" "${MISE_ENV_APPLIED:-}" >>"$TEST_LOG"
 case "$*" in
-  'container inspect '*) [ -n "${LEGACY_GOST:-}" ] && case "$*" in *tailnet-forward-gost) echo legacy;; *) exit 1;; esac || exit 1 ;;
+  'container ls --all '*) [ -z "${LEGACY_GOST:-}" ] || echo tailnet-forward-gost ;;
   'compose ps --status running --services') printf 'tailscale\ngost\ntunnel-ui\n' ;;
   'compose exec -T tailscale tailscale status --json')
     backend=${NEXT_STATE:-Running}

@@ -15,10 +15,12 @@ not as independent copies at the monorepo root. The public `sh init.sh` commands
 Remote mode stages the complete reusable runtime, including `init.sh`, `verify-macos-setup.py`, and
 runtime libraries, before copying anything into
 `${CODYSSEY_INIT_DIR:-$HOME/.local/share/codyssey-init}`. It replaces a prior managed file only if
-its SHA-256 matches a supported old release at the same path. It checks every file before publishing
-any update and installs changed files by atomic rename. Failed downloads and ownership conflicts
-leave the target untouched and remove staging files. Existing `.env` and `gost/gost.yaml` files are
-preserved. A local checkout runs in place and rejects a different `CODYSSEY_INIT_DIR`.
+its SHA-256 matches a supported old release at the same path. A project-directory lock serializes
+remote runs through activation. The installer stages every replacement beside its destination, then
+rechecks all paths and Docker state before the first rename. Failed downloads, preparation failures,
+and conflicts detected in preflight leave existing managed bytes untouched. Existing `.env` and
+`gost/gost.yaml` files are preserved. A local checkout runs in place and rejects a different
+`CODYSSEY_INIT_DIR`.
 
 ## Optional features
 
@@ -86,13 +88,19 @@ input, and browser behavior in your environment. Retry the relevant setup comman
 Declining Dock cleanup adds the launcher only when `j` was explicitly selected. The launcher requires a working container when used.
 Repeated runs cannot bypass system approval or make an incompatible Docker backend compatible.
 Remote installations from accepted commit `a2838076abf01d03c02e672408adac51560a6c9b` can upgrade in
-place by repeating the normal remote command. If the old GOST editor is running, first save any
-pending changes and stop the old project using its existing Compose file; see [Codyssey tunnels](tailnet.md#codyssey-tunnels).
-If the installer refuses a customized or unrecognized path, back it up and review it, then restore
-its exact supported original or move it aside before retrying. Do not move `.env` or `gost/gost.yaml`.
+place by repeating the normal remote command. The upgrade checks the selected Docker engine without
+starting it. If the legacy stack is still present, save pending changes and run `docker compose down`
+with the old Compose file before retrying. The installer leaves that file in place and never stops
+the legacy stack itself; see [Codyssey tunnels](tailnet.md#codyssey-tunnels).
 
-From a checkout that contains that accepted Git object, `sh environment/codyssey-init/scripts/check.sh --remote-upgrade`
-tests the actual previous and current launchers against local release files, with all optional setup disabled.
+If publication was interrupted, rerun the normal remote command to finish. The incomplete marker
+blocks startup until all replacements are installed. Do not remove the marker or the lock file.
+If a customized or unrecognized path is refused, back it up and review it, then restore its exact
+supported original or move it aside before retrying. Do not move `.env` or `gost/gost.yaml`.
+
+From a checkout containing the accepted Git object, run
+`sh environment/codyssey-init/scripts/check.sh --remote-upgrade` to exercise the preflight,
+interruption recovery, and overlapping invocations using disposable state.
 
 ### Comparing environments
 

@@ -20,6 +20,7 @@ while [ "$#" -gt 0 ]; do
     *) shift ;;
   esac
 done
+if [ "$url" = 'http://127.0.0.1:18081/health' ] && [ -n "${UPGRADE_CASE:-}" ]; then exit 0; fi
 relative=${url#*/environment/codyssey-init/}
 if [ "${FAIL_FILE:-}" = "$relative" ]; then
   printf 'touch "$INITIAL_EXECUTED"\n' >"$output"
@@ -55,11 +56,80 @@ if (( $# == 1 )); then
   home="$tmp/home"
   mkdir -p "$transport" "$stage" "$home"
   cp "$fakebin/curl" "$transport/curl"
+  cp "$fakebin/mise" "$transport/mise"
+  cat >"$transport/docker" <<'EOF'
+#!/bin/sh
+case "$*" in
+  'container ls --all '*)
+    case ${UPGRADE_CASE:-} in
+      legacy) printf 'tailnet-forward-gost\ntailnet-forward-ui\n' ;;
+      unavailable) exit 1 ;;
+    esac ;;
+  info|'compose build tailscale tunnel-ui'|'compose pull gost') exit 0 ;;
+  'compose up -d --no-build')
+    printf 'startup\n' >>"$UPGRADE_LOG"
+    diff -qr "$UPGRADE_EXPECTED" "$PWD" || exit 91
+    if [ "${UPGRADE_CASE:-}" = concurrent ]; then
+      : >"$UPGRADE_EVENTS/activation-ready"
+      timeout 20 sh -c 'read -r _ <"$1"' sh "$UPGRADE_EVENTS/activation-gate"
+    fi ;;
+  'compose ps --status running --services') printf 'tailscale\ngost\ntunnel-ui\n' ;;
+  'compose exec -T tailscale tailscale status --json') printf '{"BackendState":"Running"}\n' ;;
+  *) exit 89 ;;
+esac
+EOF
+  cat >"$transport/install" <<'EOF'
+#!/bin/sh
+case ${UPGRADE_CASE:-}:$3 in
+  preparation:*/sdk/setup.mts) exit 72 ;;
+  late-conflict:*/sdk/setup.mts) printf '\n# edited during staging\n' >>"$CODYSSEY_INIT_DIR/sdk/setup.mts" ;;
+  concurrent:*/sdk/setup.mts)
+    : >"$UPGRADE_EVENTS/staging-ready"
+    timeout 20 sh -c 'read -r _ <"$1"' sh "$UPGRADE_EVENTS/staging-gate" || exit 73 ;;
+esac
+exec /usr/bin/install "$@"
+EOF
+  cat >"$transport/mv" <<'EOF'
+#!/bin/sh
+if [ "${UPGRADE_CASE:-}" = interruption ] && [ "$3" = "$CODYSSEY_INIT_DIR/docker-compose.yml" ]; then
+  kill -TERM "$PPID"
+  exit 143
+fi
+exec /bin/mv "$@"
+EOF
+  chmod 0755 "$transport/docker" "$transport/install" "$transport/mv"
+  events="$tmp/events"
+  mkdir "$events"
+  mkfifo "$events/staging-gate" "$events/activation-gate"
+  started="$tmp/activation.log"
+  : >"$started"
+  run_blocked_upgrade() {
+    local test_case=$1 destination=$2 message=$3
+    if run_release "$root" "$destination" CODYSSEY_TAILNET_SETUP=1 UPGRADE_CASE="$test_case" >"$tmp/blocked.log" 2>&1; then
+      printf 'unsafe upgrade succeeded: %s\n' "$test_case" >&2
+      exit 1
+    fi
+    if ! grep -Fq "$message" "$tmp/blocked.log"; then cat "$tmp/blocked.log" >&2; exit 1; fi
+  }
+  wait_for_event() {
+    local event=$1 attempt
+    for ((attempt=0; attempt<200; attempt++)); do
+      [[ ! -e $events/$event ]] || return 0
+      kill -0 "$upgrade_pid" 2>/dev/null || break
+      sleep 0.05
+    done
+    cat "$tmp/overlap.log" >&2
+    printf 'upgrade did not reach %s\n' "$event" >&2
+    return 1
+  }
   run_release() {
+    local source=$1 destination=$2
+    shift 2
     env -i HOME="$home" TMPDIR="$stage" PATH="$transport:/usr/bin:/bin" \
-      CODYSSEY_INIT_DIR="$2" REMOTE_SOURCE="$1" \
+      CODYSSEY_INIT_DIR="$destination" REMOTE_SOURCE="$source" \
       CODYSSEY_TAILNET_SETUP=0 CODYSSEY_MACOS_SETUP=0 CODYSSEY_INSTALL_J=0 \
-      sh <"$legacy/../../init.sh"
+      CODYSSEY_OPEN_BROWSER=0 UPGRADE_LOG="$started" UPGRADE_EXPECTED="$fresh" UPGRADE_EVENTS="$events" \
+      "$@" sh <"$legacy/../../init.sh"
   }
 
   fresh="$tmp/fresh"
@@ -88,6 +158,63 @@ api: {addr: '127.0.0.1:18080'}
 EOF
   cp -p "$old/.env" "$fresh/.env"
   cp -p "$old/gost/gost.yaml" "$fresh/gost/gost.yaml"
+  # Include the empty advisory lock inode in snapshots, not as a managed file.
+  : >"$old/.codyssey-installer.lock"
+  snapshot="$tmp/old-before"
+  cp -a "$old" "$snapshot"
+  run_blocked_upgrade legacy "$old" 'run docker compose down with the old Compose file'
+  diff -qr "$snapshot" "$old"
+  cmp "$legacy/docker-compose.yml" "$old/docker-compose.yml"
+  run_blocked_upgrade unavailable "$old" 'Cannot check for legacy GOST containers'
+  diff -qr "$snapshot" "$old"
+  [[ ! -s $started ]]
+  printf 'PASS: legacy stack blocks publication; the complete prior install and teardown Compose remain intact\n'
+
+  run_blocked_upgrade preparation "$old" 'could not stage'
+  diff -qr "$snapshot" "$old"
+  conflict="$tmp/late-conflict"
+  cp -a "$old" "$conflict"
+  run_blocked_upgrade late-conflict "$conflict" "refusing to overwrite modified $conflict/sdk/setup.mts"
+  expected="$tmp/conflict-expected"
+  cp -a "$snapshot" "$expected"
+  printf '\n# edited during staging\n' >>"$expected/sdk/setup.mts"
+  diff -qr "$expected" "$conflict"
+  [[ ! -s $started ]]
+  printf 'PASS: failed preparation and a conflict introduced during staging do not publish earlier files\n'
+
+  interrupted="$tmp/interrupted"
+  cp -a "$old" "$interrupted"
+  if run_release "$root" "$interrupted" UPGRADE_CASE=interruption CODYSSEY_TAILNET_SETUP=1; then
+    printf 'interrupted publication unexpectedly succeeded\n' >&2; exit 1
+  fi
+  cmp "$interrupted/docker-compose.yml" "$legacy/docker-compose.yml"
+  cmp "$interrupted/next-script.zsh" "$root/next-script.zsh"
+  if zsh "$interrupted/next-script.zsh" --prepared >"$tmp/blocked.log" 2>&1; then
+    printf 'interrupted install activated\n' >&2; exit 1
+  fi
+  grep -Fq 'An installer update is incomplete' "$tmp/blocked.log"
+  [[ ! -s $started ]]
+  run_release "$root" "$interrupted"
+  diff -qr "$fresh" "$interrupted"
+  printf 'PASS: interrupted publication cannot activate and is repaired by a normal retry\n'
+
+  overlap="$tmp/overlap"
+  cp -a "$old" "$overlap"
+  run_release "$root" "$overlap" UPGRADE_CASE=concurrent CODYSSEY_TAILNET_SETUP=1 TS_AUTHKEY='' >"$tmp/overlap.log" 2>&1 &
+  upgrade_pid=$!
+  wait_for_event staging-ready
+  run_blocked_upgrade '' "$overlap" 'another installer is using'
+  [[ ! -s $started ]]
+  cmp "$overlap/docker-compose.yml" "$legacy/docker-compose.yml"
+  printf '\n' >"$events/staging-gate"
+  wait_for_event activation-ready
+  run_blocked_upgrade '' "$overlap" 'another installer is using'
+  printf '\n' >"$events/activation-gate"
+  if ! wait "$upgrade_pid"; then cat "$tmp/overlap.log" >&2; exit 1; fi
+  [[ $(cat "$started") == startup ]]
+  diff -qr "$fresh" "$overlap"
+  printf 'PASS: concurrent runs cannot publish or activate during staging or activation\n'
+
 
   for file in docker-compose.yml sdk/setup.mts; do
     custom="$tmp/custom"

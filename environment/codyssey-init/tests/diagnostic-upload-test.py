@@ -63,7 +63,7 @@ with tempfile.TemporaryDirectory() as directory:
         work,
         "docker",
         """case "$*" in
-  'container inspect '*) exit 1 ;;
+  'container ls --all '*) exit 0 ;;
   'compose ps --status running --services') printf 'tailscale\\ngost\\ntunnel-ui\\n' ;;
   'compose exec -T tailscale tailscale status --json') printf '{"BackendState":"Running"}\\n' ;;
   *) printf 'synthetic private tool output\\n' >&2; exit 1 ;;
