@@ -25,14 +25,81 @@ remote_files=(
   tunnel-ui/server/gost.mjs tunnel-ui/server/config-file.mjs tunnel-ui/server/policy.mjs
 )
 remote_staging=
+remote_publish_temp=
 
 cleanup_remote_staging() {
+  [[ -z $remote_publish_temp ]] || rm -f "$remote_publish_temp"
   [[ -z $remote_staging ]] || rm -rf "$remote_staging"
 }
 
+# SHA-256 of changed managed files from accepted a2838076abf01d03c02e672408adac51560a6c9b.
+# These are the exact downloaded bytes; user state is deliberately not an upgrade candidate.
+legacy_remote_digest() {
+  case $1 in
+    chrome-extension/README.md) printf '%s\n' 485cf8c9744eceaffb763e9073a172e27b8dcf844772abb7e7e6c47f057d538c ;;
+    chrome-extension/popup.html) printf '%s\n' d6b62d955f29150b09a82c97e54b4e22df6cb3a4c3ba57447d2349b99afc0aef ;;
+    docker-compose.yml) printf '%s\n' c0e711835fff709e12e3f477fe142e7166d40033283ccfcc050cecc4a070181c ;;
+    init.sh) printf '%s\n' 0744d9eee4fad347b85e884ea410949e720cae6c204d2b72638b863c94ac70ef ;;
+    justfile) printf '%s\n' da73643709c268bf88fa15ff7a6461db768e641f0a67918cf019962c6dec9979 ;;
+    lib/readiness.zsh) printf '%s\n' f11477ea0da88b7339f5706c110b968ff53d7baf3629326625fac73963e1c203 ;;
+    next-script.zsh) printf '%s\n' 47c9471ebbdb40c22bc93748386f8a6857f89bfc5cd5777197b65ca3682e4aee ;;
+    scripts/prepare-startup.sh) printf '%s\n' 1e8e6770c01458c97758ab323da2e5bbbbb05659b0d0b941254533f647e67b87 ;;
+    scripts/tailnet-browser.sh) printf '%s\n' 373d0dcf3c681aec0f3e5afc4addca9804b4cb8ab348e09e9e0e449b7ba380d0 ;;
+    sdk/setup.mts) printf '%s\n' b89278ee63e51eba4eb5de9a0a251bd508f1b163d609bb530f978f687668e250 ;;
+    *) return 1 ;;
+  esac
+}
+
+refuse_remote_replacement() {
+  die "refusing to overwrite modified $1. Back up and review this path, then restore the exact prior installer version or move the conflicting path aside before retrying. Keep .env and gost/gost.yaml in place."
+}
+
+# Success means a write is needed; return 1 for an unchanged file or preserved user state.
+remote_file_needs_publish() {
+  local target=$1 staging=$2 file=$3
+  local destination="$target/$file" parent=$file expected digest
+  if [[ $file == gost/gost.yaml && ( -e $destination || -L $destination ) ]]; then return 1; fi
+  while [[ $parent == */* ]]; do
+    parent=${parent%/*}
+    if [[ -L $target/$parent || ( -e $target/$parent && ! -d $target/$parent ) ]]; then
+      refuse_remote_replacement "$target/$parent"
+    fi
+  done
+  if [[ ! -e $destination && ! -L $destination ]]; then return 0; fi
+  [[ -f $destination && ! -L $destination ]] || refuse_remote_replacement "$destination"
+  if cmp -s "$staging/$file" "$destination"; then return 1; fi
+  expected=$(legacy_remote_digest "$file") || refuse_remote_replacement "$destination"
+  if command -v sha256sum >/dev/null 2>&1; then
+    digest=$(sha256sum <"$destination") || die "could not hash $destination"
+  elif command -v shasum >/dev/null 2>&1; then
+    digest=$(shasum -a 256 <"$destination") || die "could not hash $destination"
+  else
+    die "install sha256sum or shasum to identify the prior installer file $destination"
+  fi
+  [[ ${digest%% *} == "$expected" ]] || refuse_remote_replacement "$destination"
+}
+
+publish_remote_file() {
+  local target=$1 staging=$2 file=$3
+  local destination="$target/$file" mode=0644
+  case $file in
+    init.sh|next-script.zsh|tailnet.sh|macos-setup.sh|verify-macos-setup.py|lib/auth.sh) mode=0755 ;;
+  esac
+  mkdir -p "${destination%/*}"
+  remote_publish_temp=$(mktemp "${destination%/*}/.codyssey-init.XXXXXX") || die "could not stage $destination"
+  install -m "$mode" "$staging/$file" "$remote_publish_temp" || die "could not stage $destination"
+  # Recheck ownership before the same-filesystem rename.
+  if remote_file_needs_publish "$target" "$staging" "$file"; then
+    mv -f "$remote_publish_temp" "$destination" || die "could not publish $destination"
+  else
+    rm -f "$remote_publish_temp"
+  fi
+  remote_publish_temp=
+}
 
 install_remote_files() {
-  local target=$1 staging file destination
+  local target=$1 staging file
+  local -a publish=()
   staging=$(mktemp -d) || die 'could not create a staging directory.'
   remote_staging=$staging
   trap cleanup_remote_staging EXIT
@@ -49,25 +116,13 @@ install_remote_files() {
     zsh -n "$staging/$file"
   done
   for file in "${remote_files[@]}"; do
-    destination="$target/$file"
-    if [[ $file == gost/gost.yaml && -e $destination ]]; then
-      continue
-    fi
-    if [[ -e $destination ]] && ! cmp -s "$staging/$file" "$destination"; then
-      die "refusing to overwrite modified $destination"
-    fi
+    if remote_file_needs_publish "$target" "$staging" "$file"; then publish+=("$file"); fi
   done
-  mkdir -p "$target/gost" "$target/lib"
-  for file in "${remote_files[@]}"; do
-    destination="$target/$file"
-    if [[ $file == gost/gost.yaml && -e $destination ]] || [[ -e $destination ]]; then
-      continue
-    fi
-    mkdir -p "$(dirname -- "$destination")"
-    install -m 0644 "$staging/$file" "$destination"
+  # Complete preflight for the whole release before publishing any file.
+  # Bash 3.2 with nounset needs the guarded expansion when there are no writes.
+  for file in ${publish[@]+"${publish[@]}"}; do
+    publish_remote_file "$target" "$staging" "$file"
   done
-  chmod 0755 "$target/init.sh" "$target/next-script.zsh" "$target/tailnet.sh" \
-    "$target/macos-setup.sh" "$target/verify-macos-setup.py" "$target/lib/auth.sh"
   rm -rf "$staging"
   remote_staging=
   trap - EXIT

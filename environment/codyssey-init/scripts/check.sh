@@ -3,6 +3,7 @@ set -eu
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 image="codyssey-init-check:local"
 native_python=0
+remote_upgrade=0
 case ${1:-} in
   '') [ "$#" -eq 0 ] ;;
   --native-python)
@@ -24,7 +25,17 @@ case ${1:-} in
     bash "$root/tests/gureum-activation-test.sh"
     native_python=1
     ;;
-  *) printf 'Usage: sh scripts/check.sh [--native-python]\n' >&2; exit 1 ;;
+  --remote-upgrade)
+    [ "$#" -eq 1 ]
+    legacy=a2838076abf01d03c02e672408adac51560a6c9b
+    legacy_tree=7c98c2ed11117d21d0a20e2d8300a36632c072f2
+    if [ "$(git -C "$root" rev-parse --verify "$legacy^{tree}" 2>/dev/null)" != "$legacy_tree" ]; then
+      printf 'The exact accepted %s tree must already be available in the local Git checkout.\n' "$legacy" >&2
+      exit 1
+    fi
+    remote_upgrade=1
+    ;;
+  *) printf 'Usage: sh scripts/check.sh [--native-python|--remote-upgrade]\n' >&2; exit 1 ;;
 esac
 docker version >/dev/null
 grep -qx '\*' "$root/.dockerignore"
@@ -62,6 +73,22 @@ else
   printf 'Check image build failed (exit %s).\n' "$result" >&2
   tail -n 12 "$context/build.log" >&2
   exit "$result"
+fi
+if [ "$remote_upgrade" -eq 1 ]; then
+  mkdir "$context/legacy"
+  git -C "$root/../.." archive "$legacy" init.sh environment/codyssey-init >"$context/legacy.tar"
+  tar -C "$context/legacy" -xf "$context/legacy.tar"
+  chmod -R a+rX "$context/legacy"
+  # The general check image uses a synthetic Docker ignore file. Ownership
+  # comparisons in this case must use the actual release asset instead.
+  install -m 0644 "$root/.dockerignore" "$context/release.dockerignore"
+  docker run --rm --network none --read-only \
+    --tmpfs /tmp:rw,exec,size=64m,mode=1777 \
+    --mount "type=bind,src=$context/legacy,dst=/legacy,readonly" \
+    --mount "type=bind,src=$context/release.dockerignore,dst=/src/.dockerignore,readonly" \
+    --security-opt no-new-privileges --cap-drop ALL \
+    --entrypoint bash "$image" /src/tests/bootstrap-remote.sh /legacy
+  exit 0
 fi
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,exec,size=64m,mode=1777 \

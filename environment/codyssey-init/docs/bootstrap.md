@@ -14,10 +14,11 @@ not as independent copies at the monorepo root. The public `sh init.sh` commands
 
 Remote mode stages the complete reusable runtime, including `init.sh`, `verify-macos-setup.py`, and
 runtime libraries, before copying anything into
-`${CODYSSEY_INIT_DIR:-$HOME/.local/share/codyssey-init}`. It refuses to overwrite a different
-installer file during a full preflight. Failed downloads leave the target untouched and remove their
-staging directory. Existing `.env` and `gost/gost.yaml` files are preserved. A local checkout runs in
-place and rejects a different `CODYSSEY_INIT_DIR`, avoiding a partial or ambiguous copy.
+`${CODYSSEY_INIT_DIR:-$HOME/.local/share/codyssey-init}`. It replaces a prior managed file only if
+its SHA-256 matches a supported old release at the same path. It checks every file before publishing
+any update and installs changed files by atomic rename. Failed downloads and ownership conflicts
+leave the target untouched and remove staging files. Existing `.env` and `gost/gost.yaml` files are
+preserved. A local checkout runs in place and rejects a different `CODYSSEY_INIT_DIR`.
 
 ## Optional features
 
@@ -84,8 +85,14 @@ may be partially applied; inspect the warnings and verify the actual Dock, short
 input, and browser behavior in your environment. Retry the relevant setup command after fixing the cause. OrbStack startup failure does not prevent a separately selected Dock launcher from being attempted.
 Declining Dock cleanup adds the launcher only when `j` was explicitly selected. The launcher requires a working container when used.
 Repeated runs cannot bypass system approval or make an incompatible Docker backend compatible.
-A remote install refuses differing runtime files instead of overwriting them; for an upgrade,
-use a fresh reviewed checkout or preserve your configuration and choose a fresh install directory.
+Remote installations from accepted commit `a2838076abf01d03c02e672408adac51560a6c9b` can upgrade in
+place by repeating the normal remote command. If the old GOST editor is running, first save any
+pending changes and stop the old project using its existing Compose file; see [Codyssey tunnels](tailnet.md#codyssey-tunnels).
+If the installer refuses a customized or unrecognized path, back it up and review it, then restore
+its exact supported original or move it aside before retrying. Do not move `.env` or `gost/gost.yaml`.
+
+From a checkout that contains that accepted Git object, `sh environment/codyssey-init/scripts/check.sh --remote-upgrade`
+tests the actual previous and current launchers against local release files, with all optional setup disabled.
 
 ### Comparing environments
 
