@@ -63,6 +63,34 @@ git version 2.54.0
 
 ## 실행 방법
 
+### Supported coursework workflow
+
+From the monorepo root, run `just materialize E1-1`, then enter `coursework/E1-1`.
+Standalone submissions already contain the generated tools. From the course root:
+
+```sh
+mise trust
+mise run setup
+mise exec -- just demo
+mise exec -- just check
+mise exec -- just verify-docker
+```
+
+The host demo runs only file operations and permissions in a temporary directory
+using Bash and GNU coreutils. `check` adds syntax checks and the offline lab CLI
+tests. On a Docker host without mise, use `sh scripts/coursework.sh shell E1-1 --
+just check` from the monorepo root, or `sh .coursework-dev/shell.sh -- just check`
+from a standalone submission. The development shell is not the DinD workstation.
+
+`verify-docker` requires a local Docker daemon that supports privileged DinD and
+Compose v2.24.4 or newer. It runs the entire lab in a temporary snapshot with a
+synthetic Git origin (configuration only), no published host ports, and a fresh
+nested daemon volume. It removes the snapshot and Compose resources on exit.
+Docker and Alpine registries must be reachable. Use the manual workstation below
+in a standalone clone to keep its runtime evidence or open the demo in a host browser.
+
+### Manual workstation
+
 필수 도구는 OrbStack 또는 Docker Engine과 Docker Compose 플러그인입니다.
 
 ```bash

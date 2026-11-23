@@ -34,10 +34,10 @@ uv='uv = "0.13.5"'
 case $course in
   B1-1) tools=$(printf '%s\n' "$node" "$python") ;;
   B1-2) tools=$(printf '%s\n' "$node" 'java = "temurin-21.0.10+7.0.LTS"') ;;
-  B2-1|B3-2|B5-1) tools=$python ;;
+  B2-1|B3-2|B5-1|E1-2|E1-3) tools=$python ;;
   B2-2) tools=$node ;;
   B3-1) tools=$(printf '%s\n' "$python" 'terraform = "1.16.5"') ;;
-  B4-1|B4-2) tools= ;;
+  B4-1|B4-2|E1-1) tools= ;;
   B5-2) tools=$(printf '%s\n' "$python" "$uv") ;;
   B6-1) tools='"conda:sqlite" = "3.49.2"' ;;
   B6-2) tools=$(printf '%s\n' "$python" "$uv" "$node") ;;

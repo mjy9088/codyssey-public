@@ -40,6 +40,10 @@ starts an assessment-supplied input, live Azure resource, or real API call.
   the firewall, or open ports would affect the lab.
 - B6-1's mise-pinned SQLite binary uses conda-forge and requires glibc on Linux.
   Use the Docker shell on musl-based hosts such as Alpine.
+- E1-1: Bash and GNU coreutils (including `stat`) for the native demo and
+  checks. The full lab additionally needs a Docker host that supports privileged
+  Docker-in-Docker and local bind mounts, and Compose v2.24.4 or newer. The
+  development shell is unprivileged and only runs the native workflows.
 
 ## Docker development shell (no host mise or just)
 
@@ -72,6 +76,9 @@ are run from the host, not from inside this shell.
 | B6-1 | All 17 SQLite queries against a disposable database | `just check` compares the golden output |
 | B6-2 | Catalog CRUD on port 8000 | `just browser` verifies CRUD using a fresh SQLite database |
 | B6-3 | Authentication, catalog, lending and returns on port 8000 | `just browser` verifies browser flows using a fresh SQLite database |
+| E1-1 | File operations and permission changes in a temporary directory | `just verify-docker` runs the full DinD workstation lab |
+| E1-2 | Add, list and play a quiz, then reload its score in a temporary directory | `just run` for interactive play, `just verify-docker` for isolated tests |
+| E1-3 | 3×3 MAC classification in manual mode | `just analyze` processes the bundled JSON, `just verify-docker` runs isolated tests |
 
 B1-2 `check` also runs the owner-isolation probe. The checked-in shared-demo
 policy permits cross-user access, so the probe reports that limitation as a

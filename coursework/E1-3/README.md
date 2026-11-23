@@ -4,21 +4,36 @@
 
 ## 실행 방법
 
-```bash
-mise install
-just run
+From the monorepo root, run `just materialize E1-3` and enter `coursework/E1-3`.
+Standalone submissions already contain the generated tools. From the course root:
+
+```sh
+mise trust
+mise run setup
+mise exec -- just run
 ```
 
 실행 후 `1`은 3×3 사용자 입력 모드, `2`는 현재 디렉터리의 `data.json` 일괄 분석 모드입니다. 입력 모드에서는 필터 A 3행, 필터 B 3행, 패턴 3행을 차례로 입력하며 각 행은 공백으로 구분한 숫자 3개여야 합니다. 잘못된 행은 오류 메시지 후 해당 행을 다시 입력합니다.
 
 테스트는 다음 명령으로 실행합니다.
 
-```bash
-just test
-just check
+```sh
+mise exec -- just test
+mise exec -- just check
+mise exec -- just demo
+mise exec -- just analyze
+mise exec -- just verify-docker
 ```
 
-`just analyze`는 별도 입력 없이 번들된 JSON 분석 모드를 실행하고, `just demo`는 과제의 3×3 예제 입력을 재현합니다. `just`를 사용할 수 없는 환경에서는 `python3 main.py`와 `python3 -m unittest discover -s tests -v`를 직접 실행할 수 있습니다. 별도의 셸 스크립트는 필요하지 않으며, 이후 추가할 경우 Git 실행 권한에 기대지 않고 `sh path/to/script.sh` 형태로 호출합니다.
+`just analyze` runs the bundled JSON analysis; `just demo` runs the 3×3 manual
+example. Without Just, run `python3 main.py` or run the unit suite with
+`python3 -m unittest discover -s tests -v`.
+
+`verify-docker` runs the unit suite as an unprivileged user with networking
+disabled and a read-only root filesystem. For a Docker development shell, run
+`sh scripts/coursework.sh shell E1-3` from the monorepo root, or
+`sh .coursework-dev/shell.sh` from a standalone submission. To run just the
+isolated tests without mise or Just, use `sh scripts/verify.sh docker`.
 
 ## 구현 요약
 

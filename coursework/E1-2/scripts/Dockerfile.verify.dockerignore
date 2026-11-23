@@ -1,0 +1,7 @@
+**
+!main.py
+!quiz_game/src/quiz_game/*.py
+!quiz_game/src/quiz_game/data/initial_state.json
+!quiz_game/tests/test_*.py
+!scripts/capture_terminal_evidence.py
+!scripts/render_terminal_svgs.py
