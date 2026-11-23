@@ -337,6 +337,8 @@ exec tart "$@"
         self.assertIn("verify-macos-setup.py", names)
         # The guest must have every input needed to build its isolated check image.
         self.assertIn("tests/managed-j-runtime.sh", names)
+        self.assertIn("scripts/intel-macos-vm/guest_credential.py", names)
+        self.assertIn("scripts/intel-macos-vm/run-unattended.sh", names)
         self.assertIn("mise.vm.toml", names)
         self.assertNotIn(".env", names)
         self.assertNotIn("gost/gost.yaml", names)
@@ -748,7 +750,7 @@ class DesktopTransportTests(unittest.TestCase):
         self.assertEqual(calls, ["bootstrap", "bootout"])
         self.assertFalse(work.exists())
 
-    def test_tart_input_driver_transfers_the_verifier_path_helper(self):
+    def test_tart_input_driver_transfers_the_verifier_and_its_shell_dependencies(self):
         vnc = ModuleType("vncdotool")
         vnc.api = mock.Mock()
         with mock.patch.dict(sys.modules, {"vncdotool": vnc}):
@@ -771,8 +773,12 @@ class DesktopTransportTests(unittest.TestCase):
                     log.touch()
                     driver["run_check"]("synthetic", log)
         with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
-            self.assertIn("scripts/verify-macos-vm.sh", archive.getnames())
-            self.assertIn("scripts/vm-guest-path.sh", archive.getnames())
+            self.assertLessEqual({
+                "scripts/verify-macos-vm.sh",
+                "scripts/vm-guest-path.sh",
+                "lib/bootstrap-tools.sh",
+                "lib/preparation.sh",
+            }, set(archive.getnames()))
 
 
 class UnattendedCacheTests(unittest.TestCase):

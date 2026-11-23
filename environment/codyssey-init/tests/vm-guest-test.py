@@ -58,6 +58,9 @@ case $1 in
         [ "$VM_GUEST_SCENARIO" != wrong-driver ] || driver=VZ
         printf '{"driver":"%s","arch":"%s","runtime":"docker"}\\n' "$driver" "$arch"
         ;;
+    start)
+        printf 'lima DHCP timeout %s\\n' "${LIMA_USERNET_RESOLVE_IP_ADDRESS_TIMEOUT:-unset}" >> "$VM_CALLS"
+        ;;
     stop)
         if [ "$VM_GUEST_SCENARIO" = docker-and-stop-failure ]; then exit 23; fi
         ;;
@@ -109,6 +112,7 @@ sys.exit(0)
             env = dict(os.environ, HOME=str(home), VM_CALLS=str(calls),
                        VM_CURL_COUNT=str(work / "curl-count"), VM_GUEST_SCENARIO=scenario)
             env.pop("DOCKER_HOST", None)
+            env.pop("LIMA_USERNET_RESOLVE_IP_ADDRESS_TIMEOUT", None)
             env.update(overrides)
             tools = self.make_tools(work)
             if scenario == "intel-macports":
@@ -152,6 +156,14 @@ sys.exit(0)
                 self.assertTrue(any(call.startswith(
                     f"start --profile codyssey-verify --vm-type qemu --arch {linux} "
                 ) for call in calls))
+                self.assertIn("lima DHCP timeout 10", calls)
+
+    def test_preparer_honors_explicit_lima_dhcp_timeout(self) -> None:
+        result, calls = self.run_script(
+            "prepare-macos-vm.sh", LIMA_USERNET_RESOLVE_IP_ADDRESS_TIMEOUT="15"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("lima DHCP timeout 15", calls)
 
     def test_preparer_publishes_managed_ownership_for_a_later_stop(self) -> None:
         result, calls = self.run_script("prepare-macos-vm.sh", managed=True)

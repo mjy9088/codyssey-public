@@ -285,8 +285,8 @@ preparation using the [Fusion instructions](intel-macos-vm.md). Preparation star
 dedicated `codyssey-verify` Colima profile using QEMU TCG. The Linux architecture is x86_64
 inside an Apple Silicon macOS guest and aarch64 inside an Intel macOS guest. Cross-architecture
 emulation avoids nested hardware virtualization.
-On Intel, the preparer allows up to ten minutes for Lima user-v2 address
-resolution because the emulated ARM guest can reach DHCP after the default
+The preparer defaults to ten minutes for Lima user-v2 address resolution on both
+architectures because the emulated Linux guest can reach DHCP after Lima's usual
 two-minute deadline.
 See [Colima's architecture and QEMU configuration](https://colima.run/docs/configuration/).
 Preparation includes Lima's additional guest agents, required for

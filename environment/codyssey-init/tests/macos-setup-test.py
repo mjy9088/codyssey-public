@@ -362,6 +362,8 @@ def test_interactive_dock_default_and_decline() -> None:
                         if not answered and b"[y/N] " in output:
                             os.write(terminal, answer)
                             answered = True
+                            # Full setup starts many fixture processes, which can be slow under emulation.
+                            deadline = time.monotonic() + 120
                     child, status = os.waitpid(pid, os.WNOHANG)
                     if child:
                         break

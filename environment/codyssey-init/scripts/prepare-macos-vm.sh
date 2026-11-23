@@ -144,11 +144,8 @@ for line in sys.stdin:
 check_cancelled
 : > "$ownership/acquired"
 colima_owned=1
-# On Intel Fusion, the emulated ARM guest can reach DHCP after Lima's
-# default two-minute address-resolution deadline.
-if [[ $linux_arch == aarch64 ]]; then
-  export LIMA_USERNET_RESOLVE_IP_ADDRESS_TIMEOUT="${LIMA_USERNET_RESOLVE_IP_ADDRESS_TIMEOUT:-10}"
-fi
+# Either emulated architecture can reach DHCP after Lima's two-minute default.
+export LIMA_USERNET_RESOLVE_IP_ADDRESS_TIMEOUT="${LIMA_USERNET_RESOLVE_IP_ADDRESS_TIMEOUT:-10}"
 run_quiet_step 'Starting test Docker' colima start --profile "$profile" --vm-type qemu --arch "$linux_arch" \
   --cpu-type max --cpus 2 --memory 4 --disk 30 --runtime docker
 colima status --profile "$profile" --json | python3 -c '
