@@ -26,9 +26,11 @@ fi
 tools_dir='/Library/Application Support/VMware Tools'
 tools_running=0
 remote_login=0
+automatic=0
+if [[ -e $media/automatic-setup ]]; then automatic=1; fi
 if /usr/bin/pgrep -f "^$tools_dir/vmware-tools-daemon( |$)" >/dev/null; then tools_running=1; fi
 if /usr/bin/nc -z -G 2 127.0.0.1 22; then remote_login=1; fi
-if (( ! tools_running || ! remote_login )) || [[ ! -r /etc/ssh/ssh_host_ed25519_key.pub ]]; then
+if (( ! tools_running || ! remote_login )) || [[ $expected_user == vmuser || ! -r /etc/ssh/ssh_host_ed25519_key.pub ]]; then
   prompt_id=$(cat "$media/prompt-id")
   [[ $prompt_id =~ ^[0-9a-f]{8}$ ]]
   sudo -v -p "Codyssey $prompt_id password: "
@@ -52,9 +54,22 @@ fi
 if [[ ! -r /etc/ssh/ssh_host_ed25519_key.pub ]]; then
   sudo /usr/bin/ssh-keygen -A
 fi
+if [[ $expected_user == vmuser ]]; then
+  (
+    config=$(mktemp)
+    trap 'rm -f -- "$config"' EXIT
+    printf '%s\n' 'Match User vmuser' '    AuthenticationMethods publickey' > "$config"
+    sudo /usr/bin/install -o root -g wheel -m 644 "$config" /etc/ssh/sshd_config.d/00-codyssey-lab.conf
+    if ! sudo /usr/sbin/sshd -T -C "user=$expected_user,host=localhost,addr=127.0.0.1" |
+      grep -Fx 'authenticationmethods publickey' >/dev/null; then
+      printf 'The lab guest requires public-key SSH authentication.\n' >&2
+      exit 1
+    fi
+  )
+fi
 read -r type blob _ < /etc/ssh/ssh_host_ed25519_key.pub
 "$tools_dir/vmware-tools-daemon" --cmd "info-set guestinfo.codyssey.ssh-host-key $type $blob"
-if [[ ! -e $media/automatic-setup ]] && ! /usr/bin/xcode-select -p >/dev/null 2>&1; then
+if (( ! automatic )) && ! /usr/bin/xcode-select -p >/dev/null 2>&1; then
   /usr/bin/xcode-select --install || printf 'Check the Command Line Tools installer in the guest.\n'
 fi
 if (( ! remote_login )); then

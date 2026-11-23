@@ -171,6 +171,12 @@ elif args[0] == "/usr/bin/tar":
         names = [item.name for item in archive]
     with open(os.environ["VM_TEST_PAYLOAD"], "w") as stream:
         json.dump(names, stream)
+elif len(args) > 1 and args[1].endswith("/prepare-fusion-base.sh"):
+    if os.environ.get("CODYSSEY_FUSION_UNATTENDED") == "1" and os.environ["CODYSSEY_FUSION_GUEST_USER"] == "vmuser":
+        assert "-T" in options and args[2:] == ["--sudo-password-stdin"]
+        assert sys.stdin.read() == "vm user password\n"
+    else:
+        assert "-t" in options and args[2:] == []
 elif len(args) > 1 and args[1].endswith("/vm-aqua-exec.py"):
     scenario = os.environ["VM_TEST_SCENARIO"]
     if scenario == "verify-failure":
@@ -218,7 +224,7 @@ class OrchestrationTests(unittest.TestCase):
             )
             self.assertEqual(public_key.stdout, identity.with_suffix(".pub").read_text())
 
-    def run_case(self, scenario="success", extra=(), arch="arm64", quick=False):
+    def run_case(self, scenario="success", extra=(), arch="arm64", quick=False, unattended_guest=None):
         with tempfile.TemporaryDirectory(prefix="vm-orchestration-") as directory:
             work = Path(directory)
             fakebin = work / "bin"
@@ -286,6 +292,9 @@ exec tart "$@"
                            CODYSSEY_FUSION_CREDENTIALS=str(work / "credentials"),
                            CODYSSEY_FUSION_IDENTITY=str(identity))
                 env.pop("codyssey_fusion_agent_pid", None)
+                env.pop("CODYSSEY_FUSION_UNATTENDED", None)
+                if unattended_guest is not None:
+                    env.update(CODYSSEY_FUSION_UNATTENDED="1", CODYSSEY_FUSION_GUEST_USER=unattended_guest)
                 if "--prepare" in extra:
                     known_hosts.unlink()
                     Path(env["VM_TEST_RUNNING"]).write_text(str(base))
@@ -421,6 +430,22 @@ test "$(fusion_selected_base)" = "$4"
                 text=True, capture_output=True, timeout=10,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_unattended_base_preparation_supplies_the_preset_without_a_password_file(self):
+        result, commands, _ = self.run_case(
+            "quick-prepare", ("--prepare",), arch="x86_64", quick=True, unattended_guest="vmuser",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any("--sudo-password-stdin" in command for command in commands))
+        self.assertNotIn(["ssh", "/usr/bin/xcode-select", "-p"], commands)
+
+    def test_unattended_flag_does_not_send_the_preset_for_a_custom_account(self):
+        result, commands, _ = self.run_case(
+            "quick-prepare", ("--prepare",), arch="x86_64", quick=True, unattended_guest="synthetic",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any("--sudo-password-stdin" in command for command in commands))
+        self.assertIn(["ssh", "/usr/bin/xcode-select", "-p"], commands)
 
     def test_intel_base_preparation_pins_only_verified_keys(self):
         cases = {
@@ -719,6 +744,143 @@ class DesktopTransportTests(unittest.TestCase):
         with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
             self.assertIn("scripts/verify-macos-vm.sh", archive.getnames())
             self.assertIn("scripts/vm-guest-path.sh", archive.getnames())
+
+
+class UnattendedCacheTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.work = Path(temporary.name)
+        self.storage = self.work / "VM storage"
+        self.bin = self.work / "bin"
+        self.bin.mkdir()
+        scripts = self.work / "scripts"
+        numbered = scripts / "intel-macos-vm"
+        numbered.mkdir(parents=True)
+        shutil.copy(ROOT / "scripts/vm-fusion.sh", scripts)
+        self.launcher = numbered / "run-unattended.sh"
+        shutil.copy(ROOT / "scripts/intel-macos-vm" / self.launcher.name, self.launcher)
+        for name, body in {
+            "git": 'test "$3 $4 $5" = "rev-parse --verify HEAD" && printf "%s\\n" "$TEST_COMMIT"',
+            "uname": 'case $1 in -s) echo Darwin;; -m) echo x86_64;; esac',
+            "xcrun": "exit 0",
+            "pgrep": "exit 1",
+            "vmcli": "exit 0",
+            "python3": '''case ${2:-} in
+    'import socket;'*) echo 49152; exit 0;;
+esac
+exec "$TEST_PYTHON" "$@"''',
+            "vmrun": '''case $3 in
+    list) echo "Total running VMs: 0";;
+    listSnapshots)
+      test -f "${4%.vmx}.snapshot" || exit 3
+      echo "macOS - initial setup complete";;
+    *) exit 2;;
+esac''',
+        }.items():
+            executable = self.bin / name
+            executable.write_text(f"#!/bin/sh\n{body}\n")
+            executable.chmod(0o755)
+        for name, body in {
+            "01-create-install-media.sh": '''mkdir -p "$CODYSSEY_FUSION_STORAGE/installers"
+iso="$CODYSSEY_FUSION_STORAGE/installers/test.iso"
+if [ ! -e "$iso" ]; then printf '%s\\n' "$TEST_COMMIT" > "$iso"; fi
+printf '%s\\n' installers/test.iso > "$CODYSSEY_FUSION_STORAGE/current-installer"''',
+            "02-create-base-vm.sh": '''directory="$CODYSSEY_FUSION_STORAGE/bases/Sequoia.vmwarevm"
+mkdir -p "$directory"
+touch "$directory/Sequoia.vmx"''',
+            "04-checkpoint-and-mount-tools.sh": '''test -z "$TEST_FAIL_PREPARE" || exit 14
+mkdir -p "$CODYSSEY_FUSION_CREDENTIALS"
+printf "key\\n" > "$CODYSSEY_FUSION_IDENTITY"
+printf "pin\\n" > "$CODYSSEY_FUSION_KNOWN_HOSTS"
+touch "${1%.vmx}.snapshot"''',
+            "06-verify-workstation.sh": '''test -f "$1"
+test -s "$CODYSSEY_FUSION_IDENTITY"
+test -s "$CODYSSEY_FUSION_KNOWN_HOSTS"
+printf '%s\\n' "$1" > "$CODYSSEY_FUSION_STORAGE/verified-base"
+test -z "$TEST_FAIL_VERIFY" || exit 16''',
+            "07-close-fusion.sh": "",
+        }.items():
+            script = numbered / name
+            script.write_text(f"set -eu\n{body}\n")
+        (numbered / "install-guest.py").touch()
+        self.commit = "1" * 40
+
+    def run_launcher(self, *arguments, fail_prepare="", fail_verify=""):
+        environment = dict(
+            os.environ,
+            PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
+            CODYSSEY_FUSION_VMRUN=str(self.bin / "vmrun"),
+            CODYSSEY_FUSION_STORAGE=str(self.storage),
+            TEST_COMMIT=self.commit,
+            TEST_PYTHON=sys.executable,
+            TEST_FAIL_PREPARE=fail_prepare,
+            TEST_FAIL_VERIFY=fail_verify,
+        )
+        result = subprocess.run(
+            ["/bin/bash", str(self.launcher), "--accept-license", *arguments],
+            env=environment, capture_output=True, text=True, timeout=15,
+        )
+        directory = next((Path(line[5:]) for line in result.stdout.splitlines()
+                          if line.startswith("Run: ")), None)
+        return result, directory
+
+    def verified_base(self, *arguments):
+        result, run = self.run_launcher(*arguments)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("PASS:", result.stdout)
+        return run, Path((run / "verified-base").read_text().strip())
+
+    def test_cache_key_uses_commit_and_invalidation_is_explicit(self):
+        first, base = self.verified_base()
+        self.assertTrue((first / "04-prepare.log").is_file())
+        (self.work / "scripts" / "dirty").write_text("uncommitted edit")
+        repeat, reused = self.verified_base()
+        self.assertEqual(reused, base)
+        self.assertTrue((repeat / "base-reuse.log").is_file())
+        self.assertFalse((repeat / "02-create.log").exists())
+        self.commit = "2" * 40
+        forced_reuse, reused = self.verified_base("--no-invalidate")
+        self.assertEqual(reused, base)
+        self.assertEqual((forced_reuse / "git-commit").read_text().strip(), self.commit)
+        rebuilt = self.verified_base()[1]
+        self.assertNotEqual(rebuilt, base)
+        installer = self.storage / "installer-cache/installers/test.iso"
+        self.assertEqual(installer.read_text().strip(), "1" * 40)
+        self.assertNotEqual(self.verified_base("--invalidate")[1], rebuilt)
+        self.assertTrue(base.is_file())
+
+    def test_failure_invalidates_auto_reuse_but_leaves_the_prepared_base_available(self):
+        result, failed = self.run_launcher(fail_verify="yes")
+        self.assertEqual(result.returncode, 16, result.stderr)
+        failed_base = Path((failed / "verified-base").read_text().strip())
+        self.assertEqual(self.verified_base("--no-invalidate")[1], failed_base)
+        result, _ = self.run_launcher(fail_verify="yes")
+        self.assertEqual(result.returncode, 16, result.stderr)
+        self.assertNotEqual(self.verified_base()[1], failed_base)
+
+    def test_failed_preparation_and_missing_snapshot_cannot_be_reused(self):
+        result, failed = self.run_launcher(fail_prepare="yes")
+        self.assertEqual(result.returncode, 14, result.stderr)
+        run, base = self.verified_base("--no-invalidate")
+        self.assertNotEqual(run, failed)
+        self.assertTrue((run / "04-prepare.log").is_file())
+        base.with_suffix(".snapshot").unlink()
+        self.assertNotEqual(self.verified_base("--no-invalidate")[1], base)
+
+    def test_concurrent_invocation_does_not_change_the_cache(self):
+        import fcntl
+
+        self.verified_base()
+        state = self.storage / "unattended-base"
+        before = state.read_text()
+        with (self.storage / ".unattended.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            result, run = self.run_launcher("--invalidate")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Another unattended Fusion run", result.stderr)
+        self.assertIsNone(run)
+        self.assertEqual(state.read_text(), before)
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ if [[ ${2:-} == --workstation ]]; then
   unset CODYSSEY_APPLICATIONS_DIR CODYSSEY_SYSTEM_APPLICATIONS_DIR CODYSSEY_INPUT_SWITCH
   export TS_AUTHKEY='' CODYSSEY_TAILNET_SETUP=0 CODYSSEY_INSTALL_J=1 CODYSSEY_MACOS_SETUP=1
   export CODYSSEY_DOCK_SETUP=1 CODYSSEY_OPEN_BROWSER=0 CODYSSEY_INTERACTIVE_SHELL=0
-  python3 -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ required"'
+  vm_guest_python_ready || { printf 'Python 3.10+ required.\n' >&2; exit 1; }
   bash init.sh
   mise trust "$root/mise.toml"
   mise install
@@ -34,7 +34,14 @@ if [[ ${2:-} == --input-desktop ]]; then
   unset DEFAULTS_BIN PLISTBUDDY_BIN PLUTIL_BIN UNAME_BIN CODYSSEY_INPUT_SWITCH
   helper="$root/enable-korean.swift"
   hangul=org.youknowone.inputmethod.Gureum.han2
+  . "$root/lib/bootstrap-tools.sh"
   node_bin=${CODYSSEY_VERIFY_NODE:-node}
+  if [[ -z ${CODYSSEY_VERIFY_NODE:-} ]] && ! node_runs_setup_sdk "$root"; then
+    node_bin=$(mise_setup_node_path) || {
+      printf 'Run the workstation verification first to install the Node.js runtime through mise.\n' >&2
+      exit 1
+    }
+  fi
   "$node_bin" "$root/sdk/cli.mts" configure-input
   [[ $(/usr/bin/swift "$helper" --current-source) == "$hangul" ]]
   # The first activation may leave a separate Input Monitoring dialog to dismiss.
@@ -97,7 +104,7 @@ trap 'exit 143' TERM
 for tool in docker python3 curl zsh nc; do
   command -v "$tool" >/dev/null || { printf 'Missing guest tool: %s\n' "$tool" >&2; exit 1; }
 done
-python3 -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ required"'
+vm_guest_python_ready || { printf 'Python 3.10+ required.\n' >&2; exit 1; }
 [[ -z ${DOCKER_HOST:-} ]] || { printf 'DOCKER_HOST overrides are not allowed for VM verification.\n' >&2; exit 1; }
 docker_context=${DOCKER_CONTEXT:-}
 [[ -n $docker_context ]] || docker_context=$(docker context show)

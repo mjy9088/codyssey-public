@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-prompt_password=0
-if [[ ${1:-} == --prompt-guest-password ]]; then
-  prompt_password=1
-  shift
-fi
 if [[ ${1:-} == --help || $# -gt 1 ]]; then
-  printf 'Usage: bash %s [--prompt-guest-password] [BASE.vmx]\n' "$0"
+  printf 'Usage: bash %s [BASE.vmx]\n' "$0"
   [[ ${1:-} == --help ]]
   exit
 fi
@@ -32,14 +27,11 @@ vnc_enabled=0
 started=0
 opened_fusion=0
 cleanup() {
-  if [[ ${CODYSSEY_FUSION_GUEST_PASSWORD_FILE:-} == "$work/guest-password" ]]; then
-    rm -f -- "$work/guest-password"
-  fi
   if (( vnc_enabled )); then
     running=$(fusion list) || return 1
     if (( started )) && fusion_list_contains "$base" "$running"; then
       fusion_started=1
-      if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 ]]; then
+      if fusion_uses_lab_password; then
         vm_stop_disposable "$base" || return 1
       else
         vm_stop "$base" || return 1
@@ -66,15 +58,6 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-if (( prompt_password )) && [[ -z ${CODYSSEY_FUSION_GUEST_PASSWORD_FILE:-} ]]; then
-  [[ -t 0 ]] || { printf 'Use a terminal to enter the guest credential.\n' >&2; exit 1; }
-  IFS= read -rs -p 'Disposable guest administrator password: ' password
-  printf '\n'
-  [[ -n $password ]] || { printf 'The guest password is empty.\n' >&2; exit 1; }
-  export CODYSSEY_FUSION_GUEST_PASSWORD_FILE="$work/guest-password"
-  printf '%s\n' "$password" > "$CODYSSEY_FUSION_GUEST_PASSWORD_FILE"
-  unset password
-fi
 if [[ ! -e $tools && ! -L $tools ]]; then
   cache_stage=$(mktemp -d "$storage/tools/.download.XXXXXX")
   download="$cache_stage/darwin.iso"
@@ -106,7 +89,9 @@ ssh-keygen -lf "$work/media/host.pub" >/dev/null
 printf '%s\n' "$guest_user" > "$work/media/guest-user"
 prompt_id=$(od -An -N4 -tx1 /dev/urandom | tr -d '[:space:]')
 printf '%s\n' "$prompt_id" > "$work/media/prompt-id"
-if [[ -n ${CODYSSEY_FUSION_GUEST_PASSWORD_FILE:-} ]]; then
+lab_password=0
+if fusion_uses_lab_password; then
+  lab_password=1
   touch "$work/media/automatic-setup"
 fi
 cp "$scripts/intel-macos-vm/guest-setup.sh" "$work/media/setup.sh"
@@ -164,17 +149,18 @@ started=1
 fusion start "$base" gui
 setup_opened=0
 if (( vnc_enabled )); then
-  if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 ]]; then
+  if fusion_uses_lab_password; then
     printf 'Opening the guest setup disc and handling the lab account prompts.\n'
   else
     printf 'Waiting for Finder to show the guest setup file. Sign in to the guest if needed.\n'
   fi
-  if python3 "$launcher/open-guest-setup.py" "$fusion_vmcli" "$base" "$work/recognize" "$work/screen.png" "$port" "$guest_user" "$prompt_id"; then
+  if CODYSSEY_FUSION_USE_LAB_PASSWORD=$lab_password \
+    python3 "$launcher/open-guest-setup.py" "$fusion_vmcli" "$base" "$work/recognize" "$work/screen.png" "$port" "$guest_user" "$prompt_id"; then
     setup_opened=1
   fi
 fi
 if (( ! setup_opened )); then
-  if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 ]]; then
+  if fusion_uses_lab_password; then
     if [[ -f $work/screen.txt ]]; then
       cp "$work/screen.txt" "$storage/setup-screen.txt"
       printf 'Last setup OCR: %s/setup-screen.txt\n' "$storage" >&2
@@ -190,7 +176,7 @@ bash /Volumes/Codyssey/setup.sh
 
 EOF
 fi
-if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} != 1 ]]; then
+if ! fusion_uses_lab_password; then
   cat <<'EOF'
 Approve VMware Tools and Command Line Tools if prompted. Restart the guest if
 requested and rerun the command after signing in. Enable Remote Login for the

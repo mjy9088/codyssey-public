@@ -5,36 +5,51 @@ Install [VMware Fusion 26H1](https://support.broadcom.com/group/ecx/productfiles
 ## Single-command verification
 
 The host needs Fusion Pro, Python 3, Apple Command Line Tools, and about
-100 GiB of free space on the VM storage volume. Put the disposable `vmuser`
-password in a host-private file with mode `0600`, outside
-the repository. After reviewing the [macOS license](https://www.apple.com/legal/sla/),
+100 GiB of free space on the VM storage volume. After reviewing the
+[macOS license](https://www.apple.com/legal/sla/),
 run from `environment/codyssey-init`.
 
 ```sh
-CODYSSEY_FUSION_GUEST_PASSWORD_FILE=/path/to/guest-password \
-  bash scripts/intel-macos-vm/run-unattended.sh --accept-license
+bash scripts/intel-macos-vm/run-unattended.sh --accept-license
 ```
 
-The script requests Sequoia 15.8.3, formats the new virtual disk, installs
-macOS, creates `vmuser` through Setup Assistant, and prepares the base for
-workstation verification. The host drives guest login, setup, and approval
-dialogs through the English guest console over Fusion's loopback interface.
+When it needs a new base, the script requests Sequoia 15.8.3, formats the new virtual disk, installs
+macOS, creates `vmuser` through Setup Assistant with the preset password
+`vm user password`, and prepares the base for workstation verification.
+Use this preset only for disposable lab VMs. The host drives guest login,
+setup, and approval dialogs through the English guest console over Fusion's
+loopback interface.
 The script saves the `macOS - initial setup complete` snapshot before
 installing guest tools and verifies a full clone of the prepared base. On
 success, it closes Fusion if no other VMs are running, removes the verification
 clone, and retains the stopped base, snapshot, and logs.
 
-The script prints the path to a fresh `runs/unattended.*` directory. Look
-there for `01-media.log`, `02-create.log`, `03-installer.log`, `04-prepare.log`
-(including step 05), `06-verify.log`, and `07-cleanup.log`.
+Every invocation creates a fresh `runs/unattended.*` directory for verification
+and logs, and records the current `HEAD` in `git-commit`. If the last invocation
+passed and its prepared base belongs to that commit, the script reuses the base
+and starts at step 06. Uncommitted changes do not affect the comparison.
+
+- `--invalidate` forces a new base. Use it to rebuild after uncommitted changes
+  or to use different installer media.
+- `--no-invalidate` reuses the last prepared base even after a failed run or a
+  commit change. It still builds a new base if the saved VM, snapshot, or SSH
+  credentials are missing. Forced reuse retains the base's original commit.
+
+The optional installer argument is used when building a new base. The default
+installer is cached separately by macOS version and can be reused when rebuilding
+the base.
+The script leaves older base VMs and logs on disk for inspection.
+
+A rebuilt run writes `01-media.log`, `02-create.log`, `03-installer.log`, `04-prepare.log`
+(including step 05), `06-verify.log`, and `07-cleanup.log`. A reused run writes
+`base-reuse.log` in place of steps 01–05.
 
 Apple’s `createinstallmedia` requires host administrator privileges when
 building an ISO. Authenticate when the host prompts.
 [Apple's installer instructions](https://support.apple.com/en-us/101578).
 
-To reuse an Apple-generated ISO, append its path to the command after
-`--accept-license`. The script stages it in the fresh run and proceeds with
-the same VM setup and verification.
+To build a base from an Apple-generated ISO, pass `--invalidate` and append
+the ISO path. The script stages it for the new VM.
 Set `CODYSSEY_FUSION_HOST_AUTH=dialog` to use the macOS host authorization
 dialog.
 
@@ -54,13 +69,15 @@ Use these steps from `environment/codyssey-init` to diagnose a failed run or
 to prepare a base interactively.
 
 If the single command created a run before failing, use its printed directory
-as storage when resuming. Steps 04–06 read that run's base selection and SSH
-credentials. Keep the same guest password file.
+as storage when resuming. For a reused base, `base-reuse.log` points to the
+original run whose `credentials` directory step 06 uses. If the base uses the
+preset `vmuser` password, enable unattended mode to resume its automatic setup.
 
 ```sh
 export CODYSSEY_FUSION_STORAGE="/path/to/runs/unattended.XXXXXX"
-export CODYSSEY_FUSION_CREDENTIALS="$CODYSSEY_FUSION_STORAGE/credentials"
-export CODYSSEY_FUSION_GUEST_PASSWORD_FILE=/path/to/guest-password
+export CODYSSEY_FUSION_CREDENTIALS="/path/to/the/base-run/credentials"
+export CODYSSEY_FUSION_KNOWN_HOSTS="$CODYSSEY_FUSION_CREDENTIALS/known_hosts"
+export CODYSSEY_FUSION_UNATTENDED=1
 ```
 
 ### 01–02. Build the installer and start the VM
@@ -78,8 +95,9 @@ vCPUs, 8 GiB RAM, and a growable 80 GiB SATA disk. It saves the selected VMX in
 
 In the guest, open Disk Utility, erase the **new virtual SATA disk** (about 86 GB) as
 APFS with a GUID partition map, and install macOS there. Complete Setup Assistant
-with a disposable local administrator named `vmuser`. Save its unique password
-in your password manager. During long installs, use the [installer watcher](#watch-a-long-installation).
+with a disposable local administrator named `vmuser`. Use the preset password
+`vm user password` to enable unattended preparation for this base.
+During long installs, use the [installer watcher](#watch-a-long-installation).
 
 #### Format the target from the guest Terminal
 
@@ -149,20 +167,16 @@ Step 04 saves the initial desktop checkpoint, disconnects the installer, and
 boots the guest with a setup disc containing its VMware Tools package and the
 host's public SSH key.
 
-To enter the disposable guest password once, run step 04 with
-`--prompt-guest-password`. For unattended preparation, set
-`CODYSSEY_FUSION_GUEST_PASSWORD_FILE` to a host file owned by you with mode
-`0600` containing the guest administrator password on one line. Step 04 uses
-it for the matching guest login and administrator prompts and handles recognized
-VMware dialogs. Step 05 uses the same file to authenticate guest package
-installation over the pinned SSH connection, including Apple's Command Line
-Tools when Software Update offers them. Keep persistent credential files
-outside the repository. When step 04 starts Fusion itself, it closes Fusion
-after the guest has stopped.
+For a disposable `vmuser` account with the preset password, set
+`CODYSSEY_FUSION_UNATTENDED=1` when running step 04. With English Finder labels,
+Python 3.8 or newer, and host Apple Command Line Tools, step 04 can sign in,
+open the setup disc, and handle recognized VMware dialogs. Step 05 uses the
+preset for guest package installation over pinned SSH. The lab account
+`vmuser` uses public-key SSH in both unattended and manual preparation.
+When step 04 starts Fusion itself, it closes Fusion after the guest has stopped.
 
-With the password file, English Finder labels, Python 3.8 or newer, and host
-Apple Command Line Tools, step 04 can sign in, open the setup disc, and handle
-the recognized VMware dialogs. In the manual recovery path, open
+For manual recovery or a guest with a custom password, clear
+`CODYSSEY_FUSION_UNATTENDED` and open
 **Start Setup.command** on the **Codyssey** disc, or run
 `bash /Volumes/Codyssey/setup.sh` after signing in. Approve any remaining
 VMware Tools or Command Line Tools prompts. If SSH is still unavailable, enable
@@ -175,14 +189,16 @@ SSH connection succeeds. The host prints the current prerequisite as it
 progresses. If it is waiting for the guest SSH key, run the setup command in the
 guest Terminal and finish any VMware Tools prompts. If it is waiting for SSH or
 Command Line Tools, check Remote Login or finish the Apple installer in the
-guest. It then installs any missing MacPorts, Python, Node.js,
-and Google Chrome, shuts down the base, and disconnects the setup disc. Enter
-the guest administrator password when prompted. Close the installer or setup
-console with Command-W once the base has shut down.
+guest. It installs Python from the pinned macOS installer if the harness
+needs it, and installs Google Chrome for the live Dock check if it is missing.
+It then shuts down the base and disconnects the setup disc. Step 06 runs
+`init.sh`, which installs Node.js through mise when needed. In
+manual mode, enter the guest administrator password when prompted. Close the
+installer or setup console with Command-W once the base has shut down.
 
 If the host wait is interrupted or an automatic package install fails, leave the
 guest running. If needed, install the missing tool using the
-[MacPorts installer](https://www.macports.org/install.php) or
+[Python installer](https://www.python.org/downloads/release/python-31410/) or
 [Google Chrome installer](https://www.google.com/chrome/), then resume on the host.
 
 ```sh

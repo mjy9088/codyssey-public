@@ -40,37 +40,34 @@ if ! /usr/bin/xcode-select -p >/dev/null 2>&1; then
     exit 1
   fi
 fi
-guest_tools_ready() {
-  python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' &&
-    node -e '
-      const [major, minor] = process.versions.node.split(".").map(Number);
-      process.exit(major < 22 || (major === 22 && minor < 18) ? 1 : 0);
-    '
-}
-if ! guest_tools_ready; then
-  if ! command -v port >/dev/null; then
-    [[ $(sw_vers -productVersion) == 15.* ]] || {
-      printf 'Install the official MacPorts package for this guest macOS version, then retry.\n' >&2
+if ! vm_guest_python_ready; then
+  printf 'Installing Python 3.14.10 from the official macOS package.\n'
+  (
+    work=$(mktemp -d)
+    trap 'rm -rf -- "$work"' EXIT
+    package="$work/Python.pkg"
+    curl --fail --silent --show-error --location --retry 2 --proto '=https' --proto-redir '=https' \
+      https://www.python.org/ftp/python/3.14.10/python-3.14.10-macos11.pkg -o "$package"
+    digest=$(shasum -a 256 "$package")
+    [[ ${digest%% *} == 286c7018aa2730f6747ca433dccdc2b31be45f078a9ea0ffa44d5f06368fd2d7 ]] || {
+      printf 'Python package checksum mismatch.\n' >&2
       exit 1
     }
-    printf 'Installing the pinned MacPorts package for Sequoia.\n'
-    (
-      work=$(mktemp -d)
-      trap 'rm -rf -- "$work"' EXIT
-      curl --fail --silent --show-error --location --retry 2 --proto '=https' --proto-redir '=https' \
-        https://distfiles.macports.org/MacPorts/MacPorts-2.12.7-15-Sequoia.pkg -o "$work/MacPorts.pkg"
-      digest=$(shasum -a 256 "$work/MacPorts.pkg")
-      [[ ${digest%% *} == 87b2e87ed7adc4aca947b42eb7ff991614cc0edfccb486237f2bbc75f28aae63 ]] || {
-        printf 'MacPorts package checksum mismatch.\n' >&2
-        exit 1
-      }
-      admin /usr/sbin/installer -pkg "$work/MacPorts.pkg" -target /
-    )
-  fi
-  admin "$(command -v port)" install python313 nodejs24
-  admin "$(command -v port)" select --set python3 python313
+    # Keep the framework and /usr/local/bin tools required by the guest harness.
+    {
+      printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' '<plist version="1.0"><array>'
+      for component in Applications Documentation ProfileChanges InstallPip TFramework; do
+        printf '%s\n' '<dict>' \
+          "<key>choiceIdentifier</key><string>org.python.Python.Python$component-3.14</string>" \
+          '<key>choiceAttribute</key><string>selected</string>' \
+          '<key>attributeSetting</key><integer>0</integer>' '</dict>'
+      done
+      printf '%s\n' '</array></plist>'
+    } > "$work/choices.plist"
+    admin /usr/sbin/installer -pkg "$package" -target / -applyChoiceChangesXML "$work/choices.plist"
+  )
   hash -r
-  guest_tools_ready || { printf 'Expected Python 3.10+ and Node.js 22.18+ on the guest PATH.\n' >&2; exit 1; }
+  vm_guest_python_ready || { printf 'Expected Python 3.10+ on the guest PATH.\n' >&2; exit 1; }
 fi
 if [[ ! -d '/Applications/Google Chrome.app' && ! -d "$HOME/Applications/Google Chrome.app" ]]; then
   printf 'Downloading and verifying Google Chrome.\n'

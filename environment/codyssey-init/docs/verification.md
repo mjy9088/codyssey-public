@@ -255,7 +255,8 @@ ephemeral identity and requires a fresh login.
 ### An existing disposable VM
 
 For a workstation-only run, sign in to the guest and run the following from
-`environment/codyssey-init` with Python 3.10+, Node.js 22.18+, and Chrome available:
+`environment/codyssey-init` with Python 3.10+ and Chrome available. The setup
+installs Node.js through mise when a compatible runtime is missing.
 
 ```sh
 bash scripts/verify-macos-vm.sh --disposable --workstation

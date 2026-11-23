@@ -12,7 +12,20 @@ cleanup_mise_download() {
 MISE_VERSION=v2026.10.5
 MISE_MACOS_ARM64_SHA256=41c4028257d30f5f5742c99247c461f417143d6c7301f167a0c185247c8f206e
 MISE_MACOS_X64_SHA256=204c7d64e8b0b62c0a95847ab6442bf23bf88247d52967e99c5cad53f56eaa0c
+MISE_SETUP_NODE=node@24.11.1
 
+node_runs_setup_sdk() {
+  command -v node >/dev/null 2>&1 && node --input-type=module -e '
+    import { pathToFileURL } from "node:url";
+    await import(pathToFileURL(process.argv[1]).href);
+  ' "$1/sdk/setup.mts" >/dev/null 2>&1
+}
+
+mise_setup_node_path() {
+  local directory
+  directory=$(mise where "$MISE_SETUP_NODE") && [[ -x $directory/bin/node ]] || return 1
+  printf '%s/bin/node\n' "$directory"
+}
 
 prepare_docker() {
   local app tools plugin_dir plugin attempt

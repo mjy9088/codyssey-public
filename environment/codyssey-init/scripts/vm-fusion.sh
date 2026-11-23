@@ -53,11 +53,15 @@ fusion_guest_identity() {
   printf '%s\n' "${CODYSSEY_FUSION_IDENTITY:-"$credentials/id_ed25519"}"
 }
 
+fusion_uses_lab_password() {
+  [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 && ${CODYSSEY_FUSION_GUEST_USER:-vmuser} == vmuser ]]
+}
+
 fusion_ensure_guest_identity() {
   local identity=$1
   local -a key_options
   key_options=(-t ed25519 -C codyssey-fusion-lab -f "$identity")
-  if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 ]]; then
+  if fusion_uses_lab_password; then
     # This disposable key lives in the private run directory.
     key_options+=(-N '')
   fi
@@ -227,7 +231,7 @@ fusion_list_contains() {
 }
 
 vm_start() {
-  local mode=${CODYSSEY_FUSION_START_MODE:-gui} port
+  local mode=${CODYSSEY_FUSION_START_MODE:-gui} port lab_password=0
   [[ $mode == gui || $mode == nogui ]] || {
     printf 'Set CODYSSEY_FUSION_START_MODE to gui or nogui.\n' >&2
     return 1
@@ -250,7 +254,9 @@ vm_start() {
   fusion start "$fusion_vmx" "$mode" || return
   fusion_started=1
   if (( fusion_console_enabled )); then
-    python3 "$fusion_project_root/scripts/intel-macos-vm/watch-workstation-console.py" \
+    if fusion_uses_lab_password; then lab_password=1; fi
+    CODYSSEY_FUSION_USE_LAB_PASSWORD=$lab_password \
+      python3 "$fusion_project_root/scripts/intel-macos-vm/watch-workstation-console.py" \
       "$fusion_vmcli" "$fusion_vmx" "$CODYSSEY_FUSION_VERIFY_RECOGNIZER" "$port" "$fusion_user" \
       "$fusion_bundle/.verification-console.png" &
     fusion_console_pid=$!

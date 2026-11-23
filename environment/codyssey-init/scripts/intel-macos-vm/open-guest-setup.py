@@ -25,6 +25,11 @@ def type_password(connection, password):
     key(connection, 0xff0d)
 
 
+def can_focus_finder(items):
+    labels = {word for x, y, line in items if x < 0.65 and y < 0.04 for word in line.split()}
+    return {"Edit", "Window", "Help"} <= labels
+
+
 def approval_target(items, password_available, prompt_id, user, handled):
     # Require dialog-specific text as well as the action button.
     center = lambda x, y: 0.15 < x < 0.88 and 0.12 < y < 0.90
@@ -47,6 +52,22 @@ def approval_target(items, password_available, prompt_id, user, handled):
         field = find_text(items, "Password", center)
         if account and field and 0 < field[1] - account[1] < 0.10:
             return "vmware-auth", field, 1
+        if field:
+            x_field, y_field = field
+            heading = find_text(
+                items, r"Privacy & Security is trying to modify(?: your system settings\.)?",
+                lambda x, y: abs(x - x_field) < 0.17 and 0.04 < y_field - y < 0.22,
+            )
+            instructions = find_text(
+                items, r"Enter your password to allow this\.?",
+                lambda x, y: abs(x - x_field) < 0.17 and 0 < y_field - y < 0.13,
+            )
+            modify = find_text(
+                items, "Modify Settings",
+                lambda x, y: abs(x - x_field) < 0.22 and 0 < y - y_field < 0.18,
+            )
+            if heading and instructions and modify and heading[1] < instructions[1]:
+                return "vmware-auth", field, 1
     if "vmware-extension" in handled and "a restart is required" in labels and "system extensions" in labels:
         later = find_text(items, "Not Now", center)
         if later:
@@ -125,9 +146,7 @@ def open_setup(vmcli, vmx, recognizer, image, port, user, prompt_id):
                     target = ("computer", computer, 1)
                 elif go:
                     target = ("go", go, 1)
-            elif not opened and not target and not requested_finder and all(
-                find_text(items, name, lambda x, y: x < 0.65 and y < 0.04) for name in ("Edit", "Window", "Help")
-            ):
+            elif not opened and not target and not requested_finder and can_focus_finder(items):
                 target = ("finder", None, 0)
             if same_target(target, previous, size):
                 label, point, count = target

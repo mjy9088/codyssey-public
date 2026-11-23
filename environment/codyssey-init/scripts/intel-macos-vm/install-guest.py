@@ -8,7 +8,7 @@ import subprocess
 import time
 
 from fusion_console import click, console, decline_app_reopen, find_text, read_frame, same_target, type_text
-from guest_credential import guest_password
+from guest_credential import LAB_GUEST_PASSWORD
 
 
 def setup_action(items, account_filled):
@@ -117,7 +117,6 @@ def drive_installer(vmx, vmcli, recognizer, output, port, accepted, setup_only=F
     analytics_disabled = False
     desktop = False
     shutdown_requested = False
-    password = guest_password()
     while time.monotonic() < deadline:
         try:
             size, items = read_frame(vmcli, vmx, recognizer, output / "installer.png", "vmuser")
@@ -168,9 +167,7 @@ def drive_installer(vmx, vmcli, recognizer, output, port, accepted, setup_only=F
                 raise RuntimeError("Fusion has not confirmed the loopback console")
             with console(port, size) as client:
                 if label == "account-fields":
-                    if password is None:
-                        raise RuntimeError("A private guest password file is required for Setup Assistant.")
-                    for field, value in zip(point, ("vmuser", password, password)):
+                    for field, value in zip(point, ("vmuser", LAB_GUEST_PASSWORD, LAB_GUEST_PASSWORD)):
                         click(client, size, field, 1)
                         type_text(client, value)
                     account_filled = True

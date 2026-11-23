@@ -91,7 +91,7 @@ elif [[ ! -s $pin ]]; then
   exit 1
 fi
 printf 'Waiting for guest preparation (up to %s seconds).\n' "$timeout"
-if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 ]]; then
+if fusion_uses_lab_password; then
   address_status='Waiting for Fusion to report a guest IPv4 address.'
   clt_status='SSH is connected. Waiting for Command Line Tools.'
   ssh_status='Waiting for an SSH connection with the pinned host key.'
@@ -119,7 +119,7 @@ while :; do
     fi
   fi
   if [[ ! -s $CODYSSEY_FUSION_KNOWN_HOSTS ]]; then
-    if [[ ${CODYSSEY_FUSION_UNATTENDED:-0} == 1 ]]; then
+    if fusion_uses_lab_password; then
       status='Waiting for the guest to publish its SSH host key.'
     elif [[ ${CODYSSEY_FUSION_SETUP_OPENED:-0} == 1 ]]; then
       status='Waiting for the guest SSH key. Check the setup Terminal for an approval or administrator prompt.'
@@ -131,7 +131,7 @@ while :; do
     if ! fusion_address=$(fusion_guest_address "$base" 2>/dev/null); then
       status=$address_status
     elif fusion_console_ready >/dev/null 2>&1; then
-      if [[ -n ${CODYSSEY_FUSION_GUEST_PASSWORD_FILE:-} ]] || vm_exec /usr/bin/xcode-select -p >/dev/null 2>&1; then
+      if fusion_uses_lab_password || vm_exec /usr/bin/xcode-select -p >/dev/null 2>&1; then
         break
       fi
       status=$clt_status
@@ -166,8 +166,8 @@ guest_root=$(vm_exec /usr/bin/mktemp -d /tmp/codyssey-fusion-base.XXXXXX)
 }
 tar -C "$root" -cf "$temp/payload.tar" scripts/prepare-fusion-base.sh scripts/vm-guest-path.sh
 vm_transfer "$guest_root" "$temp/payload.tar"
-if [[ -n ${CODYSSEY_FUSION_GUEST_PASSWORD_FILE:-} ]]; then
-  python3 "$root/scripts/intel-macos-vm/guest_credential.py" |
+if fusion_uses_lab_password; then
+  CODYSSEY_FUSION_USE_LAB_PASSWORD=1 python3 "$root/scripts/intel-macos-vm/guest_credential.py" |
     fusion_ssh /bin/bash "$guest_root/scripts/prepare-fusion-base.sh" --sudo-password-stdin
 else
   fusion_ssh_terminal=-t fusion_ssh /bin/bash "$guest_root/scripts/prepare-fusion-base.sh"

@@ -117,18 +117,15 @@ run_sdk() {
 
 ensure_sdk_runtime() {
   [[ -n $sdk_node ]] && return 0
-  if command -v node >/dev/null 2>&1 && node --input-type=module -e '
-    import { pathToFileURL } from "node:url";
-    await import(pathToFileURL(process.argv[1]).href);
-  ' "$init_dir/sdk/setup.mts" >/dev/null 2>&1; then
+  if node_runs_setup_sdk "$init_dir"; then
     sdk_node=$(command -v node)
     return 0
   fi
   local managed_node
   if { [[ $tools_ready == 1 ]] || ensure_mise; } &&
-     run_quiet_step 'Installing Node for the setup SDK' mise install node@24.11.1 &&
-     managed_node=$(mise where node@24.11.1) && [[ -x $managed_node/bin/node ]]; then
-    sdk_node="$managed_node/bin/node"
+     run_quiet_step 'Installing Node for the setup SDK' mise install "$MISE_SETUP_NODE" &&
+     managed_node=$(mise_setup_node_path); then
+    sdk_node=$managed_node
     return 0
   fi
   printf 'codyssey-init: setup requires Node.js 22.18 or newer.\n' >&2

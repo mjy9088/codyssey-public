@@ -4,7 +4,6 @@ import importlib.util
 import os
 from pathlib import Path
 import sys
-import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -17,6 +16,11 @@ SPEC.loader.exec_module(console)
 
 
 class ConsoleSetupTests(unittest.TestCase):
+    def test_finder_focus_accepts_adjacent_menu_names_read_as_one_label(self):
+        labels = [(0.12, 0.02, "Edit"), (0.24, 0.02, "View Window Help")]
+        self.assertTrue(console.can_focus_finder(labels))
+        self.assertFalse(console.can_focus_finder([labels[0], (0.24, 0.15, "View Window Help")]))
+
     def test_password_requires_current_prompt_and_terminal_focus(self):
         prompt = (0.4, 0.3, "Codyssey 12ab34cd password:")
         terminal = (0.1, 0.02, "Terminal")
@@ -50,19 +54,11 @@ class ConsoleSetupTests(unittest.TestCase):
             ("vmware-settings", (0.5, 0.50), 1),
         )
 
-    def test_guest_credential_requires_a_private_regular_file(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            password_file = Path(temporary) / "guest-password"
-            password_file.write_text("synthetic-password\n")
-            with patch.dict(os.environ, CODYSSEY_FUSION_GUEST_PASSWORD_FILE=str(password_file)):
-                password_file.chmod(0o644)
-                with self.assertRaises(ValueError):
-                    console.guest_password()
-                password_file.chmod(0o600)
-                self.assertEqual(console.guest_password(), "synthetic-password")
-                password_file.write_text("synthetic\nsecond-line\n")
-                with self.assertRaises(ValueError):
-                    console.guest_password()
+    def test_preset_password_requires_opt_in_from_the_console_launcher(self):
+        with patch.dict(os.environ, CODYSSEY_FUSION_USE_LAB_PASSWORD="0"):
+            self.assertIsNone(console.guest_password())
+        with patch.dict(os.environ, CODYSSEY_FUSION_USE_LAB_PASSWORD="1"):
+            self.assertEqual(console.guest_password(), "vm user password")
 
     def test_terminal_prompt_selects_its_allow_button_over_settings_background(self):
         labels = [
@@ -74,6 +70,24 @@ class ConsoleSetupTests(unittest.TestCase):
         self.assertEqual(
             console.approval_target(labels, True, "12ab34cd", "vmuser", set()),
             ("terminal-admin", (0.56, 0.41), 1),
+        )
+
+    def test_vmware_authorization_after_the_extension_prompt_can_omit_the_account_label(self):
+        labels = [
+            (0.5, 0.40, "Privacy & Security is trying to modify"),
+            (0.5, 0.43, "your system settings."),
+            (0.5, 0.46, "Enter your password to allow this."),
+            (0.5, 0.51, "Password"),
+            (0.6, 0.57, "Modify Settings"),
+        ]
+        self.assertEqual(
+            console.approval_target(labels, True, "12ab34cd", "vmuser", {"vmware-extension"}),
+            ("vmware-auth", (0.5, 0.51), 1),
+        )
+        self.assertIsNone(console.approval_target(labels, True, "12ab34cd", "vmuser", set()))
+        offset = [(0.20, y, text) for _, y, text in labels[:3]] + labels[3:]
+        self.assertIsNone(
+            console.approval_target(offset, True, "12ab34cd", "vmuser", {"vmware-extension"})
         )
 
 
