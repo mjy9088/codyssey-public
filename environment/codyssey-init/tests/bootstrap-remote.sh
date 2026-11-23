@@ -32,7 +32,7 @@ EOF
 cat >"$fakebin/docker" <<'EOF'
 #!/bin/sh
 case "$*" in
-  info|'compose build tailscale'|'compose pull gost gost-ui') exit 0 ;;
+  info|'compose build tailscale tunnel-ui'|'compose pull gost') exit 0 ;;
   *) exit 1 ;;
 esac
 EOF

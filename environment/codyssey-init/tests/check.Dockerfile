@@ -13,6 +13,7 @@ COPY lib/ /src/lib/
 COPY tests/ /src/tests/
 COPY scripts/ /src/scripts/
 COPY sdk/ /src/sdk/
+COPY tunnel-ui/ /src/tunnel-ui/
 COPY macos-setup.sh /src/macos-setup.sh
 COPY enable-korean.swift tailscale-entrypoint.sh /src/
 COPY chrome-extension/ /src/chrome-extension/

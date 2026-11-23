@@ -305,11 +305,31 @@ and always runs `vm-guest-test.py` (with a bounded 120-second case timeout for e
 execute natively on macOS. No checks are omitted; native execution of the eight safe Python suites avoids
 expensive process startup under x86 emulation. The default `scripts/check.sh` runs all suites inside
 the isolated container.
-Verification checks the
-unauthenticated state, Bash/client tools, TUN device and home mount, GOST API and UI HTTP readiness,
-and the single shell activation block. It then runs the private local Headscale lab for ephemeral lifecycle, short-name DNS and terminal tools, verifies a fresh portable browser profile and relaunch, and verifies the real Dock launcher twice plus live shortcut registration. Input-method approval and physical Hangul typing remain an interactive check; the unattended VM does not wait for or bypass macOS approval dialogs. Run the full live preference verifier separately in a logged-in disposable desktop session. GOST API readiness also checks whether this Docker environment makes
-the Linux host's loopback listener accessible from the macOS guest; failure is a real incompatibility,
-not a simulated success. UI HTTP readiness does not prove browser rendering or API interaction.
+Verification checks the unauthenticated state, Bash/client tools, TUN device and home mount, the
+local tunnel manager's HTTP readiness through GOST's Unix socket, absence of the legacy TCP control
+endpoint, and a single shell activation block. It then runs the private local Headscale lab for
+ephemeral lifecycle, short-name DNS and terminal tools, verifies a fresh portable browser profile
+and relaunch, and verifies the real Dock launcher twice plus live shortcut registration. Input-method
+approval and physical Hangul typing remain interactive checks. Run the full live preference verifier
+separately in a logged-in disposable desktop session. HTTP readiness does not prove browser rendering
+or forwarding; run the Linux browser check below for that.
+
+### Linux tunnel UI and browser captures
+
+From the checkout, with local Docker and Node.js 24 installed:
+
+```sh
+cd environment/codyssey-init
+sh tests/tunnel-ui-check.sh
+```
+
+The check uses the Compose-pinned Linux GOST binary and pinned Playwright Chromium in a disposable
+container with networking disabled except for its own loopback. A second GOST process provides the
+real SOCKS5 endpoint, mapping a synthetic Tailscale IP to a loopback TCP service. The check does not
+start or log into Tailscale. Review the screenshots in `tunnel-ui/test-artifacts/` (`desktop.png`,
+`mobile.png`, `locked.png`, `empty.png`, and `error.png`). This is not macOS or live-tailnet verification.
+
+### macOS verification isolation and cleanup
 
 The verifier uses an allowlisted temporary copy under the guest home, a synthetic GOST configuration,
 an explicitly empty exported key, and a randomized Compose project. Before Docker workload use, it

@@ -50,6 +50,7 @@ if (( prepared == 0 )); then
 fi
 eval "$(mise env -s zsh)"
 service_status=0
+check_tunnel_upgrade || exit 1
 if run_quiet_step "Starting services" docker compose up -d --no-build; then :; else
   service_status=1
 fi
@@ -77,15 +78,15 @@ if [[ $tailnet_state == needs-login ]]; then
   fi
 fi
 
-ui_url='http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080'
-if wait_for_gost_ui; then
+ui_url='http://127.0.0.1:18081/'
+if wait_for_tunnel_ui; then
   log_event gost ready
-  printf 'GOST UI: %s\n' "$ui_url"
+  printf 'Codyssey tunnels: %s\n' "$ui_url"
   if [[ ${CODYSSEY_OPEN_BROWSER:-1} != 0 ]] && command -v open >/dev/null 2>&1; then
     if open_browser "$ui_url"; then log_event gost-browser exit=0; else
       browser_status=$?
       log_event gost-browser "exit=$browser_status"
-      printf 'Could not launch the browser; use the printed GOST URL.\n' >&2
+      printf 'Could not launch the browser; use the printed Codyssey tunnels URL.\n' >&2
     fi
   fi
 else
@@ -99,10 +100,10 @@ if [[ $tailnet_state == needs-login && $(read_tailnet_backend) == running ]]; th
 fi
 if [[ $tailnet_state == running ]]; then
   log_event services ready
-  printf 'GOST API/UI ready. Tailscale connected.\n'
+  printf 'Codyssey tunnels ready. Tailscale connected.\n'
 else
   log_event services needs-login
-  printf 'GOST API/UI ready. Tailscale login pending.\n'
+  printf 'Codyssey tunnels ready. Tailscale login pending.\n'
 fi
 if [[ -n $result_path ]]; then
   printf '%s\n' "$tailnet_state" "$ui_url" "${auth_url:-}" >"$result_path"

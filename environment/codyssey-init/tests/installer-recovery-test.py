@@ -160,16 +160,16 @@ if configure_tailscale_auth; then exit 9; fi
                 work = Path(directory)
                 executable(work/'docker', '''case "$*" in
   *status*--json) echo '{"BackendState":"Running"}' ;;
-  *) echo tailscale; echo gost-ui; [ "$FAILURE" = missing-gost ] || echo gost ;;
+  *) echo tailscale; echo tunnel-ui; [ "$FAILURE" = missing-gost ] || echo gost ;;
 esac''')
                 executable(work/'curl', '[ "$FAILURE" != api ]')
                 executable(work/'sleep', 'exit 0')
                 env = dict(os.environ, PATH=str(work)+':/usr/bin:/bin', FAILURE=failure)
                 result = subprocess.run(['/bin/zsh', '-f', '-c',
-                    '. "$1/lib/readiness.zsh"; ui_url=http://localhost:18081/; wait_for_tailnet || exit 9; wait_for_gost_ui',
+                    '. "$1/lib/readiness.zsh"; ui_url=http://127.0.0.1:18081/; wait_for_tailnet || exit 9; wait_for_tunnel_ui',
                     'test', str(ROOT)], env=env, capture_output=True, text=True, timeout=10)
                 self.assertEqual(result.returncode, 1, result.stderr)
-                self.assertIn('GOST API/UI did not become ready', result.stderr)
+                self.assertIn('Codyssey tunnels did not become ready', result.stderr)
 
 
 if __name__ == '__main__':

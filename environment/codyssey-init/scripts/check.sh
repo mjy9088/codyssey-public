@@ -48,7 +48,10 @@ tar -C "$root" -cf "$context/payload.tar" \
   scripts/configure-tailnet-browser.py scripts/verify-intel-macos.sh scripts/prepare-fusion-base.sh scripts/install-orbstack.sh scripts/vm-progress.sh \
   scripts/intel-macos-vm/run-unattended.sh scripts/intel-macos-vm/guest_credential.py \
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh scripts/prepare-startup.sh scripts/install-iterm2.sh scripts/configure-iterm2.sh scripts/configure-shell.sh scripts/verify-tailnet-runtime.py \
-  tests/tailnet-dns-test.sh tests/gureum-activation-test.sh tests/gureum-activation-test.swift
+  tests/tailnet-dns-test.sh tests/gureum-activation-test.sh tests/gureum-activation-test.swift \
+  tunnel-ui/.dockerignore tunnel-ui/Dockerfile tunnel-ui/package.json tunnel-ui/package-lock.json tunnel-ui/index.html \
+  tunnel-ui/src/App.tsx tunnel-ui/src/styles.css tunnel-ui/server/main.mjs tunnel-ui/server/http.mjs \
+  tunnel-ui/server/tunnels.mjs tunnel-ui/server/gost.mjs tunnel-ui/server/config-file.mjs tunnel-ui/server/policy.mjs
 tar -C "$context" -xf "$context/payload.tar"
 rm "$context/payload.tar"
 printf 'Preparing isolated checks…\n'

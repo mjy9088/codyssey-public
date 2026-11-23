@@ -19,6 +19,10 @@ remote_files=(
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh
   sdk/setup.mts sdk/cli.mts scripts/install-managed-j.sh
   scripts/prepare-startup.sh scripts/install-iterm2.sh scripts/configure-iterm2.sh scripts/configure-shell.sh
+  tunnel-ui/.dockerignore tunnel-ui/Dockerfile tunnel-ui/package.json tunnel-ui/package-lock.json tunnel-ui/index.html
+  tunnel-ui/src/App.tsx tunnel-ui/src/styles.css
+  tunnel-ui/server/main.mjs tunnel-ui/server/http.mjs tunnel-ui/server/tunnels.mjs
+  tunnel-ui/server/gost.mjs tunnel-ui/server/config-file.mjs tunnel-ui/server/policy.mjs
 )
 remote_staging=
 

@@ -155,7 +155,8 @@ class ServiceRecoveryTests(unittest.TestCase):
                 fakebin.mkdir()
                 (runtime / 'lib/readiness.zsh').write_text(
                     'wait_for_tailnet() { tailnet_state=; if [[ $FAILURE == browser ]]; then tailnet_state=running; return 0; fi; return 23; }\n'
-                    'wait_for_gost_ui() { echo gost >> "$CALLS"; return 0; }\n')
+                    'check_tunnel_upgrade() { return 0; }\n'
+                    'wait_for_tunnel_ui() { echo gost >> "$CALLS"; return 0; }\n')
                 for name, body in {
                     'mise': 'exit 0',
                     'docker': 'echo compose >> "$CALLS"; [ "$FAILURE" != start ]',
@@ -172,7 +173,7 @@ class ServiceRecoveryTests(unittest.TestCase):
                     result = subprocess.run(['/bin/zsh', '-f', str(runtime/'next-script.zsh'), '--prepared'],
                                             env=env, text=True, capture_output=True, timeout=10)
                     self.assertEqual(result.returncode, 0 if failure == 'browser' else 1, result.stderr)
-                    self.assertIn('GOST UI:', result.stdout)
+                    self.assertIn('Codyssey tunnels:', result.stdout)
                 self.assertEqual((work/'calls').read_text().count('gost\n'), 2)
                 logs = list((home/'Library/Logs/codyssey-init').glob('run.*'))
                 self.assertEqual(len(logs), 2)

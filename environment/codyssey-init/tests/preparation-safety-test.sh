@@ -54,7 +54,7 @@ cat >"$fakebin/docker" <<'EOF'
 #!/bin/sh
 case "$*" in
   info) exit 0 ;;
-  'compose build tailscale')
+  'compose build tailscale tunnel-ui')
     printf 'build\n' >>"$PREPARATION_COUNT"
     case "${PREPARATION_MODE:-immediate}" in
       immediate) exit 0 ;;
@@ -70,9 +70,10 @@ case "$*" in
         ;;
     esac
     ;;
-  'compose pull gost gost-ui') exit 0 ;;
+  'compose pull gost') exit 0 ;;
   'compose up -d --no-build') : >"$SERVICES_STARTED" ;;
-  'compose ps --status running --services') printf 'tailscale\ngost\ngost-ui\n' ;;
+  'container inspect '*) exit 1 ;;
+  'compose ps --status running --services') printf 'tailscale\ngost\ntunnel-ui\n' ;;
   'compose exec -T tailscale tailscale status --json') printf '{"BackendState":"Running"}\n' ;;
 esac
 EOF

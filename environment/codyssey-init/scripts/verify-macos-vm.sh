@@ -182,7 +182,7 @@ docker info >/dev/null
 . "$root/scripts/vm-files.sh"
 
 # Fixed production container names/host ports must not collide with an existing setup.
-for name in tailnet-forward-tailscale tailnet-forward-gost tailnet-forward-ui; do
+for name in tailnet-forward-tailscale tailnet-forward-gost tailnet-forward-tunnel-ui tailnet-forward-ui; do
   if docker container inspect "$name" >/dev/null 2>&1; then
     printf 'Existing %s container: use a clean disposable guest.\n' "$name" >&2; exit 1
   fi
@@ -216,17 +216,18 @@ for pass in 1 2; do
   state=$(docker compose exec -T tailscale tailscale status --json)
   printf '%s' "$state" | python3 -c 'import json,sys; assert json.load(sys.stdin)["BackendState"] == "NeedsLogin", "Expected unauthenticated NeedsLogin"'
   bash tailnet.sh bash -c 'test -c /dev/net/tun; test -d /host; command -v bash; command -v ssh; command -v curl; command -v git; mise --version; zellij --version'
-  for endpoint in http://localhost:18080/config http://localhost:18081/; do
-    endpoint_ready=0
-    for (( attempt=0; attempt<60; attempt++ )); do
-      if curl --fail --silent --max-time 2 "$endpoint" >/dev/null; then
-        endpoint_ready=1
-        break
-      fi
-      sleep 1
-    done
-    (( endpoint_ready )) || { printf 'Guest HTTP endpoint is not reachable: %s\n' "$endpoint" >&2; exit 1; }
+  endpoint_ready=0
+  for (( attempt=0; attempt<60; attempt++ )); do
+    if curl --noproxy '*' --fail --silent --max-time 2 http://127.0.0.1:18081/health >/dev/null; then
+      endpoint_ready=1
+      break
+    fi
+    sleep 1
   done
+  (( endpoint_ready )) || { printf 'Codyssey tunnel manager is not ready in the guest.\n' >&2; exit 1; }
+  if curl --noproxy '*' --silent --max-time 2 http://127.0.0.1:18080/config >/dev/null 2>&1; then
+    printf 'Legacy GOST TCP control endpoint is still reachable.\n' >&2; exit 1
+  fi
 done
 [[ $(grep -c '^# codyssey-init: mise$' "$HOME/.zshrc") == 1 ]]
 # Exercise ephemeral lifecycle and local DNS using a private control plane, never a real tailnet.

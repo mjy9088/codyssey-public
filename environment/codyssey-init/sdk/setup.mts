@@ -20,8 +20,8 @@ export type TailnetAuthentication =
   | { mode: "saved" }
   | { mode: "key"; key: string };
 export type TailnetStartResult = OperationResult & (
-  | { state: "running"; gostUrl: string }
-  | { state: "needs-login"; gostUrl: string; loginUrl: string }
+  | { state: "running"; tunnelUrl: string }
+  | { state: "needs-login"; tunnelUrl: string; loginUrl: string }
   | { state: "failed" }
 );
 
@@ -150,10 +150,10 @@ export async function startTailnet(
     await writeFile(resultPath, "", { mode: 0o600 });
     const result = await startPrepared(env, options, resultPath);
     if (result.exitCode !== 0) return { ...result, state: "failed" };
-    const [state, gostUrl, loginUrl] = (await readFile(resultPath, "utf8")).split("\n");
-    if (state === "running" && gostUrl) return { ...result, state, gostUrl };
-    if (state === "needs-login" && gostUrl && loginUrl?.startsWith("https://login.tailscale.com/")) {
-      return { ...result, state, gostUrl, loginUrl };
+    const [state, tunnelUrl, loginUrl] = (await readFile(resultPath, "utf8")).split("\n");
+    if (state === "running" && tunnelUrl) return { ...result, state, tunnelUrl };
+    if (state === "needs-login" && tunnelUrl && loginUrl?.startsWith("https://login.tailscale.com/")) {
+      return { ...result, state, tunnelUrl, loginUrl };
     }
     throw new Error("Tailnet startup did not return a valid readiness result.");
   } finally {
