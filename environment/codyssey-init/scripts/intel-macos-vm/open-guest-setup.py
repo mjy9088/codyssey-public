@@ -116,6 +116,10 @@ def open_setup(vmcli, vmx, recognizer, image, port, user, prompt_id):
                 ready_frames = 0
             elif opened:
                 target = approval_target(items, password is not None, prompt_id, user, handled)
+                if target:
+                    repeatable = target[0] in ("terminal-admin", "vmware-dismiss", "vmware-restart-deferred")
+                    if password is None or (target[0] in handled and not repeatable):
+                        target = None
                 if guest_ready and not target:
                     ready_frames += 1
                     if ready_frames == 2:
@@ -123,10 +127,6 @@ def open_setup(vmcli, vmx, recognizer, image, port, user, prompt_id):
                         return
                 else:
                     ready_frames = 0
-                if target:
-                    repeatable = target[0] in ("terminal-admin", "vmware-dismiss", "vmware-restart-deferred")
-                    if password is None or (target[0] in handled and not repeatable):
-                        target = None
             elif password and "login" not in handled:
                 login = find_text(items, "Enter Password", lambda x, y: 0.30 < x < 0.70 and 0.55 < y < 0.98)
                 account = find_text(items, re.escape(user), lambda x, y: 0.30 < x < 0.70 and 0.5 < y < 0.96)

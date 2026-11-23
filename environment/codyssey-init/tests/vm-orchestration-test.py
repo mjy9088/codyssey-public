@@ -337,6 +337,8 @@ exec tart "$@"
         self.assertIn("verify-macos-setup.py", names)
         # The guest must have every input needed to build its isolated check image.
         self.assertIn("tests/managed-j-runtime.sh", names)
+        self.assertIn("scripts/intel-macos-vm/guest_credential.py", names)
+        self.assertIn("scripts/intel-macos-vm/run-unattended.sh", names)
         self.assertIn("mise.vm.toml", names)
         self.assertNotIn(".env", names)
         self.assertNotIn("gost/gost.yaml", names)
@@ -354,6 +356,31 @@ exec tart "$@"
         self.assertLess(verification, shutdown)
         self.assertFalse(any("prepare-macos-vm.sh" in arg or "DOCKER_CONTEXT" in arg
                              for cmd in commands for arg in cmd))
+
+    def test_fusion_typing_relay_preserves_guest_failure_status(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            driver = root / "scripts/intel-macos-vm/drive-workstation-input.py"
+            driver.parent.mkdir(parents=True)
+            driver.write_text('import os; raise SystemExit(int(os.environ["TEST_RELAY"]))\n')
+            shell = r"""
+set -euo pipefail
+. "$1"
+fusion_console_enabled=1
+fusion_project_root=$2
+fusion_vmx=guest.vmx
+fusion_console_port=49999
+vm_exec() { return "$TEST_GUEST"; }
+vm_desktop_exec /fake/guest 1200 bash verifier --workstation
+"""
+            for guest, relay, expected in ((17, 1, 17), (17, 0, 17), (141, 1, 1), (0, 1, 1), (0, 0, 0)):
+                with self.subTest(guest=guest, relay=relay):
+                    result = subprocess.run(
+                        ["bash", "-c", shell, "fusion-relay", str(ROOT / "scripts/vm-fusion.sh"), str(root)],
+                        env=dict(os.environ, TEST_GUEST=str(guest), TEST_RELAY=str(relay)),
+                        capture_output=True, timeout=10,
+                    )
+                    self.assertEqual(result.returncode, expected, result.stderr)
 
     def test_intel_quick_start_reuses_credentials_and_writes_log(self):
         result, commands, _ = self.run_case(arch="x86_64", quick=True)
@@ -467,6 +494,10 @@ test "$(fusion_selected_base)" = "$4"
                 self.assertTrue(any(cmd[0] == "readVariable" for cmd in commands))
                 if scenario == "quick-prepare":
                     self.assertIn("scripts/prepare-fusion-base.sh", files)
+                    self.assertTrue({
+                        "scripts/install-orbstack.sh", "scripts/install-gureum.sh",
+                        "scripts/install-iterm2.sh", "scripts/vm-progress.sh",
+                    }.issubset(files))
                 else:
                     self.assertEqual(files, [])
                 if scenario in ("quick-prep-no-key", "quick-prep-invalid-key"):
@@ -719,7 +750,7 @@ class DesktopTransportTests(unittest.TestCase):
         self.assertEqual(calls, ["bootstrap", "bootout"])
         self.assertFalse(work.exists())
 
-    def test_tart_input_driver_transfers_the_verifier_path_helper(self):
+    def test_tart_input_driver_transfers_the_verifier_and_its_shell_dependencies(self):
         vnc = ModuleType("vncdotool")
         vnc.api = mock.Mock()
         with mock.patch.dict(sys.modules, {"vncdotool": vnc}):
@@ -742,8 +773,12 @@ class DesktopTransportTests(unittest.TestCase):
                     log.touch()
                     driver["run_check"]("synthetic", log)
         with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
-            self.assertIn("scripts/verify-macos-vm.sh", archive.getnames())
-            self.assertIn("scripts/vm-guest-path.sh", archive.getnames())
+            self.assertLessEqual({
+                "scripts/verify-macos-vm.sh",
+                "scripts/vm-guest-path.sh",
+                "lib/bootstrap-tools.sh",
+                "lib/preparation.sh",
+            }, set(archive.getnames()))
 
 
 class UnattendedCacheTests(unittest.TestCase):
@@ -758,6 +793,7 @@ class UnattendedCacheTests(unittest.TestCase):
         numbered = scripts / "intel-macos-vm"
         numbered.mkdir(parents=True)
         shutil.copy(ROOT / "scripts/vm-fusion.sh", scripts)
+        shutil.copy(ROOT / "scripts/vm-progress.sh", scripts)
         self.launcher = numbered / "run-unattended.sh"
         shutil.copy(ROOT / "scripts/intel-macos-vm" / self.launcher.name, self.launcher)
         for name, body in {

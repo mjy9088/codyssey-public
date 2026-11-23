@@ -16,6 +16,8 @@ from vncdotool import api
 ROOT = Path(__file__).resolve().parents[1]
 FILES = (
     "enable-korean.swift",
+    "lib/bootstrap-tools.sh",
+    "lib/preparation.sh",
     "macos-setup.sh",
     "scripts/install-gureum.sh",
     "sdk/cli.mts",

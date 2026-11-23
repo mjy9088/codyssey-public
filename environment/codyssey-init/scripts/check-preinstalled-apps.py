@@ -41,26 +41,31 @@ def inspect(home, applications=Path("/Applications"), input_methods=Path("/Libra
     return binaries[1:]
 
 
-def main():
+def main(workstation=False):
     if sys.platform != "darwin" or os.getuid() == 0:
         raise RuntimeError("Run as the macOS guest desktop user")
     binaries = inspect(Path.home())
     # A fresh image must reach the missing-Docker startup path. Do not query an
     # engine or launch OrbStack while checking it.
-    probe = subprocess.run(["/bin/zsh", "-ic", "command -v docker"], capture_output=True)
-    if probe.returncode == 0:
-        raise RuntimeError("Docker is already on the login PATH; use a fresh base")
+    if not workstation:
+        probe = subprocess.run(["/bin/zsh", "-ic", "command -v docker"], capture_output=True)
+        if probe.returncode == 0:
+            raise RuntimeError("Docker is already on the login PATH; use a fresh base")
     for binary, argument in zip(binaries, ("--version", "version", "version")):
         result = subprocess.run([str(binary), argument], capture_output=True, text=True, timeout=20)
         if result.returncode:
             raise RuntimeError("Bundled CLI version query failed: " + binary.name + ": " + result.stderr[-400:])
     subprocess.run(["/usr/bin/swift", "--version"], check=True, capture_output=True, timeout=30)
-    print("PASS: installed app identities, Gureum executable, bundled CLI execution, Swift and missing Docker PATH; no engine started.")
+    path_check = "" if workstation else ", and missing Docker PATH"
+    print("PASS: installed app identities, Gureum executable, bundled CLI execution, Swift"
+          f"{path_check}; no engine started.")
 
 
 if __name__ == "__main__":
     try:
-        main()
+        if sys.argv[1:] not in ([], ["--workstation"]):
+            raise RuntimeError("Usage: check-preinstalled-apps.py [--workstation]")
+        main(workstation=sys.argv[1:] == ["--workstation"])
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print("Preinstalled image check: " + str(error), file=sys.stderr)
         sys.exit(1)

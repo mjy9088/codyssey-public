@@ -45,7 +45,8 @@ tar -C "$root" -cf "$context/payload.tar" \
   chrome-extension/popup.html chrome-extension/popup.css chrome-extension/popup.mjs \
   chrome-extension/README.md chrome-extension/startup.json scripts/install-chrome-extension.sh tests/chrome-extension-test.mjs \
   scripts/tailnet-browser.sh scripts/browser-version.sh scripts/install-gureum.sh tests/portable-browser-test.py \
-  scripts/configure-tailnet-browser.py scripts/verify-intel-macos.sh scripts/prepare-fusion-base.sh \
+  scripts/configure-tailnet-browser.py scripts/verify-intel-macos.sh scripts/prepare-fusion-base.sh scripts/install-orbstack.sh scripts/vm-progress.sh \
+  scripts/intel-macos-vm/run-unattended.sh scripts/intel-macos-vm/guest_credential.py \
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh scripts/prepare-startup.sh scripts/install-iterm2.sh scripts/configure-iterm2.sh scripts/configure-shell.sh scripts/verify-tailnet-runtime.py \
   tests/tailnet-dns-test.sh tests/gureum-activation-test.sh tests/gureum-activation-test.swift
 tar -C "$context" -xf "$context/payload.tar"

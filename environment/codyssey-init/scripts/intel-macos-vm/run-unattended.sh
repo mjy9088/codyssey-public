@@ -32,6 +32,7 @@ scripts=${launcher%/*}
 revision=$(git -C "$launcher" rev-parse --verify HEAD)
 # shellcheck source=scripts/vm-fusion.sh
 . "$scripts/vm-fusion.sh"
+. "$scripts/vm-progress.sh"
 fusion_require_intel
 fusion_tools
 if ! command -v python3 >/dev/null || ! xcrun --find swiftc >/dev/null; then
@@ -149,7 +150,7 @@ trap 'close_fusion || :; python3 -c "import fcntl; fcntl.flock(9, fcntl.LOCK_UN)
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-xcrun swiftc -module-cache-path "$storage/swift-cache" "$launcher/recognize-screen.swift" -o "$run/recognize"
+vm_progress "Building the Fusion console recognizer" xcrun swiftc -module-cache-path "$storage/swift-cache" "$launcher/recognize-screen.swift" -o "$run/recognize"
 if (( reuse )); then
   printf 'Reusing prepared base from commit %s: %s\n' "$cached_revision" "$base" | tee "$run/base-reuse.log"
   fusion_remember_base "$base"
@@ -158,10 +159,16 @@ else
   if [[ $media == *.iso ]]; then
     installer=$(fusion_media_path "$media")
     mkdir "$run/installers"
-    cp -c "$installer" "$run/installers/Sequoia-local.iso" ||
-      cp "$installer" "$run/installers/Sequoia-local.iso"
+    local_iso="$run/installers/Sequoia-local.iso"
+    {
+      if [[ $(stat -f %d "$installer") == "$(stat -f %d "$run/installers")" ]]; then
+        vm_progress_path="$local_iso" vm_progress "Staging the installer ISO" cp -c "$installer" "$local_iso"
+      else
+        vm_progress "Copying the installer ISO" rsync --progress -- "$installer" "$local_iso"
+      fi
+    } 2>&1 | tee "$run/01-media.log"
     fusion_remember_media "$run/installers/Sequoia-local.iso"
-    printf 'Staged the Apple installer ISO from %s.\n' "$installer" | tee "$run/01-media.log"
+    printf 'Staged the Apple installer ISO from %s.\n' "$installer" | tee -a "$run/01-media.log"
   elif [[ -n $media ]]; then
     bash "$launcher/01-create-install-media.sh" --app "$media" 2>&1 | tee "$run/01-media.log"
   else

@@ -18,6 +18,28 @@ fi
   printf 'Build this VMware Fusion installer on an Intel Mac.\n' >&2
   exit 1
 }
+scripts=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+. "$scripts/vm-progress.sh"
+
+convert_image() {
+  local label=$1
+  shift
+  vm_progress "$label" hdiutil convert -puppetstrings "$@" |
+    LC_ALL=C awk '
+      BEGIN { last = -5 }
+      /^MESSAGE:/ { sub(/^MESSAGE:/, ""); print; fflush(); next }
+      /^PERCENT:/ {
+        value = int(substr($0, 9))
+        if (value >= 0 && value < 100 && value >= last + 5) {
+          print "Disk image conversion: " value "%"
+          fflush()
+          last = value
+        }
+        next
+      }
+      { print; fflush() }
+    ' && printf 'Disk image conversion: 100%%\n'
+}
 umask 077
 mkdir -p -- "$(dirname -- "$2")"
 directory=$(CDPATH='' cd -- "$(dirname -- "$2")" && pwd -P)
@@ -50,7 +72,7 @@ if (( recovery )); then
     printf 'Use a new recovery filename with letters, digits, periods, hyphens or underscores.\n' >&2
     exit 1
   }
-  hdiutil convert "$1" -format UDTO -o "$work/recovery"
+  convert_image "Converting the recovery disk image" "$1" -format UDTO -o "$work/recovery"
   bytes=$(stat -f %z "$work/recovery.cdr")
   (( bytes > 0 && bytes % 512 == 0 )) || { printf 'Invalid recovery disk size.\n' >&2; exit 1; }
   cat > "$work/recovery.vmdk" <<EOF
@@ -87,7 +109,7 @@ candidate=$(/usr/libexec/PlistBuddy -c 'Print :system-entities:0:dev-entry' "$wo
 }
 device=${BASH_REMATCH[1]}
 if [[ ${CODYSSEY_FUSION_HOST_AUTH:-terminal} == dialog ]]; then
-  /usr/bin/osascript - "$installer" "$mount" <<'APPLESCRIPT'
+  vm_progress "Writing the installer volume (host authorization may be pending)" /usr/bin/osascript - "$installer" "$mount" <<'APPLESCRIPT'
 on run arguments
   set installer to quoted form of item 1 of arguments
   set targetVolume to quoted form of item 2 of arguments
@@ -95,15 +117,15 @@ on run arguments
 end run
 APPLESCRIPT
 else
-  sudo "$installer" --volume "$mount" --nointeraction
+  vm_progress "Writing the installer volume" sudo "$installer" --volume "$mount" --nointeraction
 fi
 hdiutil detach "$device"
 attached=0
 if [[ $output == *.iso ]]; then
-  hdiutil convert "$work/installer.sparseimage" -format UDTO -o "$work/installer"
+  convert_image "Converting the installer volume to ISO" "$work/installer.sparseimage" -format UDTO -o "$work/installer"
   ln "$work/installer.cdr" "$output"
 else
-  hdiutil convert "$work/installer.sparseimage" -format UDRW -o "$work/installer.dmg"
+  convert_image "Converting the installer volume to DMG" "$work/installer.sparseimage" -format UDRW -o "$work/installer.dmg"
   ln "$work/installer.dmg" "$output"
 fi
 printf 'In Fusion, select File > New > Install from disc or image and choose:\n%s\n' "$output"

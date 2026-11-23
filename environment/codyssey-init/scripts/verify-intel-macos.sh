@@ -103,6 +103,7 @@ else
   console_status="SSH is connected. Sign in to the guest desktop as $CODYSSEY_FUSION_GUEST_USER and leave that session open."
 fi
 previous_status=
+next_report=$SECONDS
 while :; do
   if (( new_pin )) && [[ ! -s $temp/known_hosts ]]; then
     # This variable is scoped to the selected VMX through Fusion's guest channel.
@@ -141,9 +142,10 @@ while :; do
       status=$console_status
     fi
   fi
-  if [[ $status != "$previous_status" ]]; then
-    printf '%s\n' "$status"
+  if [[ $status != "$previous_status" || $SECONDS -ge $next_report ]]; then
+    printf '%s (%ss elapsed.)\n' "$status" "$((timeout - deadline + SECONDS))"
     previous_status=$status
+    next_report=$((SECONDS + 10))
   fi
   remaining=$((deadline - SECONDS))
   if (( remaining <= 0 )); then
@@ -164,7 +166,8 @@ guest_root=$(vm_exec /usr/bin/mktemp -d /tmp/codyssey-fusion-base.XXXXXX)
   printf 'Unexpected guest working directory.\n' >&2
   exit 1
 }
-tar -C "$root" -cf "$temp/payload.tar" scripts/prepare-fusion-base.sh scripts/vm-guest-path.sh
+tar -C "$root" -cf "$temp/payload.tar" scripts/prepare-fusion-base.sh scripts/vm-guest-path.sh \
+  scripts/vm-progress.sh scripts/install-orbstack.sh scripts/install-gureum.sh scripts/install-iterm2.sh
 vm_transfer "$guest_root" "$temp/payload.tar"
 if fusion_uses_lab_password; then
   CODYSSEY_FUSION_USE_LAB_PASSWORD=1 python3 "$root/scripts/intel-macos-vm/guest_credential.py" |
