@@ -82,7 +82,7 @@ document identity, fixture administration, and verification boundaries.
 - Firebase Auth and Firestore emulators plus the modular Firebase SDK
 - Zod, Phosphor icons, Vite, Biome, Vitest, and Playwright
 - Multi-stage pinned Docker images; Nginx production server
-- QEMU TCG with pinned Alpine guest artifacts and checksum verification
+- QEMU TCG with a checksum-verified Alpine minirootfs and signed Alpine guest packages
 
 ## GitHub Pages and Firebase
 

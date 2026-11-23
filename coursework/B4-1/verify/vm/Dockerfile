@@ -1,18 +1,18 @@
 ARG ALPINE_IMAGE=alpine@sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412
 FROM ${ALPINE_IMAGE} AS initramfs-builder
 RUN apk add --no-cache \
-      acl=2.3.2-r1 \
-      bash=5.2.37-r0 \
-      cpio=2.15-r0 \
-      dcron=4.6-r0 \
-      firewalld=2.3.0-r0 \
-      gawk=5.3.2-r2 \
-      iproute2=6.15.0-r0 \
-      linux-virt=6.12.112-r0 \
-      logrotate=3.21.0-r1 \
-      netcat-openbsd=1.229.1-r0 \
-      openssh-server=10.0_p1-r10 \
-      procps-ng=4.0.4-r3
+      acl \
+      'bash~5' \
+      cpio \
+      dcron \
+      firewalld \
+      gawk \
+      iproute2 \
+      linux-virt \
+      logrotate \
+      netcat-openbsd \
+      openssh-server \
+      procps-ng
 WORKDIR /rootfs
 RUN mkdir -p app dev proc sys run tmp \
     && cp -a /bin /etc /lib /sbin /usr /var /rootfs/ \
@@ -26,7 +26,7 @@ RUN chmod 0755 /rootfs/init /rootfs/lab/bin/*.sh /rootfs/lab/synthetic-app.sh \
       | gzip -n -9 > /initramfs.cpio.gz
 
 FROM ${ALPINE_IMAGE}
-RUN apk add --no-cache qemu-system-x86_64=10.0.0-r1
+RUN apk add --no-cache qemu-system-x86_64
 COPY --from=initramfs-builder /vmlinuz-virt /opt/vm/vmlinuz-virt
 COPY --from=initramfs-builder /initramfs.cpio.gz /opt/vm/initramfs.cpio.gz
 COPY verify/vm/launch-vm.sh /usr/local/bin/launch-vm
