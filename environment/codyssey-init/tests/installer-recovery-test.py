@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise interrupted writes, failed app installs, and actual service readiness."""
 import os
+import plistlib
 import pty
 import select
 import time
@@ -18,6 +19,53 @@ def executable(path, body):
 
 
 class InstallerRecoveryTests(unittest.TestCase):
+    @unittest.skipUnless(Path('/usr/libexec/PlistBuddy').is_file()
+                         and (ROOT/'scripts/create-fusion-installer.sh').is_file(),
+                         'requires the macOS host installer tooling')
+    def test_fusion_installer_authorizes_before_reporting_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            app = work/'Install macOS.app'
+            installer = app/'Contents/Resources/createinstallmedia'
+            installer.parent.mkdir(parents=True)
+            executable(installer, 'echo "Installer ran"')
+            output = work/'installer.iso'
+            attachment = work/'attachment.plist'
+            attachment.write_bytes(plistlib.dumps({'system-entities': [{'dev-entry': '/dev/disk99'}]}))
+            executable(work/'uname', 'case "$1" in -s) echo Darwin ;; -m) echo x86_64 ;; esac')
+            executable(work/'hdiutil', '''case "$1" in
+  create) exit 0 ;;
+  attach) cat "$ATTACHMENT" ;;
+  detach) echo "Image detached" ;;
+  convert) touch "$7.cdr" ;;
+  *) exit 2 ;;
+esac''')
+            executable(work/'sudo', '''case "$1" in
+  -v) echo "Authorization requested"; exit "$AUTH_STATUS" ;;
+  -n) shift; exec "$@" ;;
+  *) exit 2 ;;
+esac''')
+            env = dict(os.environ, PATH=str(work)+':/usr/bin:/bin:/usr/sbin',
+                       ATTACHMENT=str(attachment), CODYSSEY_FUSION_HOST_AUTH='terminal')
+            command = ['/bin/bash', str(ROOT/'scripts/create-fusion-installer.sh'), str(app), str(output)]
+            for status in (1, 0):
+                with self.subTest(authorization_status=status):
+                    result = subprocess.run(command, env=dict(env, AUTH_STATUS=str(status)),
+                                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                            text=True, timeout=10)
+                    self.assertIn('Authorization requested', result.stdout)
+                    self.assertEqual(result.returncode, status, result.stdout)
+                    self.assertIn('Image detached', result.stdout)
+                    self.assertEqual(list(work.glob('.fusion-installer.*')), [])
+                    self.assertEqual(output.exists(), status == 0)
+                    if status:
+                        self.assertNotIn('Writing the installer volume', result.stdout)
+                        self.assertNotIn('Installer ran', result.stdout)
+                    else:
+                        self.assertLess(result.stdout.index('Authorization requested'),
+                                        result.stdout.index('Writing the installer volume'))
+                        self.assertIn('Installer ran', result.stdout)
+
     def test_iterm2_failure_then_retry_and_existing_app_preservation(self):
         for failure in ('download', 'checksum', 'extract', 'copy'):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:

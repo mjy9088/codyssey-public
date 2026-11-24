@@ -117,7 +117,9 @@ on run arguments
 end run
 APPLESCRIPT
 else
-  vm_progress "Writing the installer volume" sudo "$installer" --volume "$mount" --nointeraction
+  # Finish terminal authentication before the background progress output starts.
+  sudo -v -p 'Codyssey installer administrator password for %p: '
+  vm_progress "Writing the installer volume" sudo -n "$installer" --volume "$mount" --nointeraction
 fi
 hdiutil detach "$device"
 attached=0
