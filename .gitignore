@@ -38,3 +38,9 @@ coverage/
 tmp/
 /core
 /core.[0-9]*
+
+# Materialized coursework tooling (included only in standalone submissions)
+/coursework/*/mise.toml
+/coursework/*/justfile
+/coursework/*/.coursework-dev/
+/coursework/*/.coursework-stage.*/

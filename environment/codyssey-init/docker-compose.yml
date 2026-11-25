@@ -41,6 +41,11 @@ services:
     image: gogost/gost:3.2.6@sha256:1ae76fcd556aec335ff602a1828c1140c27d6243c7f02a89f41e177baa265faf
     container_name: tailnet-forward-gost
     network_mode: host
+    labels:
+      org.codyssey.tunnel-control: unix-v1
+    environment:
+      GOST_API: unix:///run/gost/control.sock
+    entrypoint: ["/bin/sh", "-ec", "umask 077; rm -f /run/gost/control.sock; exec /bin/gost \"$$@\"", "gost"]
 
     working_dir: /etc/gost
     command:
@@ -48,18 +53,34 @@ services:
       - /etc/gost/gost.yaml
 
     volumes:
-      - ./gost:/etc/gost
+      - ./gost:/etc/gost:ro
+      - gost-control:/run/gost
 
     depends_on:
       - tailscale
 
     restart: unless-stopped
 
-  gost-ui:
-    image: gogost/gost-ui:b956f5ee@sha256:40f7467199e9f83d12ca8e790850207934f5456603358f2fed09688e17227b22
-    container_name: tailnet-forward-ui
-
+  tunnel-ui:
+    build: ./tunnel-ui
+    image: codyssey-tunnel-ui:local
+    container_name: tailnet-forward-tunnel-ui
     ports:
-      - "127.0.0.1:18081:80"
+      - "127.0.0.1:18081:18081"
+    read_only: true
+    tmpfs:
+      - /run/tunnel-owner:mode=0700
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE]
+    volumes:
+      - ./gost:/etc/gost
+      - gost-control:/run/gost:ro
+    depends_on:
+      - gost
 
     restart: unless-stopped
+
+volumes:
+  gost-control:

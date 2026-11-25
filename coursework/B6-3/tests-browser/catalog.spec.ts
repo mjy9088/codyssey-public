@@ -74,7 +74,9 @@ test("mobile search and empty results remain contained", async ({ page }) => {
   await page.getByRole("button", { name: "Search" }).click();
 
   // Then: the empty state and retained search fit without horizontal overflow.
-  await expect(page.getByRole("heading", { name: "Try another shelf." })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Try another shelf." }),
+  ).toBeVisible();
   await expect(page.getByLabel("Title or author")).toHaveValue(query);
   const viewportFits = await page.evaluate(
     () => document.documentElement.scrollWidth <= window.innerWidth,

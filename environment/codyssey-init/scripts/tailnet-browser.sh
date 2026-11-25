@@ -65,7 +65,7 @@ done
 printf '{"enableOnInstall":true}\n' >"$extension/startup.json"
 if (( extension_changed )); then rm -f "$configured"; fi
 if (( prepare_only )); then exit 0; fi
-if (( $# == 0 )); then set -- 'http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080'; fi
+if (( $# == 0 )); then set -- 'http://127.0.0.1:18081/'; fi
 
 # codyssey-init: unpacked-extension-registry-v1
 extensions=$extension

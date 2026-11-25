@@ -20,6 +20,7 @@ while [ "$#" -gt 0 ]; do
     *) shift ;;
   esac
 done
+if [ "$url" = 'http://127.0.0.1:18081/health' ] && [ -n "${UPGRADE_CASE:-}" ]; then exit 0; fi
 relative=${url#*/environment/codyssey-init/}
 if [ "${FAIL_FILE:-}" = "$relative" ]; then
   printf 'touch "$INITIAL_EXECUTED"\n' >"$output"
@@ -32,7 +33,7 @@ EOF
 cat >"$fakebin/docker" <<'EOF'
 #!/bin/sh
 case "$*" in
-  info|'compose build tailscale'|'compose pull gost gost-ui') exit 0 ;;
+  info|'compose build tailscale tunnel-ui'|'compose pull gost') exit 0 ;;
   *) exit 1 ;;
 esac
 EOF
@@ -45,6 +46,277 @@ cat >"$fakebin/zsh" <<'EOF'
 printf 'zsh %s\n' "$*" >>"$REMOTE_LOG"
 EOF
 chmod 0755 "$fakebin"/*
+
+if (( $# == 1 )); then
+  # Same public entry point and feature inputs for both releases. Only the
+  # download transport is redirected to read-only release files.
+  legacy=$1/environment/codyssey-init
+  transport="$tmp/transport"
+  stage="$tmp/stage"
+  home="$tmp/home"
+  mkdir -p "$transport" "$stage" "$home"
+  cp "$fakebin/curl" "$transport/curl"
+  cp "$fakebin/mise" "$transport/mise"
+  cat >"$transport/docker" <<'EOF'
+#!/bin/sh
+case "$*" in
+  'container ls --all '*)
+    case ${UPGRADE_CASE:-} in
+      legacy) printf 'tailnet-forward-gost\ntailnet-forward-ui\n' ;;
+      unavailable) exit 1 ;;
+      query-edit)
+        if [ -e "$UPGRADE_EVENTS/first-query" ]; then
+          : >"$UPGRADE_EVENTS/second-query-ready"
+          timeout 20 sh -c 'read -r _ <"$1"' sh "$UPGRADE_EVENTS/second-query-gate" || exit 74
+        else
+          : >"$UPGRADE_EVENTS/first-query"
+        fi ;;
+    esac ;;
+  info|'compose build tailscale tunnel-ui'|'compose pull gost') exit 0 ;;
+  'compose up -d --no-build')
+    printf 'startup\n' >>"$UPGRADE_LOG"
+    diff -qr "$UPGRADE_EXPECTED" "$PWD" || exit 91
+    if [ "${UPGRADE_CASE:-}" = concurrent ]; then
+      : >"$UPGRADE_EVENTS/activation-ready"
+      timeout 20 sh -c 'read -r _ <"$1"' sh "$UPGRADE_EVENTS/activation-gate"
+    fi ;;
+  'compose ps --status running --services') printf 'tailscale\ngost\ntunnel-ui\n' ;;
+  'compose exec -T tailscale tailscale status --json') printf '{"BackendState":"Running"}\n' ;;
+  *) exit 89 ;;
+esac
+EOF
+  cat >"$transport/install" <<'EOF'
+#!/bin/sh
+case ${UPGRADE_CASE:-}:$3 in
+  preparation:*/sdk/setup.mts) exit 72 ;;
+  late-conflict:*/sdk/setup.mts) printf '\n# edited during staging\n' >>"$CODYSSEY_INIT_DIR/sdk/setup.mts" ;;
+  concurrent:*/sdk/setup.mts)
+    : >"$UPGRADE_EVENTS/staging-ready"
+    timeout 20 sh -c 'read -r _ <"$1"' sh "$UPGRADE_EVENTS/staging-gate" || exit 73 ;;
+esac
+exec /usr/bin/install "$@"
+EOF
+  cat >"$transport/mv" <<'EOF'
+#!/bin/sh
+if [ "$3" = "$CODYSSEY_INIT_DIR/docker-compose.yml" ]; then
+  case ${UPGRADE_CASE:-} in
+    interruption) kill -TERM "$PPID"; exit 143 ;;
+    path-type)
+      /bin/mv "$@" || exit $?
+      destination="$CODYSSEY_INIT_DIR/scripts/prepare-startup.sh"
+      /bin/mv "$destination" "$UPGRADE_EVENTS/displaced-prepare" || exit $?
+      mkdir "$destination" || exit $?
+      printf 'custom directory\n' >"$destination/owner.txt"
+      exit $? ;;
+  esac
+fi
+exec /bin/mv "$@"
+EOF
+  cat >"$transport/ln" <<'EOF'
+#!/bin/sh
+if [ "${UPGRADE_CASE:-}" = appears ] && [ "$3" = "$CODYSSEY_INIT_DIR/tunnel-ui/package.json" ]; then
+  printf 'new owner file\n' >"$3" || exit $?
+fi
+exec /bin/ln "$@"
+EOF
+  chmod 0755 "$transport/docker" "$transport/install" "$transport/mv" "$transport/ln"
+  events="$tmp/events"
+  mkdir "$events"
+  mkfifo "$events/staging-gate" "$events/activation-gate" "$events/second-query-gate"
+  started="$tmp/activation.log"
+  : >"$started"
+  run_blocked_upgrade() {
+    local test_case=$1 destination=$2 message=$3
+    if run_release "$root" "$destination" CODYSSEY_TAILNET_SETUP=1 UPGRADE_CASE="$test_case" >"$tmp/blocked.log" 2>&1; then
+      printf 'unsafe upgrade succeeded: %s\n' "$test_case" >&2
+      exit 1
+    fi
+    if ! grep -Fq "$message" "$tmp/blocked.log"; then cat "$tmp/blocked.log" >&2; exit 1; fi
+  }
+  wait_for_event() {
+    local event=$1 attempt
+    for ((attempt=0; attempt<200; attempt++)); do
+      [[ ! -e $events/$event ]] || return 0
+      kill -0 "$upgrade_pid" 2>/dev/null || break
+      sleep 0.05
+    done
+    cat "$upgrade_log" >&2
+    printf 'upgrade did not reach %s\n' "$event" >&2
+    return 1
+  }
+  assert_pending_cannot_start() {
+    local destination=$1
+    [[ -d $destination/.codyssey-install-pending ]]
+    if zsh "$destination/next-script.zsh" --prepared >"$tmp/blocked.log" 2>&1; then
+      printf 'incomplete install activated: %s\n' "$destination" >&2; exit 1
+    fi
+    grep -Fq 'An installer update is incomplete' "$tmp/blocked.log"
+    [[ ! -s $started ]]
+  }
+  run_release() {
+    local source=$1 destination=$2
+    shift 2
+    env -i HOME="$home" TMPDIR="$stage" PATH="$transport:/usr/bin:/bin" \
+      CODYSSEY_INIT_DIR="$destination" REMOTE_SOURCE="$source" \
+      CODYSSEY_TAILNET_SETUP=0 CODYSSEY_MACOS_SETUP=0 CODYSSEY_INSTALL_J=0 \
+      CODYSSEY_OPEN_BROWSER=0 UPGRADE_LOG="$started" UPGRADE_EXPECTED="$fresh" UPGRADE_EVENTS="$events" \
+      "$@" sh <"$legacy/../../init.sh"
+  }
+
+  fresh="$tmp/fresh"
+  run_release "$root" "$fresh"
+  cmp "$fresh/docker-compose.yml" "$root/docker-compose.yml"
+  cmp "$fresh/tunnel-ui/index.html" "$root/tunnel-ui/index.html"
+  [[ ! -e $fresh/.env ]]
+  printf 'PASS: fresh download installs the tunnel UI\n'
+
+  old="$tmp/installed with spaces"
+  run_release "$legacy" "$old"
+  cmp "$old/docker-compose.yml" "$legacy/docker-compose.yml"
+  [[ ! -e $old/tunnel-ui ]]
+  install -m 0600 /dev/null "$old/.env"
+  printf 'TS_AUTHKEY=synthetic-saved-value\n' >"$old/.env"
+  cat >"$old/gost/gost.yaml" <<'EOF'
+# Existing configuration owned by the installer user.
+services:
+  - name: previous-preview
+    addr: 127.0.0.1:19090
+    handler: {type: tcp}
+    listener: {type: tcp}
+    forwarder: {nodes: [{name: preview, addr: '127.0.0.1:3000'}]}
+    futureField: {keep: 'exactly as written'}
+api: {addr: '127.0.0.1:18080'}
+EOF
+  cp -p "$old/.env" "$fresh/.env"
+  cp -p "$old/gost/gost.yaml" "$fresh/gost/gost.yaml"
+  # Include the empty advisory lock inode in snapshots, not as a managed file.
+  : >"$old/.codyssey-installer.lock"
+  snapshot="$tmp/old-before"
+  cp -a "$old" "$snapshot"
+  run_blocked_upgrade legacy "$old" 'run docker compose down with the old Compose file'
+  diff -qr "$snapshot" "$old"
+  cmp "$legacy/docker-compose.yml" "$old/docker-compose.yml"
+  run_blocked_upgrade unavailable "$old" 'Cannot check for legacy GOST containers'
+  diff -qr "$snapshot" "$old"
+  [[ ! -s $started ]]
+  printf 'PASS: legacy stack blocks publication; the complete prior install and teardown Compose remain intact\n'
+
+  run_blocked_upgrade preparation "$old" 'could not stage'
+  diff -qr "$snapshot" "$old"
+  conflict="$tmp/late-conflict"
+  cp -a "$old" "$conflict"
+  run_blocked_upgrade late-conflict "$conflict" "refusing to overwrite modified $conflict/sdk/setup.mts"
+  expected="$tmp/conflict-expected"
+  cp -a "$snapshot" "$expected"
+  printf '\n# edited during staging\n' >>"$expected/sdk/setup.mts"
+  diff -qr "$expected" "$conflict"
+  [[ ! -s $started ]]
+  printf 'PASS: failed preparation and a conflict introduced during staging do not publish earlier files\n'
+
+  query_edit="$tmp/query-edit"
+  cp -a "$old" "$query_edit"
+  upgrade_log="$tmp/query-edit.log"
+  run_release "$root" "$query_edit" UPGRADE_CASE=query-edit CODYSSEY_TAILNET_SETUP=1 TS_AUTHKEY='' >"$upgrade_log" 2>&1 &
+  upgrade_pid=$!
+  wait_for_event second-query-ready
+  printf '\n# edited during final engine query\n' >>"$query_edit/scripts/prepare-startup.sh"
+  printf '\n' >"$events/second-query-gate"
+  if wait "$upgrade_pid"; then printf 'engine-query edit was accepted\n' >&2; exit 1; fi
+  grep -Fq "refusing to overwrite modified $query_edit/scripts/prepare-startup.sh" "$upgrade_log" || { cat "$upgrade_log" >&2; exit 1; }
+  query_expected="$tmp/query-expected"
+  cp -a "$snapshot" "$query_expected"
+  printf '\n# edited during final engine query\n' >>"$query_expected/scripts/prepare-startup.sh"
+  diff -qr "$query_expected" "$query_edit"
+  [[ ! -s $started ]]
+  printf 'PASS: edit during the second engine query survives; no files published or services started\n'
+
+  path_type="$tmp/path-type"
+  cp -a "$old" "$path_type"
+  destination="$path_type/scripts/prepare-startup.sh"
+  run_blocked_upgrade path-type "$path_type" "refusing to overwrite modified $destination"
+  cmp "$path_type/docker-compose.yml" "$root/docker-compose.yml"
+  [[ $(ls -A "$destination") == owner.txt ]]
+  printf 'custom directory\n' | cmp - "$destination/owner.txt"
+  assert_pending_cannot_start "$path_type"
+  run_blocked_upgrade '' "$path_type" "refusing to overwrite modified $destination"
+  printf 'custom directory\n' | cmp - "$destination/owner.txt"
+  mv "$destination" "$tmp/reconciled-copy"
+  cp -p "$events/displaced-prepare" "$destination"
+  run_release "$root" "$path_type"
+  diff -qr "$fresh" "$path_type"
+  printf 'PASS: late directory conflict preserves owner data and requires explicit reconciliation before retry\n'
+
+  appears="$tmp/appears"
+  cp -a "$old" "$appears"
+  destination="$appears/tunnel-ui/package.json"
+  run_blocked_upgrade appears "$appears" "could not publish $destination safely"
+  printf 'new owner file\n' | cmp - "$destination"
+  assert_pending_cannot_start "$appears"
+  printf 'PASS: no-clobber publication preserves a file that appeared after the last check\n'
+
+  interrupted="$tmp/interrupted"
+  cp -a "$old" "$interrupted"
+  if run_release "$root" "$interrupted" UPGRADE_CASE=interruption CODYSSEY_TAILNET_SETUP=1; then
+    printf 'interrupted publication unexpectedly succeeded\n' >&2; exit 1
+  fi
+  cmp "$interrupted/docker-compose.yml" "$legacy/docker-compose.yml"
+  cmp "$interrupted/next-script.zsh" "$root/next-script.zsh"
+  assert_pending_cannot_start "$interrupted"
+  run_release "$root" "$interrupted"
+  diff -qr "$fresh" "$interrupted"
+  printf 'PASS: interrupted publication cannot activate and is repaired by a normal retry\n'
+
+  overlap="$tmp/overlap"
+  cp -a "$old" "$overlap"
+  upgrade_log="$tmp/overlap.log"
+  run_release "$root" "$overlap" UPGRADE_CASE=concurrent CODYSSEY_TAILNET_SETUP=1 TS_AUTHKEY='' >"$upgrade_log" 2>&1 &
+  upgrade_pid=$!
+  wait_for_event staging-ready
+  run_blocked_upgrade '' "$overlap" 'another installer is using'
+  [[ ! -s $started ]]
+  cmp "$overlap/docker-compose.yml" "$legacy/docker-compose.yml"
+  printf '\n' >"$events/staging-gate"
+  wait_for_event activation-ready
+  run_blocked_upgrade '' "$overlap" 'another installer is using'
+  printf '\n' >"$events/activation-gate"
+  if ! wait "$upgrade_pid"; then cat "$upgrade_log" >&2; exit 1; fi
+  [[ $(cat "$started") == startup ]]
+  diff -qr "$fresh" "$overlap"
+  printf 'PASS: concurrent runs cannot publish or activate during staging or activation\n'
+
+  for file in docker-compose.yml sdk/setup.mts; do
+    custom="$tmp/custom"
+    snapshot="$tmp/custom-before"
+    cp -a "$old" "$custom"
+    printf '\n# intentionally customized\n' >>"$custom/$file"
+    cp -a "$custom" "$snapshot"
+    if run_release "$root" "$custom" >"$tmp/conflict.log" 2>&1; then
+      printf 'customized %s was overwritten\n' "$file" >&2
+      exit 1
+    fi
+    if ! grep -Fq "refusing to overwrite modified $custom/$file" "$tmp/conflict.log" ||
+        ! grep -Fq 'Back up and review this path' "$tmp/conflict.log"; then
+      cat "$tmp/conflict.log" >&2
+      exit 1
+    fi
+    diff -qr "$snapshot" "$custom"
+    rm -rf "$custom" "$snapshot"
+  done
+  printf 'PASS: customized early and late files refused before publishing anything\n'
+
+  run_release "$root" "$old"
+  diff -qr "$fresh" "$old"
+  [[ $(stat -c %a "$old/.env") == 600 ]]
+  printf 'PASS: byte-exact prior install upgraded in place; credentials and tunnels preserved\n'
+
+  before=$(stat -c '%i:%Y' "$old/docker-compose.yml")
+  run_release "$root" "$old"
+  diff -qr "$fresh" "$old"
+  [[ $(stat -c '%i:%Y' "$old/docker-compose.yml") == "$before" ]]
+  [[ -z $(find "$stage" -mindepth 1 -print -quit) ]]
+  printf 'PASS: repeated upgrade leaves installed files in place and cleans staging\n'
+  exit 0
+fi
 
 # A failed initial download may have written executable shell text. The documented
 # download-then-run contract must not execute that incomplete file.

@@ -49,7 +49,7 @@ Tailnet-only mode remains available and subsequent launches preserve it.
 Private IPv4 ranges are `10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`; their actual reachability
 depends on the container's routes and Tailnet permissions. Public websites stay direct.
 Use the default **All websites** for services at other domain names. Localhost, IPv4 loopback, IPv6 loopback,
-and `.local` names stay direct in both modes, including the local GOST dashboard.
+and `.local` names stay direct in both modes, including the local Codyssey tunnel manager.
 
 The extension does not authenticate Tailscale, install routes on macOS, select an exit node, or
 provide a system-wide VPN. SOCKS5 carries browser web connections; WebRTC and other non-web traffic

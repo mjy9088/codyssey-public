@@ -1,6 +1,6 @@
 ARG PYTHON_IMAGE=python:3.13.7-alpine3.22@sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844
 FROM ${PYTHON_IMAGE} AS initramfs-builder
-RUN apk add --no-cache cpio=2.15-r0 git=2.49.1-r0 linux-virt=6.12.112-r0
+RUN apk add --no-cache cpio 'git~2' linux-virt
 WORKDIR /rootfs
 RUN mkdir -p app dev proc sys run tmp \
     && cp -a /bin /etc /lib /sbin /usr /rootfs/ \
@@ -14,7 +14,7 @@ RUN chmod 0755 /rootfs/init \
       | gzip -n -9 > /initramfs.cpio.gz
 
 FROM alpine@sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412
-RUN apk add --no-cache qemu-system-x86_64=10.0.0-r1
+RUN apk add --no-cache qemu-system-x86_64
 COPY --from=initramfs-builder /vmlinuz-virt /opt/vm/vmlinuz-virt
 COPY --from=initramfs-builder /initramfs.cpio.gz /opt/vm/initramfs.cpio.gz
 COPY verify/vm/launch-vm.sh /usr/local/bin/launch-vm

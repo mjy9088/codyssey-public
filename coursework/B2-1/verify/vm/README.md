@@ -1,11 +1,13 @@
 # QEMU verifier
 
 The VM image boots an x86_64 Alpine kernel with QEMU TCG and runs the real Python
-unit and CLI tests inside its initramfs. A guest-created JSON endpoint reports the
-result; the container health check stays unhealthy when guest tests fail. The path
-uses no KVM device, privileged mode, added capability, bind mount, or Docker socket.
+unit and CLI tests inside its initramfs. The guest emits `VM-BOOT-READY` with its
+kernel release before the suite starts, emits `VM-TEST-PASS` or `VM-TEST-FAIL`
+afterwards, and powers off. The verifier requires clean QEMU termination and
+both success markers within the 300-second one-shot run. It prints guest serial
+output even on failure. There is no HTTP service or guest network.
 
-The Python base, Alpine host image, guest kernel package checksum, package versions,
-application, and tests are all included by this subtree's Docker build. QEMU user
-networking exposes only guest port 8080 to the container. This proves an emulated
-guest run, not cloud deployment or behavior on every architecture.
+This path uses no KVM, privileged mode, added capability, bind mount, or Docker
+socket. It verifies an emulated guest run, not cloud deployment or behavior on
+every architecture. The Docker image pins its Python and Alpine bases and uses
+Alpine 3.22's signed `linux-virt` package.

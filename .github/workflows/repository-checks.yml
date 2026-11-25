@@ -28,6 +28,7 @@ jobs:
         run: |
           sh tests/publish-coursework-test.sh
           sh tests/pages-package-test.sh
+          sh tests/coursework-workflow-test.sh
       - name: Check verifier lifecycle contracts
         run: |
           for project in B1-2 B4-1 B4-2 B5-1; do
@@ -39,7 +40,7 @@ jobs:
         run: |
           sh tests/docker-context-policy-test.sh
           sh coursework/B6-2/tests/test_build_context.sh
-      - name: Check archived command boundaries without starting a lab
+      - name: Check E1 command boundaries without starting a lab
         run: |
-          sh archive/E1-1/tests/lab-cli-test.sh
-          sh archive/E1-2/scripts/tests/verify_public_origin_test.sh
+          sh coursework/E1-1/tests/lab-cli-test.sh
+          sh coursework/E1-2/scripts/tests/verify_public_origin_test.sh

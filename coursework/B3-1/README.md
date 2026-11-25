@@ -29,14 +29,14 @@ plus negative tests for open/malformed SSH sources, malformed public keys, movin
 invalid principal IDs. Mocks exercise the real provider schema without credentials or API calls.
 They do not implement the Azure control plane or dataplane.
 
-During the verifier image build, pinned Alpine `cloud-init` `24.3.1-r2` validates the cloud-config
+During the verifier image build, `cloud-init` from Alpine 3.22 validates the cloud-config
 schema and renders its `runcmd` through the real `cc_runcmd` module. The rendered commands then run
 inside that disposable build stage. The shell writes are real and their complete health output and
 key index content are checked; package installation and service management use recording stubs whose
 exact arguments are checked, so the build has no package or service side effects. This proves local
 schema, rendering, command syntax, ordering, and file effects. It does not reproduce Ubuntu boot,
-APT installation, systemd, or Azure provisioning. Image construction downloads pinned tools and
-packages; the Compose verification runtime remains offline.
+APT installation, systemd, or Azure provisioning. Image construction downloads the pinned Terraform
+archive and Alpine packages; the Compose verification runtime remains offline.
 
 The verifier image pins Terraform `1.16.5` and selects its Linux archive from the build host
 architecture: `amd64` SHA-256

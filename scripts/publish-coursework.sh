@@ -5,17 +5,18 @@ export GIT_PAGER=cat
 usage() {
   cat <<'EOF'
 Usage:
-  sh scripts/publish-coursework.sh [--source REVISION] SUBTREE [DESTINATION] [TARGET_BRANCH]
+  sh scripts/publish-coursework.sh [--prepare] [--source REVISION] COURSE [DESTINATION] [TARGET_BRANCH]
 
 Prepare a standalone-root submission commit from a local committed revision.
 The source checkout is not modified. After preparing the commit, the script asks
 for confirmation on a terminal before force-pushing to DESTINATION.
 
 Options:
+  --prepare          Prepare locally without prompting or pushing
   --source REVISION  Local committed revision to publish (default: HEAD)
 
 Arguments:
-  SUBTREE       Coursework identifier or repository-relative coursework path
+  COURSE        Coursework name (for example, B1-1)
   DESTINATION   Git remote URL for the submission repository
                 (default: https://github.com/mjy9088/codyssey-submit.git)
   TARGET_BRANCH Destination branch (default: main)
@@ -27,47 +28,39 @@ EOF
 }
 
 source_revision=HEAD
+prepare_only=false
 default_destination=https://github.com/mjy9088/codyssey-submit.git
-case ${1-} in
-  --help|-h)
-    usage
-    exit 0
-    ;;
-  --source)
-    if [ "$#" -lt 2 ]; then
-      printf '%s\n' 'Option --source requires a revision.' >&2
-      usage >&2
-      exit 2
-    fi
-    source_revision=$2
-    shift 2
-    ;;
-  --*)
-    printf 'Unknown option: %s\n' "$1" >&2
-    usage >&2
-    exit 2
-    ;;
-esac
+while [ "$#" -gt 0 ]; do
+  case $1 in
+    --help|-h) usage; exit 0 ;;
+    --prepare) prepare_only=true; shift ;;
+    --source)
+      if [ "$#" -lt 2 ]; then
+        printf '%s\n' 'Option --source requires a revision.' >&2
+        usage >&2
+        exit 2
+      fi
+      source_revision=$2
+      shift 2
+      ;;
+    --*) printf 'Unknown option: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+    *) break ;;
+  esac
+done
 
 if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
   usage >&2
   exit 2
 fi
 
-case $1 in
-  coursework/*) subtree=$1 ;;
-  *) subtree=coursework/$1 ;;
+project=$1
+case $project in
+  ''|[!a-zA-Z0-9]*|*[!a-zA-Z0-9_-]*) printf 'Invalid course name: %s\n' "$project" >&2; exit 2 ;;
 esac
+subtree=coursework/$project
 destination=${2-$default_destination}
 target_branch=${3-main}
 
-case $subtree in
-  coursework/*) ;;
-  *) printf 'Invalid coursework subtree: %s\n' "$subtree" >&2; exit 2 ;;
-esac
-case $subtree in
-  *..*|*/.|*/) printf 'Invalid coursework subtree: %s\n' "$subtree" >&2; exit 2 ;;
-esac
 if ! git check-ref-format --branch "$target_branch" >/dev/null 2>&1; then
   printf 'Invalid target branch: %s\n' "$target_branch" >&2
   exit 2
@@ -103,6 +96,11 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 git worktree add --detach "$worktree" "$source_commit" >/dev/null
+materialized=false
+if [ -f "$worktree/scripts/coursework.sh" ]; then
+  sh "$worktree/scripts/coursework.sh" materialize "$project"
+  materialized=true
+fi
 mkdir "$payload"
 mv "$worktree/$subtree" "$payload/root"
 
@@ -110,7 +108,9 @@ git -C "$worktree" rm -r --quiet -- .
 find "$payload/root" -mindepth 1 -maxdepth 1 -exec mv {} "$worktree"/ \;
 git -C "$worktree" add -A
 
-project=${subtree##*/}
+if [ "$materialized" = true ]; then
+  git -C "$worktree" add -f -- mise.toml justfile .coursework-dev
+fi
 git -C "$worktree" commit --quiet \
   -m "chore(submission): publish $project at repository root"
 commit=$(git -C "$worktree" rev-parse HEAD)
@@ -120,6 +120,11 @@ git -C "$worktree" status --short
 git -C "$worktree" show --shortstat --oneline HEAD
 printf '\nSubmission root:\n'
 git -C "$worktree" ls-tree --name-only HEAD
+
+if [ "$prepare_only" = true ]; then
+  printf '\nLocal preparation only; the destination was not changed.\n'
+  exit 0
+fi
 
 if [ ! -t 0 ]; then
   printf '\nNo interactive terminal; the destination was not changed.\n'

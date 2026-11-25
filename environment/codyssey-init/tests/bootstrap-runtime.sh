@@ -22,7 +22,7 @@ EOF
 cat >"$fakebin/curl" <<'EOF'
 #!/bin/sh
 case "$*" in
-  *localhost:18081*) [ -z "${LOGIN_ON_UI:-}" ] || : >"$LOGIN_ON_UI" ;;
+  *127.0.0.1:18081/health*) [ -z "${LOGIN_ON_UI:-}" ] || : >"$LOGIN_ON_UI" ;;
 esac
 exit 0
 EOF
@@ -46,7 +46,8 @@ printf '<docker>' >>"$TEST_LOG"
 for argument in "$@"; do printf '<%s>' "$argument" >>"$TEST_LOG"; done
 printf '<auth=%s><mise=%s>\n' "${TS_AUTHKEY:-}" "${MISE_ENV_APPLIED:-}" >>"$TEST_LOG"
 case "$*" in
-  'compose ps --status running --services') printf 'tailscale\ngost\ngost-ui\n' ;;
+  'container ls --all '*) [ -z "${LEGACY_GOST:-}" ] || echo tailnet-forward-gost ;;
+  'compose ps --status running --services') printf 'tailscale\ngost\ntunnel-ui\n' ;;
   'compose exec -T tailscale tailscale status --json')
     backend=${NEXT_STATE:-Running}
     if [ -n "${LOGIN_ON_UI:-}" ] && [ -f "$LOGIN_ON_UI" ]; then backend=Running; fi
@@ -73,6 +74,13 @@ TS_AUTHKEY=tskey-auth_exported-value NEXT_STATE=Running zsh "$work/next-script.z
 grep -q '<mise><install><just@1.43.0>' "$log"
 grep -q '<auth=tskey-auth_exported-value><mise=1>' "$log"
 
+: >"$log"
+if LEGACY_GOST=1 TS_AUTHKEY='' zsh "$work/next-script.zsh" --prepared </dev/null >"$tmp/legacy.out" 2>&1; then
+  printf 'legacy bootstrap incorrectly proceeded\n' >&2; exit 1
+fi
+grep -q 'Save pending changes in the old UI' "$tmp/legacy.out"
+if grep -q '<compose><up>' "$log"; then exit 1; fi
+
 printf 'TS_AUTHKEY=existing-value\n' >"$work/.env"
 before=$(sha256sum "$work/.env")
 NEXT_STATE=Running zsh "$work/next-script.zsh" </dev/null
@@ -81,15 +89,15 @@ NEXT_STATE=Running zsh "$work/next-script.zsh" </dev/null
 rm "$work/.env"
 NEXT_STATE=NeedsLogin zsh "$work/next-script.zsh" </dev/null >"$tmp/login.out"
 grep -q 'https://login.tailscale.com/a/synthetic' "$tmp/login.out"
-grep -Fxq 'GOST API/UI ready. Tailscale login pending.' "$tmp/login.out"
+grep -Fxq 'Codyssey tunnels ready. Tailscale login pending.' "$tmp/login.out"
 if grep -q 'Environment ready' "$tmp/login.out"; then exit 1; fi
 grep -qx 'TS_AUTHKEY=' "$work/.env"
 [[ $(stat -c '%a' "$work/.env") == 600 ]]
 
-# Login can complete while the local GOST UI is starting.
+# Login can complete while Codyssey tunnels is starting.
 TS_AUTHKEY='' NEXT_STATE=NeedsLogin LOGIN_ON_UI="$tmp/logged-in" \
   zsh "$work/next-script.zsh" </dev/null >"$tmp/logged-in.out"
-grep -Fxq 'GOST API/UI ready. Tailscale connected.' "$tmp/logged-in.out"
+grep -Fxq 'Codyssey tunnels ready. Tailscale connected.' "$tmp/logged-in.out"
 
 TS_AUTHKEY='' NEXT_STATE=Running CODYSSEY_WORKSTATION_INCOMPLETE=1 \
   zsh "$work/next-script.zsh" --prepared </dev/null >"$tmp/incomplete.out" 2>&1
@@ -118,7 +126,7 @@ grep -q 'no authentication URL is available' "$tmp/missing.out"
 : >"$log"
 TS_AUTHKEY='' NEXT_STATE=NeedsLogin CODYSSEY_OPEN_BROWSER=0 \
   zsh "$work/next-script.zsh" </dev/null >"$tmp/headless.out"
-grep -q 'GOST UI:' "$tmp/headless.out"
+grep -q 'Codyssey tunnels:' "$tmp/headless.out"
 if grep -q '<open>' "$log"; then
   printf 'headless bootstrap launched a browser\n' >&2
   exit 1
@@ -142,7 +150,7 @@ chmod 0755 "$fakebin/uname"
 TS_AUTHKEY='' NEXT_STATE=NeedsLogin CODYSSEY_BROWSER=portable CODYSSEY_OPEN_BROWSER=1 \
   zsh "$work/next-script.zsh" </dev/null >"$tmp/macos-browser.out"
 grep -qx '<open><https://login.tailscale.com/a/synthetic>' "$log"
-grep -qx '<portable><http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080>' "$log"
+grep -qx '<portable><http://127.0.0.1:18081/>' "$log"
 if grep -q '<portable><https://login.tailscale.com/' "$log"; then
   printf 'login used the unauthenticated Tailnet browser\n' >&2
   exit 1
@@ -219,7 +227,7 @@ mkdir -p "$install_bin" "$install_home"
 cat >"$install_bin/docker" <<'EOF'
 #!/bin/sh
 case "$*" in
-  info|'compose build tailscale'|'compose pull gost gost-ui') exit 0 ;;
+  info|'compose build tailscale tunnel-ui'|'compose pull gost') exit 0 ;;
   *) exit 1 ;;
 esac
 EOF

@@ -12,9 +12,10 @@ import {
 } from "./native-processes.mjs"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
-if (process.argv.length > 2) {
+const demo = process.argv.length === 3 && process.argv[2] === "--demo"
+if (process.argv.length > 2 && !demo) {
   console.log(
-    "Usage: node scripts/verify-native.mjs\nRequires Node, Java 21+, installed app/operator locked dependencies, and Chromium.",
+    "Usage: node scripts/verify-native.mjs [--demo]\nRequires Node, Java 21+, installed app/operator locked dependencies, and Chromium.",
   )
   process.exit(process.argv.length === 3 && process.argv[2] === "--help" ? 0 : 2)
 }
@@ -31,6 +32,9 @@ const env = {
   ...(process.env.FONTCONFIG_FILE ? { FONTCONFIG_FILE: process.env.FONTCONFIG_FILE } : {}),
   ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
     ? { PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+    : {}),
+  ...(process.env.PLAYWRIGHT_BROWSERS_PATH
+    ? { PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH }
     : {}),
   HOME: home,
   XDG_CONFIG_HOME: join(home, "config"),
@@ -192,13 +196,15 @@ try {
     "line",
   ])
   console.log("PASS: real local Auth/Firestore, checked-in rules, production-build browser suite")
-  const isolation = await start("owner-isolation", process.execPath, [
-    join(root, "tests/emulator-isolation-probe.mjs"),
-  ]).done
-  if (isolation.code === 2) {
-    console.log("FAIL: owner isolation; checked-in shared-demo policy permits cross-user access")
-    process.exitCode = 2
-  } else if (isolation.code !== 0) throw new Error("Owner isolation probe failed unexpectedly")
+  if (!demo) {
+    const isolation = await start("owner-isolation", process.execPath, [
+      join(root, "tests/emulator-isolation-probe.mjs"),
+    ]).done
+    if (isolation.code === 2) {
+      console.log("FAIL: owner isolation; checked-in shared-demo policy permits cross-user access")
+      process.exitCode = 2
+    } else if (isolation.code !== 0) throw new Error("Owner isolation probe failed unexpectedly")
+  }
   passed = true
 } catch (error) {
   console.error(error instanceof Error ? error.message : "Native verification failed")

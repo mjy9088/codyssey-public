@@ -27,7 +27,7 @@ test("SDK operations can run together and receive independent choices", async ()
       '[[ $1 == --prepared && $CODYSSEY_OPEN_BROWSER == 0 && $CODYSSEY_INTERACTIVE_SHELL == 0 ]] || exit 7',
       '[[ -z $TS_AUTHKEY && -n ${TS_AUTHKEY+x} ]] || exit 8',
       '[[ $2 == --result ]] || exit 9',
-      'printf "%s\\n" needs-login http://localhost:18081 https://login.tailscale.com/a/synthetic >"$3"',
+      'printf "%s\\n" needs-login http://127.0.0.1:18081/ https://login.tailscale.com/a/synthetic >"$3"',
       'printf "login pending\\n"',
     ].join("\n"));
 
@@ -55,7 +55,7 @@ test("SDK operations can run together and receive independent choices", async ()
     const result = await sdk.startTailnet({ mode: "browser" }, { onOutput: capture(startOutput) });
     assert.deepEqual(result, {
       exitCode: 0, signal: null, state: "needs-login",
-      gostUrl: "http://localhost:18081", loginUrl: "https://login.tailscale.com/a/synthetic",
+      tunnelUrl: "http://127.0.0.1:18081/", loginUrl: "https://login.tailscale.com/a/synthetic",
     });
     assert.equal(startOutput.join(""), "login pending\n");
     await assert.rejects(sdk.startTailnet({ mode: "key", key: "invalid" }), /Invalid Tailscale auth key/);

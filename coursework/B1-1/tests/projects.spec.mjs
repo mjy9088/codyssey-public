@@ -100,14 +100,20 @@ test("request timeout exposes retry instead of an endless spinner", async ({ pag
   await expect(page.locator("#project-list")).toHaveAttribute("aria-busy", "false");
 });
 
-test("the selected verification backend identifies itself", async ({ request }) => {
-  if (process.env.VERIFY_MODE === "vm") {
+test("the selected verification backend identifies itself", async ({ request }, info) => {
+  const { verificationMode } = info.config.metadata;
+  if (verificationMode === "vm") {
     const response = await request.get("/__vm-proof.txt");
     expect(response.ok()).toBeTruthy();
     expect(await response.text()).toMatch(/Linux.*x86_64/);
   } else {
     const response = await request.get("/");
     expect(response.ok()).toBeTruthy();
-    expect(response.headers().server).toBe("nginx");
+    const server = response.headers().server;
+    if (verificationMode === "native") {
+      expect(server).toMatch(/^SimpleHTTP\/\d+\.\d+ Python\//);
+    } else {
+      expect(server).toBe("nginx");
+    }
   }
 });

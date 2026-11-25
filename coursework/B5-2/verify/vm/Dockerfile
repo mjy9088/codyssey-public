@@ -14,20 +14,12 @@ COPY verify/guest_check.py verify/guest_check.py
 COPY main.py ./
 
 FROM ${ALPINE_IMAGE} AS initramfs-builder
-ARG LINUX_VIRT_VERSION=6.12.112-r0
-ARG LINUX_VIRT_SHA256=6694e66849759265135a930306452c944bf2159f259b8c8f1c8731e474f2830b
-RUN apk add --no-cache \
-      ca-certificates=20260909-r0 \
-      cpio=2.15-r0 \
-      curl=8.14.1-r3 \
-      gzip=1.14-r2
+RUN apk add --no-cache cpio gzip
 WORKDIR /work
-RUN curl --fail --location --proto '=https' --tlsv1.2 \
-      --output linux-virt.apk \
-      "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/linux-virt-${LINUX_VIRT_VERSION}.apk" \
-    && echo "${LINUX_VIRT_SHA256}  linux-virt.apk" | sha256sum -c - \
+RUN apk fetch --no-cache --arch x86_64 linux-virt \
+    && apk verify linux-virt-*.apk \
     && mkdir kernel root \
-    && tar -xzf linux-virt.apk -C kernel \
+    && tar -xzf linux-virt-*.apk -C kernel \
     && cp kernel/boot/vmlinuz-virt /work/vmlinuz-virt
 COPY --from=runtime-root / /work/root/
 COPY verify/vm/guest-init /work/root/init
@@ -38,7 +30,7 @@ RUN cp -a kernel/lib/modules root/lib/ \
       | gzip -n -9 > /work/initramfs.cpio.gz
 
 FROM ${ALPINE_IMAGE}
-RUN apk add --no-cache qemu-system-x86_64=10.0.0-r1
+RUN apk add --no-cache qemu-system-x86_64
 COPY --from=initramfs-builder /work/vmlinuz-virt /opt/vm/vmlinuz-virt
 COPY --from=initramfs-builder /work/initramfs.cpio.gz /opt/vm/initramfs.cpio.gz
 COPY verify/vm/launch-vm.sh /usr/local/bin/launch-vm

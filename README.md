@@ -21,15 +21,6 @@ mise install
 ```
 
 The repository configuration pins Node.js, pnpm, Python, uv, and ShellCheck.
-When the mise shell integration is active, entering a coursework project that
-contains `uv.lock` creates and activates its `.venv` automatically. Install that
-project's locked Python dependencies from its directory, for example:
-
-```sh
-cd coursework/B6-3
-uv sync --locked
-```
-
-Each coursework project remains independently runnable through its documented
-Docker and Compose workflow; the mise configuration is an optional convenience
-for host-side development.
+See [Coursework development](docs/COURSEWORK_DEVELOPMENT.md) for per-course setup,
+local verification, runnable demos, and the Docker development shell. Use
+`just submit B6-3` to prepare a standalone submission locally; it does not push.

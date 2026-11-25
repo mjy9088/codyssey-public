@@ -32,6 +32,9 @@ sh scripts/verify.sh all
 
 The workflows need Docker Engine, Compose v2, and a POSIX shell. They do not need host Python, Node, QEMU, KVM, privileged mode, added capabilities, a bind mount, a Docker socket inside a workload, or credentials.
 
+The check image installs its locked dependencies at build time. The container runs the installed
+tools from `.venv/bin` on a read-only filesystem, without re-syncing dependencies.
+
 ## Request flow
 
 ```text

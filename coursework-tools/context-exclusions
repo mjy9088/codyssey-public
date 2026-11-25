@@ -1,0 +1,14 @@
+**/.git
+**/.local
+**/.env
+**/.env.*
+**/*.key
+**/*.pem
+**/firebase-tools.json
+**/application_default_credentials.json
+**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/*.tfvars
+**/*.tfvars.json

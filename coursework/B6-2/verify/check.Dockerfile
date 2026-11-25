@@ -11,4 +11,4 @@ COPY src/ src/
 COPY tests/ tests/
 COPY scripts/ scripts/
 RUN chmod +x tests/fake-docker-bin/docker && uv sync --locked
-CMD ["sh", "-c", "uv run ruff format --check . && uv run ruff check . && uv run basedpyright && uv run pytest -p no:cacheprovider && sh tests/test_verify_orchestration.sh"]
+CMD ["sh", "-c", ".venv/bin/ruff format --check . && .venv/bin/ruff check . && .venv/bin/basedpyright && .venv/bin/pytest -p no:cacheprovider && sh tests/test_verify_orchestration.sh"]

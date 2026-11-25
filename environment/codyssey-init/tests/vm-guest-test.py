@@ -40,7 +40,7 @@ esac
 cat >/dev/null || true
 exit 0
 ''',
-            "curl": '#!/bin/sh\ncase "$*" in *18081*) kind=ui; ready=${VM_UI_READY_AT:-1};; *) kind=api; ready=${VM_API_READY_AT:-1};; esac\ncount_file="$VM_CURL_COUNT-$kind"; count=0; [ ! -f "$count_file" ] || count=$(cat "$count_file"); count=$((count + 1)); echo "$count" > "$count_file"; [ "$count" -ge "$ready" ]\n',
+            "curl": '#!/bin/sh\ncase "$*" in *18081/health*) ready=${VM_UI_READY_AT:-1};; *) exit 7;; esac\ncount_file="$VM_CURL_COUNT"; count=0; [ ! -f "$count_file" ] || count=$(cat "$count_file"); count=$((count + 1)); echo "$count" > "$count_file"; [ "$count" -ge "$ready" ]\n',
             "colima": '''#!/bin/sh
 printf '%s\\n' "$*" >> "$VM_CALLS"
 case $1 in

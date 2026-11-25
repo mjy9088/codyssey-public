@@ -1,17 +1,18 @@
 #!/bin/bash
 set -Eeuo pipefail
-source /workspace/scripts/lib.bash
+course_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+source "$course_root/scripts/lib.bash"
 begin_validation "10-cli-and-permissions"
 
 demo_dir="$(mktemp -d /tmp/workstation-cli.XXXXXX)"
 trap 'rm -rf "$demo_dir"' EXIT
 
 section "Navigation and file operations"
-working_directory="$(pwd)"
+working_directory="$(pwd -P)"
 printf '%s\n' "$working_directory"
-assert_eq "working directory" "/workspace" "$working_directory"
-ls -la
+assert_eq "working directory" "$course_root" "$working_directory"
 mkdir -p "$demo_dir/source" "$demo_dir/archive"
+ls -la "$demo_dir"
 assert_eq "source directory created" "directory" \
   "$(test -d "$demo_dir/source" && printf directory)"
 assert_eq "archive directory created" "directory" \

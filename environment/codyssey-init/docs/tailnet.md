@@ -14,8 +14,8 @@ and x86_64 use the official `mise` v2026.10.5 release binary with a repository-p
 No mutable shell installer is executed. Automatic installation requires `curl`, `shasum`, `cut`,
 `install`, and `mktemp`; unsupported systems and architectures fail clearly. The repository-owned
 `mise.toml` pins `just` to `1.43.0`. Startup preparation runs with an explicitly empty exported
-`TS_AUTHKEY`: it trusts the local config, installs `just@1.43.0`, builds the Tailscale image, and
-pulls the pinned GOST images. `next-script.zsh` refreshes the shell environment with
+`TS_AUTHKEY`: it trusts the local config, installs `just@1.43.0`, builds the Tailscale and tunnel UI
+images, and pulls the pinned GOST image. `next-script.zsh` refreshes the shell environment with
 `mise env -s zsh` before Compose starts.
 Portable-browser preparation is deliberately not part of this worker: `--prepare` updates the
 dedicated profile and extension copy, so it stays in the foreground browser path rather than racing
@@ -97,10 +97,9 @@ docker compose logs tailscale
 
 The login URL opens automatically in the system default browser, without waiting for the portable
 browser download or profile setup and without using its unauthenticated Tailnet proxy.
-It then waits for the local GOST UI and opens Chrome when available, falling back to the default
-portable Tailnet browser by default (or the installed browser with `CODYSSEY_BROWSER=system`). Interactive runs finish in zsh with `mise` and `just` available. The URL is:
-
-<http://localhost:18081/?api=http%3A%2F%2Flocalhost%3A18080>
+It then waits for **Codyssey tunnels**. On macOS, the default is the portable Tailnet browser
+(or the installed browser with `CODYSSEY_BROWSER=system`). Interactive runs finish in zsh with
+`mise` and `just` available. Open <http://127.0.0.1:18081/> from the machine running the initializer.
 
 Set `CODYSSEY_OPEN_BROWSER=0` for unattended or headless runs. Both URLs are still printed, but no
 browser is launched. VM verification uses this mode to avoid first-launch browser dialogs blocking
@@ -109,7 +108,7 @@ the bootstrap.
 macOS preference failures print a warning and a command to retry them separately.
 They do not prevent container startup or browser setup. Docker, tool installation, and service readiness failures return a nonzero status.
 Independent workstation settings are attempted even when Docker or tool preparation fails;
-steps that require those prerequisites are skipped. Tailscale readiness and GOST UI readiness
+steps that require those prerequisites are skipped. Tailscale and Codyssey tunnels readiness
 are checked independently, so one failing service does not suppress the other result.
 
 Startup prints a single preparation message and the environment URL. Docker builds run privately;
@@ -140,10 +139,55 @@ abandoned permanent entries, rather than hiding active devices. See the
 
 Repeating init while the same container is running reuses that live session. Restarting, stopping
 and starting, or recreating it loses the identity and requires authentication again.
-The GOST API listens only on
-`127.0.0.1:18080`, and the UI is published only on `127.0.0.1:18081`. No forwarding service is enabled
-by default. Add services with loopback listener addresses unless deliberate external exposure is
-required.
+
+## Codyssey tunnels
+
+Open <http://127.0.0.1:18081/>. From a private terminal in the installation directory, run
+`just tunnel-key` and paste the owner key into the page. Treat the key like a password; it rotates
+when the tunnel UI restarts. The browser keeps it in the current tab, scoped to this exact origin.
+Use **Lock** to clear it from the tab. The GOST control API is on a private Unix socket, not a TCP port.
+Docker administrators can access both services; do not share Docker access with untrusted users.
+
+Choose **This machine** for a service on GOST’s loopback (the Linux Docker host; on OrbStack, its
+Linux VM). Choose **Tailnet** for a peer’s Tailscale IP, as shown by `tailscale ip` on the peer.
+This uses the existing Tailscale SOCKS5 chain. To avoid ambiguous DNS or public destinations, the
+form accepts only `127.0.0.1` locally and literal Tailscale-range IPv4 or IPv6 addresses for Tailnet.
+It does not change tailnet policy, use an exit node on your behalf, or test destination reachability.
+All new TCP listeners bind `127.0.0.1`; loopback is not per-user access control for forwarded traffic.
+
+**Add tunnel** starts the listener and adds one entry to `gost/gost.yaml` without rewriting the
+other entries. “Added” means GOST accepted the listener and the file was saved, not that the peer is
+reachable. Advanced services are listed without exposing their raw settings. The form cannot edit
+or delete them. Use the infrastructure file for advanced changes and don't edit it concurrently with
+the form. If a save is interrupted, reload the page: a service shown as **not saved** exists only in
+GOST's current runtime. Its configuration will not survive a restart.
+
+**Upgrading from the old editor:** save any in-memory changes in the previous GOST UI and confirm
+they are on disk before stopping the old installation. Run `docker compose down` in the previous
+installation only after saving, and carry `gost/gost.yaml` into the new installation if the paths differ.
+The initializer refuses to replace legacy containers automatically. A new Tailnet login may be needed.
+Legacy `api` settings are retained in the file but overridden by the private Unix socket at runtime.
+
+### SSH local and reverse forwarding
+
+Use the existing SSH client rather than the form for temporary SSH forwarding. From a terminal that can
+reach the peer over Tailscale (for example, `just bash`), use its MagicDNS name or Tailscale IP:
+
+```sh
+# Local: connect to port 8080 on the SSH client's loopback to reach port 3000 on the peer.
+ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:8080:127.0.0.1:3000 user@peer
+# Reverse: connect to port 8080 on the peer's loopback to reach port 3000 on the SSH client.
+ssh -N -o ExitOnForwardFailure=yes -R 127.0.0.1:8080:127.0.0.1:3000 user@peer
+```
+
+The SSH server must allow the requested direction. For OpenSSH servers use `GatewayPorts no`
+for loopback-only reverse forwarding; don't use `-g` or wildcard addresses. If the peer uses
+Tailscale SSH, its SSH policy must permit the connection. Codyssey does not enable an SSH server,
+modify tailnet rules, or collect SSH credentials. Stop `ssh` to close the forward.
+
+References: [GOST TCP forwarding](https://gost.run/en/tutorials/port-forwarding/),
+[OpenSSH forwarding options](https://man.openbsd.org/ssh.1#L), and
+[Tailscale SSH](https://tailscale.com/docs/features/tailscale-ssh). No GOST extension is needed.
 
 ## Tailnet shell and `just`
 

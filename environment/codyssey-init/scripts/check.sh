@@ -3,6 +3,7 @@ set -eu
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 image="codyssey-init-check:local"
 native_python=0
+remote_upgrade=0
 case ${1:-} in
   '') [ "$#" -eq 0 ] ;;
   --native-python)
@@ -24,7 +25,17 @@ case ${1:-} in
     bash "$root/tests/gureum-activation-test.sh"
     native_python=1
     ;;
-  *) printf 'Usage: sh scripts/check.sh [--native-python]\n' >&2; exit 1 ;;
+  --remote-upgrade)
+    [ "$#" -eq 1 ]
+    legacy=a2838076abf01d03c02e672408adac51560a6c9b
+    legacy_tree=7c98c2ed11117d21d0a20e2d8300a36632c072f2
+    if [ "$(git -C "$root" rev-parse --verify "$legacy^{tree}" 2>/dev/null)" != "$legacy_tree" ]; then
+      printf 'The exact accepted %s tree must already be available in the local Git checkout.\n' "$legacy" >&2
+      exit 1
+    fi
+    remote_upgrade=1
+    ;;
+  *) printf 'Usage: sh scripts/check.sh [--native-python|--remote-upgrade]\n' >&2; exit 1 ;;
 esac
 docker version >/dev/null
 grep -qx '\*' "$root/.dockerignore"
@@ -48,7 +59,10 @@ tar -C "$root" -cf "$context/payload.tar" \
   scripts/configure-tailnet-browser.py scripts/verify-intel-macos.sh scripts/prepare-fusion-base.sh scripts/install-orbstack.sh scripts/vm-progress.sh \
   scripts/intel-macos-vm/run-unattended.sh scripts/intel-macos-vm/guest_credential.py \
   scripts/install-tailnet-tools.sh scripts/tailnet-dns.sh scripts/prepare-startup.sh scripts/install-iterm2.sh scripts/configure-iterm2.sh scripts/configure-shell.sh scripts/verify-tailnet-runtime.py \
-  tests/tailnet-dns-test.sh tests/gureum-activation-test.sh tests/gureum-activation-test.swift
+  tests/tailnet-dns-test.sh tests/gureum-activation-test.sh tests/gureum-activation-test.swift \
+  tunnel-ui/.dockerignore tunnel-ui/Dockerfile tunnel-ui/package.json tunnel-ui/package-lock.json tunnel-ui/index.html \
+  tunnel-ui/src/App.tsx tunnel-ui/src/styles.css tunnel-ui/server/main.mjs tunnel-ui/server/http.mjs \
+  tunnel-ui/server/tunnels.mjs tunnel-ui/server/gost.mjs tunnel-ui/server/config-file.mjs tunnel-ui/server/policy.mjs
 tar -C "$context" -xf "$context/payload.tar"
 rm "$context/payload.tar"
 printf 'Preparing isolated checks…\n'
@@ -59,6 +73,22 @@ else
   printf 'Check image build failed (exit %s).\n' "$result" >&2
   tail -n 12 "$context/build.log" >&2
   exit "$result"
+fi
+if [ "$remote_upgrade" -eq 1 ]; then
+  mkdir "$context/legacy"
+  git -C "$root/../.." archive "$legacy" init.sh environment/codyssey-init >"$context/legacy.tar"
+  tar -C "$context/legacy" -xf "$context/legacy.tar"
+  chmod -R a+rX "$context/legacy"
+  # The general check image uses a synthetic Docker ignore file. Ownership
+  # comparisons in this case must use the actual release asset instead.
+  install -m 0644 "$root/.dockerignore" "$context/release.dockerignore"
+  docker run --rm --network none --read-only \
+    --tmpfs /tmp:rw,exec,size=64m,mode=1777 \
+    --mount "type=bind,src=$context/legacy,dst=/legacy,readonly" \
+    --mount "type=bind,src=$context/release.dockerignore,dst=/src/.dockerignore,readonly" \
+    --security-opt no-new-privileges --cap-drop ALL \
+    --entrypoint bash "$image" /src/tests/bootstrap-remote.sh /legacy
+  exit 0
 fi
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,exec,size=64m,mode=1777 \

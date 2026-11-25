@@ -8,6 +8,25 @@
 
 ## 시작하기
 
+From the monorepo root, run `just materialize E1-2`, then enter `coursework/E1-2`.
+Standalone submissions already contain the generated tools. From the course root:
+
+```sh
+mise trust
+mise run setup
+mise exec -- just run
+mise exec -- just demo
+mise exec -- just check
+```
+
+`run` saves quiz state in the course directory; `demo` adds, lists and plays a
+quiz, then reads back its persisted score in a disposable directory. `check`
+runs the unit tests and the offline origin-command tests. For a Docker
+development shell, run `sh scripts/coursework.sh shell E1-2` from the monorepo
+root, or `sh .coursework-dev/shell.sh` from a standalone submission.
+
+### Python-only fallback
+
 Python 3.10 이상이 필요하며 외부 라이브러리는 사용하지 않습니다. 다음 스크립트는 프로젝트 루트에 `.venv`를 만들고 로컬 `src` 패키지를 연결합니다.
 
 ```bash
@@ -26,7 +45,8 @@ python -m unittest discover -s quiz_game/tests -v
 
 ## Portable verification
 
-Run the complete 35-test suite with Docker when Python is unavailable on the host:
+Run the complete 35-test suite with `mise exec -- just verify-docker` or, when
+the host has no Python or mise, with:
 
 ```sh
 sh scripts/verify.sh docker
@@ -36,6 +56,10 @@ The verifier builds only this project from a digest-pinned Python 3.13 image. It
 application, tests, and test support modules into the image, then runs with networking disabled, a
 read-only root filesystem, and an unprivileged user. The temporary container and verifier image are
 removed when the command exits.
+
+The checked-in submission evidence records the original standalone project.
+Its GitHub practice, tagging, and evidence refresh procedures target a separately
+approved standalone repository; they are not part of local coursework checks.
 
 ## 기능 목록
 

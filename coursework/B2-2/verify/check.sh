@@ -1,12 +1,14 @@
 #!/bin/bash
 set -euo pipefail
-node --test /app/tests/text-utils.test.mjs
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+node --test "$root/tests/text-utils.test.mjs"
 temp=$(mktemp -d)
 trap 'rm -rf "$temp"' EXIT
 export GIT_AUTHOR_NAME='Synthetic fixture' GIT_COMMITTER_NAME='Synthetic fixture'
 export GIT_AUTHOR_EMAIL='fixture@example.invalid' GIT_COMMITTER_EMAIL='fixture@example.invalid'
 export GIT_AUTHOR_DATE='2026-01-01T00:00:00+0000' GIT_COMMITTER_DATE='2026-01-01T00:00:00+0000'
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
 git_lab() { GIT_MASTER=1 git -c credential.helper= -C "$temp/repo" "$@"; }
 GIT_MASTER=1 git init -b main "$temp/repo" >/dev/null
 printf 'base\n' > "$temp/repo/shared.txt"

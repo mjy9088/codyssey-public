@@ -11,8 +11,8 @@
 
 ## Tooling and automation
 
-- Use `mise` to declare the development tool versions in `mise.toml`.
-- Put routine project commands in `Justfile` recipes. Prefer `just test`, `just check`, `just run`, and `just analyze` over repeatedly documenting long command lines.
+- Declare tool versions through shared coursework materialization; do not edit the generated `mise.toml`.
+- Put routine project commands in `workflow.just`, imported by the generated Justfile. Prefer `just test`, `just check`, `just run`, and `just analyze` over repeatedly documenting long command lines.
 - Prefer a `just` recipe over adding a shell script when the task is short and project-local.
 - When a shell script is genuinely useful, invoke it explicitly as `sh path/to/script.sh`. Do not rely on executable permission bits being preserved or shared by Git.
 - Keep text-file behavior consistent through `.editorconfig` and `.gitattributes`; avoid committing generated caches or machine-specific files.

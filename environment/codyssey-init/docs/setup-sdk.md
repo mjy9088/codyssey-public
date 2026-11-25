@@ -33,6 +33,7 @@ The Tailnet operations expect a running Docker engine with Compose and mise avai
 Operations accept an `AbortSignal` and an optional `onOutput` callback. Output arrives as
 stdout/stderr chunks. Treat login URLs as private. Operation results include the exit code and
 termination signal. Tailnet startup also returns its readiness state and the applicable URLs.
+The local manager is returned as `tunnelUrl` in the `running` and `needs-login` states.
 Browser login, an existing `.env`, or an explicit key are separate authentication choices. An
 explicit SDK key is passed to the child environment. The SDK uses neither an auth prompt nor a
 browser launch, and does not write the key to a configuration file.

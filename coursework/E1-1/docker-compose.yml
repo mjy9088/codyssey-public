@@ -12,8 +12,8 @@ services:
       LAB_GIT_NAME: "${LAB_GIT_NAME:-workstation-student}"
       LAB_GIT_EMAIL: "${LAB_GIT_EMAIL:-student@example.invalid}"
     ports:
-      - "8080:8080"
-      - "8081:8081"
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
     volumes:
       - .:/workspace
       - ./volumes/bind-mount:/mnt/host-bind-mount-volume

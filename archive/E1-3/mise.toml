@@ -1,6 +1,0 @@
-[tools]
-python = "3.12"
-just = "1"
-
-[env]
-PYTHONDONTWRITEBYTECODE = "1"

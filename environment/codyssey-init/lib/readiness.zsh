@@ -1,5 +1,20 @@
 #!/usr/bin/env zsh
 
+check_tunnel_upgrade() {
+  local containers name control
+  if ! containers=$(docker container ls --all --filter 'name=^/tailnet-forward-(gost|ui)$' \
+      --format '{{.Names}} {{.Label "org.codyssey.tunnel-control"}}' 2>/dev/null); then
+    printf 'Cannot check for legacy GOST containers. Make the selected Docker engine reachable and retry.\n' >&2
+    return 1
+  fi
+  while read -r name control; do
+    if [[ $name == tailnet-forward-ui || ( $name == tailnet-forward-gost && $control != unix-v1 ) ]]; then
+      printf 'Legacy GOST containers found. Save pending changes in the old UI and run docker compose down with the old Compose file before retrying.\n' >&2
+      return 1
+    fi
+  done <<< "$containers"
+}
+
 read_tailnet_backend() {
   local backend_json
   backend_json=$(docker compose exec -T tailscale tailscale status --json 2>/dev/null || true)
@@ -21,7 +36,7 @@ wait_for_tailnet() {
     fi
     sleep 1
   done
-  printf 'Services did not become ready. Run: docker compose logs tailscale gost gost-ui\n' >&2
+  printf 'Services did not become ready. Run: docker compose logs tailscale gost tunnel-ui\n' >&2
   return 1
 }
 
@@ -41,18 +56,17 @@ find_tailscale_auth_url() {
   return 1
 }
 
-wait_for_gost_ui() {
+wait_for_tunnel_ui() {
   local running
   for _ in {1..60}; do
     running=$(docker compose ps --status running --services 2>/dev/null || true)
     if print -r -- "$running" | grep -qx gost \
-      && print -r -- "$running" | grep -qx gost-ui \
-      && curl --silent --fail --output /dev/null 'http://localhost:18080/config' \
-      && curl --silent --fail --output /dev/null "$ui_url"; then
+      && print -r -- "$running" | grep -qx tunnel-ui \
+      && curl --noproxy '*' --silent --fail --max-time 4 --output /dev/null "${ui_url}health"; then
       return 0
     fi
     sleep 1
   done
-  printf 'GOST API/UI did not become ready: %s\n' "$ui_url" >&2
+  printf 'Codyssey tunnels did not become ready: %s\n' "$ui_url" >&2
   return 1
 }

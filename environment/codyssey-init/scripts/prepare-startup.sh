@@ -66,9 +66,9 @@ run_preparation_step() {
 
 prepare_container_images() {
   local build_pid pull_pid build_result pull_result
-  docker compose build tailscale &
+  docker compose build tailscale tunnel-ui &
   build_pid=$!
-  docker compose pull gost gost-ui &
+  docker compose pull gost &
   pull_pid=$!
   preparation_groups="$build_pid $pull_pid"
   : >"$ready_path"
