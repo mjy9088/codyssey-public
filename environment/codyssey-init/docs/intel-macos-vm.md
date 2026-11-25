@@ -60,9 +60,12 @@ script leaves the installer available for the next run. [Apple's installer downl
 
 The terminal shows native percentages for disk-image conversion and download
 progress when the tool reports a total. Full Fusion clones report the bytes
-written and elapsed time about every ten seconds. Steps that cannot estimate
-completion, such as waiting for SSH or checking signatures, report elapsed
-time. Follow the guest installer window for the macOS installation itself.
+written and elapsed time about every ten seconds. Guest preparation reports
+changes in SSH and desktop readiness. The guest installer reports recognized installer steps and target disk
+growth in `03-installer.log`. It times out after two hours without observed
+progress. Target disk growth, a lower recognized time estimate, and new installer
+steps extend the wait. Open the Fusion window or read `installer-screen.txt` in
+the run directory to see the latest screen.
 
 ### Store VMs on an external disk
 
@@ -219,7 +222,8 @@ bash scripts/intel-macos-vm/05-prepare-base.sh
 ```
 
 Pass the VMX when resuming an imported base that has yet to be saved.
-Set `CODYSSEY_FUSION_PREPARE_TIMEOUT` in seconds for a longer wait.
+Set `CODYSSEY_FUSION_PREPARE_TIMEOUT` in seconds to allow more time between guest
+readiness milestones.
 
 If step 04 cannot download the Tools image, place Broadcom's published
 [`darwin.iso`](https://packages-prod.broadcom.com/tools/frozen/darwin/darwin.iso) in

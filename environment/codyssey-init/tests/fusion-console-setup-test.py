@@ -89,16 +89,24 @@ class ConsoleSetupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             vmx = Path(temporary) / "base.vmx"
             vmx.with_name("vmware.log").write_text("Started VNC server, listening at 127.0.0.1:49999\n")
+            clock = 0
+
+            def slow_guest(_seconds):
+                nonlocal clock
+                clock += 110
+
             with (
                 patch.object(console, "guest_password", return_value="disposable"),
                 patch.object(console, "read_frame", side_effect=[frames[0]] * 2 + [frames[1]] * 4),
                 patch.object(console, "console", return_value=MagicMock()),
                 patch.object(console, "click") as click,
-                patch.object(console.time, "sleep"),
-                patch.object(console.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="ready")),
+                patch.object(console.time, "monotonic", side_effect=lambda: clock),
+                patch.object(console.time, "sleep", side_effect=slow_guest),
+                patch.object(console.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="ready")) as status,
             ):
                 console.open_setup("/fake/vmcli", vmx, "/fake/ocr", vmx.with_suffix(".png"), 49999, "vmuser", "1234")
             self.assertEqual([entry.args[-1] for entry in click.call_args_list], [2, 1])
+            self.assertEqual(status.call_count, 4)
 
     def test_vmware_authorization_after_the_extension_prompt_can_omit_the_account_label(self):
         labels = [

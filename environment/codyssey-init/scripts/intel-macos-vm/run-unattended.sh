@@ -164,7 +164,7 @@ else
       if [[ $(stat -f %d "$installer") == "$(stat -f %d "$run/installers")" ]]; then
         vm_progress_path="$local_iso" vm_progress "Staging the installer ISO" cp -c "$installer" "$local_iso"
       else
-        vm_progress "Copying the installer ISO" rsync --progress -- "$installer" "$local_iso"
+        rsync --progress -- "$installer" "$local_iso"
       fi
     } 2>&1 | tee "$run/01-media.log"
     fusion_remember_media "$run/installers/Sequoia-local.iso"

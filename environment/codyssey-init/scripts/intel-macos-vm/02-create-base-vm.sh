@@ -8,7 +8,6 @@ usage() {
 scripts=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 # shellcheck source=scripts/vm-fusion.sh
 . "$scripts/vm-fusion.sh"
-. "$scripts/vm-progress.sh"
 fusion_require_intel
 if [[ $# == 0 ]]; then
   installer=$(fusion_selected_media)
@@ -87,9 +86,11 @@ printf 'Creating base: %s\n' "$bundle"
 console_port=${CODYSSEY_FUSION_INSTALL_CONSOLE_PORT:-}
 if [[ -n $console_port ]]; then
   [[ $console_port =~ ^[1-9][0-9]{3,4}$ ]] && (( console_port <= 65535 )) || exit 2
-  vm_progress "Preparing the guest target disk" bash "$scripts/intel-macos-vm/create-install-target.sh" "$bundle" "$vdiskmanager"
+  printf 'Preparing the guest target disk.\n'
+  bash "$scripts/intel-macos-vm/create-install-target.sh" "$bundle" "$vdiskmanager"
 else
-  vm_progress "Creating the guest target disk" "$vdiskmanager" -c -s 80GB -a lsilogic -t 0 "$bundle/Target.vmdk"
+  printf 'Creating the guest target disk.\n'
+  "$vdiskmanager" -c -s 80GB -a lsilogic -t 0 "$bundle/Target.vmdk"
 fi
 
 vmx="$bundle/$name.vmx"
@@ -150,4 +151,5 @@ EOF
 fi
 printf 'Base VMX: %s\n' "$vmx"
 fusion_remember_base "$vmx"
+printf 'Starting the guest in VMware Fusion.\n'
 fusion start "$vmx" gui

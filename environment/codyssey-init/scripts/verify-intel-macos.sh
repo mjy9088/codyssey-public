@@ -90,7 +90,7 @@ elif [[ ! -s $pin ]]; then
   printf 'The saved SSH host key file is empty or missing: %s\n' "$pin" >&2
   exit 1
 fi
-printf 'Waiting for guest preparation (up to %s seconds).\n' "$timeout"
+printf 'Waiting for guest preparation (%s-second inactivity limit).\n' "$timeout"
 if fusion_uses_lab_password; then
   address_status='Waiting for Fusion to report a guest IPv4 address.'
   clt_status='SSH is connected. Waiting for Command Line Tools.'
@@ -103,8 +103,9 @@ else
   console_status="SSH is connected. Sign in to the guest desktop as $CODYSSEY_FUSION_GUEST_USER and leave that session open."
 fi
 previous_status=
-next_report=$SECONDS
+furthest_stage=0
 while :; do
+  stage=0
   if (( new_pin )) && [[ ! -s $temp/known_hosts ]]; then
     # This variable is scoped to the selected VMX through Fusion's guest channel.
     guest_key=$(fusion readVariable "$base" guestVar codyssey.ssh-host-key 2>/dev/null) || guest_key=
@@ -130,22 +131,29 @@ while :; do
   else
     vm_init "$base" prepared-base
     if ! fusion_address=$(fusion_guest_address "$base" 2>/dev/null); then
+      stage=1
       status=$address_status
     elif fusion_console_ready >/dev/null 2>&1; then
       if fusion_uses_lab_password || vm_exec /usr/bin/xcode-select -p >/dev/null 2>&1; then
         break
       fi
+      stage=4
       status=$clt_status
     elif [[ $? == 255 ]]; then
+      stage=2
       status=$ssh_status
     else
+      stage=3
       status=$console_status
     fi
   fi
-  if [[ $status != "$previous_status" || $SECONDS -ge $next_report ]]; then
-    printf '%s (%ss elapsed.)\n' "$status" "$((timeout - deadline + SECONDS))"
+  if (( stage > furthest_stage )); then
+    furthest_stage=$stage
+    deadline=$((SECONDS + timeout))
+  fi
+  if [[ $status != "$previous_status" ]]; then
+    printf '%s\n' "$status"
     previous_status=$status
-    next_report=$((SECONDS + 10))
   fi
   remaining=$((deadline - SECONDS))
   if (( remaining <= 0 )); then

@@ -55,7 +55,8 @@ if [[ -s $iso && -f $iso && ! -L $iso ]]; then
   printf 'Existing installer: %s\n' "$iso"
   exit 0
 fi
-if ! vm_progress "Fetching macOS Sequoia $version from Apple" softwareupdate --fetch-full-installer --full-installer-version "$version"; then
+printf 'Fetching macOS Sequoia %s from Apple.\n' "$version"
+if ! softwareupdate --fetch-full-installer --full-installer-version "$version"; then
   quit_installer "$app"
   printf 'Could not fetch Sequoia %s. Retry, use --list, or supply a full installer with --app.\n' "$version" >&2
   exit 1

@@ -28,6 +28,35 @@ input_driver = load_script("drive-workstation-input.py")
 
 
 class InstallerScreenTests(unittest.TestCase):
+    def test_disk_growth_extends_installation_past_original_deadline(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary)
+            vmx = run / "Guest.vmx"
+            vmx.touch()
+            clock = 0
+
+            def sleep(seconds):
+                nonlocal clock
+                clock += seconds
+
+            # An unchanged screen provides no evidence of progress.
+            with (patch.object(installer, "INSTALL_IDLE_TIMEOUT", 60),
+                  patch.object(installer.time, "monotonic", side_effect=lambda: clock),
+                  patch.object(installer.time, "sleep", side_effect=sleep),
+                  patch.object(installer, "target_disk_blocks", side_effect=[0, 0, 1, 2, 2, 2]),
+                  patch.object(installer, "read_frame", return_value=((1024, 768), [])) as capture,
+                  patch("sys.stdout", new_callable=io.StringIO) as output):
+                with self.assertRaisesRegex(TimeoutError, "No macOS installer progress for 60s"):
+                    installer.drive_installer(vmx, None, None, run, 5900, False)
+            self.assertEqual(clock, 120)
+            self.assertEqual(capture.call_count, 4)
+            self.assertEqual(output.getvalue().count("Fusion guest console is visible."), 1)
+
+    def test_installer_reads_hour_and_minute_estimates(self):
+        self.assertEqual(installer.installer_minutes_remaining([(0.5, 0.5, "About 1 hour and 15 minutes remaining")]), 75)
+        self.assertEqual(installer.installer_minutes_remaining([(0.5, 0.5, "About 8 minutes remaining.")]), 8)
+        self.assertIsNone(installer.installer_minutes_remaining([(0.5, 0.5, "8 minutes after startup")]))
+
     def test_language_selection_is_bound_to_the_recovery_picker(self):
         labels = [(0.5, 0.36, "Language"), (0.5, 0.43, "English")]
         self.assertEqual(installer.installer_action(labels), ("language", (0.5, 0.43), 1))

@@ -155,7 +155,7 @@ if (( vnc_enabled )); then
     printf 'Waiting for Finder to show the guest setup file. Sign in to the guest if needed.\n'
   fi
   if CODYSSEY_FUSION_USE_LAB_PASSWORD=$lab_password \
-    vm_progress "Waiting for the guest setup to report ready" python3 "$launcher/open-guest-setup.py" "$fusion_vmcli" "$base" "$work/recognize" "$work/screen.png" "$port" "$guest_user" "$prompt_id"; then
+    python3 "$launcher/open-guest-setup.py" "$fusion_vmcli" "$base" "$work/recognize" "$work/screen.png" "$port" "$guest_user" "$prompt_id"; then
     setup_opened=1
   fi
 fi

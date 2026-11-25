@@ -18,13 +18,11 @@ fi
   printf 'Build this VMware Fusion installer on an Intel Mac.\n' >&2
   exit 1
 }
-scripts=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
-. "$scripts/vm-progress.sh"
-
 convert_image() {
   local label=$1
   shift
-  vm_progress "$label" hdiutil convert -puppetstrings "$@" |
+  printf '%s…\n' "$label" >&2
+  hdiutil convert -puppetstrings "$@" |
     LC_ALL=C awk '
       BEGIN { last = -5 }
       /^MESSAGE:/ { sub(/^MESSAGE:/, ""); print; fflush(); next }
@@ -109,7 +107,8 @@ candidate=$(/usr/libexec/PlistBuddy -c 'Print :system-entities:0:dev-entry' "$wo
 }
 device=${BASH_REMATCH[1]}
 if [[ ${CODYSSEY_FUSION_HOST_AUTH:-terminal} == dialog ]]; then
-  vm_progress "Writing the installer volume (host authorization may be pending)" /usr/bin/osascript - "$installer" "$mount" <<'APPLESCRIPT'
+  printf 'Authorize writing the installer volume in the macOS dialog.\n' >&2
+  /usr/bin/osascript - "$installer" "$mount" <<'APPLESCRIPT'
 on run arguments
   set installer to quoted form of item 1 of arguments
   set targetVolume to quoted form of item 2 of arguments
@@ -117,9 +116,10 @@ on run arguments
 end run
 APPLESCRIPT
 else
-  # Finish terminal authentication before the background progress output starts.
+  # Keep the authorization prompt ahead of the installer output.
   sudo -v -p 'Codyssey installer administrator password for %p: '
-  vm_progress "Writing the installer volume" sudo -n "$installer" --volume "$mount" --nointeraction
+  printf 'Writing the installer volume…\n' >&2
+  sudo -n "$installer" --volume "$mount" --nointeraction
 fi
 hdiutil detach "$device"
 attached=0

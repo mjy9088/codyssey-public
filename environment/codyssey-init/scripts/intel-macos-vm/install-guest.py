@@ -10,6 +10,30 @@ import time
 from fusion_console import click, console, decline_app_reopen, find_text, read_frame, same_target, type_text
 from guest_credential import LAB_GUEST_PASSWORD
 
+INSTALL_IDLE_TIMEOUT = 7200
+BLOCKS_PER_GIB = 2 ** 21  # stat reports allocated space in 512-byte blocks.
+
+
+def target_disk_blocks(bundle):
+    blocks = 0
+    for image in bundle.glob("Target*.vmdk"):
+        try:
+            blocks += image.stat().st_blocks
+        except FileNotFoundError:
+            continue
+    return blocks
+
+
+def installer_minutes_remaining(items):
+    for _, _, text in items:
+        match = re.fullmatch(
+            r"(?:About )?(?:(\d+) hours?(?: and )? *)?(?:(\d+) minutes?)? remaining\.?",
+            text, re.IGNORECASE,
+        )
+        if match and any(match.groups()):
+            return 60 * int(match[1] or 0) + int(match[2] or 0)
+    return None
+
 
 def setup_action(items, account_filled):
     def button(pattern):
@@ -108,7 +132,11 @@ def installer_action(items):
 
 def drive_installer(vmx, vmcli, recognizer, output, port, accepted, setup_only=False):
     vmx = vmx.resolve(strict=True)
-    deadline = time.monotonic() + 7200
+    last_progress = time.monotonic()
+    disk_blocks = target_disk_blocks(vmx.parent)
+    completed_actions = set()
+    first_frame = True
+    lowest_minutes_remaining = None
     before = None
     selected_disk = False
     installing = False
@@ -117,9 +145,20 @@ def drive_installer(vmx, vmcli, recognizer, output, port, accepted, setup_only=F
     analytics_disabled = False
     desktop = False
     shutdown_requested = False
-    while time.monotonic() < deadline:
+    print("Waiting for the macOS installer console.", flush=True)
+    while True:
+        if not setup and (blocks := target_disk_blocks(vmx.parent)) > disk_blocks:
+            if blocks // BLOCKS_PER_GIB > disk_blocks // BLOCKS_PER_GIB:
+                print(f"Guest target disk uses {blocks // BLOCKS_PER_GIB} GiB on the host.", flush=True)
+            disk_blocks = blocks
+            last_progress = time.monotonic()
+        if time.monotonic() - last_progress >= INSTALL_IDLE_TIMEOUT:
+            raise TimeoutError(
+                f"No macOS installer progress for {INSTALL_IDLE_TIMEOUT}s. "
+                f"Check the Fusion window and {output / 'installer-screen.txt'}."
+            )
         try:
-            size, items = read_frame(vmcli, vmx, recognizer, output / "installer.png", "vmuser")
+            size, items = read_frame(vmcli, vmx, recognizer, output / "installer.png", "vmuser", timeout=60)
         except (OSError, ValueError, subprocess.SubprocessError):
             if shutdown_requested:
                 inventory = subprocess.check_output(
@@ -131,14 +170,25 @@ def drive_installer(vmx, vmcli, recognizer, output, port, accepted, setup_only=F
             before = None
             time.sleep(10)
             continue
+        if first_frame:
+            print("Fusion guest console is visible.", flush=True)
+            first_frame = False
+            last_progress = time.monotonic()
+        if installing and not setup:
+            remaining = installer_minutes_remaining(items)
+            if remaining is not None and (lowest_minutes_remaining is None or remaining < lowest_minutes_remaining):
+                lowest_minutes_remaining = remaining
+                last_progress = time.monotonic()
         (output / "installer-screen.txt").write_text("\n".join(text for _, _, text in items) + "\n")
         words = " ".join(text.lower() for _, _, text in items)
         if installing and not setup and ("select your country" in words or "setup assistant" in words):
             print("macOS Setup Assistant is visible.", flush=True)
             setup = True
+            last_progress = time.monotonic()
         if setup and account_filled and not desktop and find_text(items, "Finder", lambda x, y: x < 0.22 and y < 0.04):
             print("First Finder desktop is visible.", flush=True)
             desktop = True
+            last_progress = time.monotonic()
         if desktop:
             stop = find_text(items, r"Shut Down(?:…|\.\.\.)?", lambda x, y: 0.02 < x < 0.72 and 0.10 < y < 0.90)
             if stop:
@@ -182,7 +232,14 @@ def drive_installer(vmx, vmcli, recognizer, output, port, accepted, setup_only=F
                 if label == "language":
                     # The Recovery language picker uses an unlabeled arrow.
                     click(client, size, (0.857, 0.853), 1)
-            print(f"Installer screen: {label}", flush=True)
+            # Several distinct Setup Assistant screens share the Continue button.
+            progress = label
+            if label == "setup-continue":
+                progress = (label, frozenset(text.casefold() for _, _, text in items))
+            if progress not in completed_actions:
+                completed_actions.add(progress)
+                print(f"Installer screen: {label}", flush=True)
+                last_progress = time.monotonic()
             if label == "disk":
                 selected_disk = True
             elif label == "install" or (label == "continue" and selected_disk):
@@ -195,7 +252,6 @@ def drive_installer(vmx, vmcli, recognizer, output, port, accepted, setup_only=F
         else:
             before = action
         time.sleep(8 if action else 30)
-    raise TimeoutError("macOS installation screen timed out")
 
 
 def guest_has_stopped(inventory, vmx):

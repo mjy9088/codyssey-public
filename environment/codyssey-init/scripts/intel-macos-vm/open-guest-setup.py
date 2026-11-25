@@ -95,6 +95,7 @@ def open_setup(vmcli, vmx, recognizer, image, port, user, prompt_id):
     password = guest_password()
     opened = False
     handled = set()
+    completed_actions = set()
     ready_frames = 0
     while time.monotonic() < deadline:
         guest_ready = False
@@ -170,7 +171,11 @@ def open_setup(vmcli, vmx, recognizer, image, port, user, prompt_id):
                     deadline = time.monotonic() + 300
                 elif opened or label in ("login", "decline-app-reopen"):
                     handled.add(label)
-                    print("Handled the guest " + label + " prompt.", flush=True)
+                if label not in completed_actions:
+                    completed_actions.add(label)
+                    if label != "setup":
+                        deadline = time.monotonic() + (300 if opened else 420)
+                        print("Guest setup console: " + label, flush=True)
                 previous = None
             else:
                 previous = target

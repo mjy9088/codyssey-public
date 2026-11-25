@@ -8,9 +8,9 @@ import subprocess
 import time
 
 
-def read_frame(vmcli, vmx, recognizer, image, user):
+def read_frame(vmcli, vmx, recognizer, image, user, *, timeout=15):
     image.unlink(missing_ok=True)
-    subprocess.run([vmcli, vmx, "MKS", "captureScreenshot", image], check=True, timeout=15)
+    subprocess.run([vmcli, vmx, "MKS", "captureScreenshot", image], check=True, timeout=timeout)
     with image.open("rb") as frame:
         png = frame.read(24)
     if png[:16] != b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR":
@@ -18,7 +18,7 @@ def read_frame(vmcli, vmx, recognizer, image, user):
     size = struct.unpack(">II", png[16:])
     if min(size) <= 2:
         raise ValueError("the guest display is still starting")
-    output = subprocess.check_output([recognizer, image, user], text=True, timeout=15, stderr=subprocess.DEVNULL)
+    output = subprocess.check_output([recognizer, image, user], text=True, timeout=timeout, stderr=subprocess.DEVNULL)
     lines = [line.split("\t", 2) for line in output.splitlines()]
     return size, [(float(x), float(y), name.strip()) for x, y, name in lines if name.strip()]
 
