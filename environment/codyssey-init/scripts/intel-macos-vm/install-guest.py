@@ -7,11 +7,12 @@ import re
 import subprocess
 import time
 
-from fusion_console import click, console, decline_app_reopen, find_text, read_frame, same_target, type_text
+from fusion_console import click, console, decline_app_reopen, find_text, read_frame, same_target, scroll_down, type_text
 from guest_credential import LAB_GUEST_PASSWORD
 
 INSTALL_IDLE_TIMEOUT = 7200
 BLOCKS_PER_GIB = 2 ** 21  # stat reports allocated space in 512-byte blocks.
+COUNTRY_SCREEN = "select your country"
 
 
 def target_disk_blocks(bundle):
@@ -35,7 +36,7 @@ def installer_minutes_remaining(items):
     return None
 
 
-def setup_action(items, account_filled):
+def setup_action(items, account_filled, country_list=None):
     def button(pattern):
         return find_text(items, pattern, lambda _x, y: 0.59 < y < 0.97)
 
@@ -86,14 +87,14 @@ def setup_action(items, account_filled):
             skip = button(choices) or find_text(items, choices, lambda x, y: 0.14 < x < 0.88 and 0.32 < y < 0.96)
             if skip:
                 return (title, skip, 1)
-    if "select your country or region" in words or "select your country" in words:
+    if COUNTRY_SCREEN in words:
         region = find_text(items, "United States", lambda x, y: 0.15 < x < 0.85 and 0.20 < y < 0.85)
         if proceed and region:
             return ("region", (region, proceed), 1)
         if proceed:
             first_region = find_text(items, "Afghanistan", lambda x, y: 0.30 < x < 0.60 and 0.35 < y < 0.68)
-            if first_region:
-                return ("find-region", first_region, 1)
+            if country_list or first_region:
+                return ("find-region", country_list or first_region, 1)
     if proceed and any(title in words for title in (
         "written and spoken languages", "data & privacy", "data and privacy",
         "enable location services", "select your time zone", "choose your look", "welcome to mac",
@@ -145,6 +146,10 @@ def drive_installer(vmx, vmcli, recognizer, output, port, accepted, setup_only=F
     analytics_disabled = False
     desktop = False
     shutdown_requested = False
+    country_list = None
+    country_scrolls = 0
+    country_rows = None
+    unchanged_country_scrolls = 0
     print("Waiting for the macOS installer console.", flush=True)
     while True:
         if not setup and (blocks := target_disk_blocks(vmx.parent)) > disk_blocks:
@@ -181,7 +186,7 @@ def drive_installer(vmx, vmcli, recognizer, output, port, accepted, setup_only=F
                 last_progress = time.monotonic()
         (output / "installer-screen.txt").write_text("\n".join(text for _, _, text in items) + "\n")
         words = " ".join(text.lower() for _, _, text in items)
-        if installing and not setup and ("select your country" in words or "setup assistant" in words):
+        if installing and not setup and (COUNTRY_SCREEN in words or "setup assistant" in words):
             print("macOS Setup Assistant is visible.", flush=True)
             setup = True
             last_progress = time.monotonic()
@@ -198,7 +203,7 @@ def drive_installer(vmx, vmcli, recognizer, output, port, accepted, setup_only=F
             else:
                 action = None
         else:
-            action = setup_action(items, account_filled) if setup else installer_action(items)
+            action = setup_action(items, account_filled, country_list) if setup else installer_action(items)
             if analytics_disabled and action and action[0] == "disable-analytics":
                 action = ("setup-continue", action[1][1], 1)
         if installing and not setup and action and action[0] == "recovery":
@@ -225,8 +230,18 @@ def drive_installer(vmx, vmcli, recognizer, output, port, accepted, setup_only=F
                     for button in point:
                         click(client, size, button, 1)
                 elif label == "find-region":
-                    click(client, size, point, 1)
-                    type_text(client, "United States")
+                    # Read each viewport before scrolling again or choosing a region.
+                    rows = frozenset(text.casefold() for x, y, text in items if 0.15 < x < 0.85 and 0.35 < y < 0.68)
+                    unchanged_country_scrolls = unchanged_country_scrolls + 1 if rows == country_rows else 0
+                    if unchanged_country_scrolls >= 3 or country_scrolls >= 150:
+                        raise RuntimeError(
+                            "Could not find United States in the guest country list. "
+                            f"Check the Fusion window and {output / 'installer-screen.txt'}."
+                        )
+                    country_rows = rows
+                    country_list = point
+                    country_scrolls += 1
+                    scroll_down(client, size, point)
                 else:
                     click(client, size, point, count)
                 if label == "language":
@@ -251,7 +266,10 @@ def drive_installer(vmx, vmcli, recognizer, output, port, accepted, setup_only=F
             before = None
         else:
             before = action
-        time.sleep(8 if action else 30)
+        if action and action[0] == "find-region":
+            time.sleep(2)
+        else:
+            time.sleep(8 if action else 30)
 
 
 def guest_has_stopped(inventory, vmx):

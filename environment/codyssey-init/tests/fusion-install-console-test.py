@@ -97,7 +97,7 @@ class InstallerScreenTests(unittest.TestCase):
         )
         self.assertIsNone(installer.setup_action(labels[:-2], False))
 
-    def test_country_search_only_focuses_the_country_list(self):
+    def test_country_search_stays_in_the_country_list_after_first_row_disappears(self):
         labels = [
             (0.5, 0.36, "Select Your Country or Region"),
             (0.4, 0.45, "Afghanistan"),
@@ -105,6 +105,44 @@ class InstallerScreenTests(unittest.TestCase):
         ]
         self.assertEqual(installer.setup_action(labels, False), ("find-region", (0.4, 0.45), 1))
         self.assertIsNone(installer.setup_action(labels[1:], False))
+        scrolled = [labels[0], (0.4, 0.45, "Canada"), labels[2]]
+        self.assertEqual(installer.setup_action(scrolled, False, (0.4, 0.45)),
+                         ("find-region", (0.4, 0.45), 1))
+        scrolled[1] = (0.4, 0.50, "United States")
+        self.assertEqual(installer.setup_action(scrolled, False, (0.4, 0.45)),
+                         ("region", ((0.4, 0.50), (0.84, 0.85)), 1))
+
+    def test_country_search_scrolls_then_selects_only_the_recognized_region(self):
+        self.exercise_country_search(stuck=False)
+
+    def test_country_search_reports_a_stuck_list_without_pressing_continue(self):
+        self.exercise_country_search(stuck=True)
+
+    def exercise_country_search(self, *, stuck):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary)
+            vmx = run / "Guest.vmx"
+            vmx.touch()
+            vmx.with_name("vmware.log").write_text("Started VNC server, listening at 127.0.0.1:5900\n")
+            size = (1024, 768)
+            title = (0.5, 0.36, "Select Your Country or Region")
+            proceed = (0.84, 0.85, "Continue")
+            first = (size, [title, (0.4, 0.45, "Afghanistan"), proceed])
+            middle = (size, [title, (0.4, 0.45, "Canada"), proceed])
+            found = (size, [title, (0.4, 0.50, "United States"), proceed])
+            frames = [first] * 8 if stuck else [first] * 2 + [middle] * 2 + [found] * 2
+            with (patch.object(installer, "read_frame", side_effect=[*frames, RuntimeError("test complete")]),
+                  patch.object(installer.time, "sleep"),
+                  patch.object(installer, "console", return_value=MagicMock()),
+                  patch.object(installer, "scroll_down") as scroll,
+                  patch.object(installer, "click") as click,
+                  patch("sys.stdout", new_callable=io.StringIO)):
+                message = "Could not find United States" if stuck else "test complete"
+                with self.assertRaisesRegex(RuntimeError, message):
+                    installer.drive_installer(vmx, None, None, run, 5900, False, setup_only=True)
+            self.assertEqual(scroll.call_count, 3 if stuck else 2)
+            self.assertEqual([call.args[2] for call in click.call_args_list],
+                             [] if stuck else [(0.4, 0.50), (0.84, 0.85)])
 
     def test_new_mac_option_is_selected_before_continuing(self):
         labels = [

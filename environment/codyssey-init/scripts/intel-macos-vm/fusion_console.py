@@ -95,6 +95,16 @@ def click(connection, size, point, count):
         time.sleep(0.08)
 
 
+def scroll_down(connection, size, point):
+    x, y = (int(length * coordinate) for length, coordinate in zip(size, point))
+    if not (0 <= x < size[0] and 0 <= y < size[1]):
+        raise ValueError("scroll target is outside the guest screen")
+    # RFB encodes a downward wheel tick as a press and release of button 5.
+    for _ in range(3):
+        connection.sendall(struct.pack(">BBHH", 5, 16, x, y))
+        connection.sendall(struct.pack(">BBHH", 5, 0, x, y))
+
+
 def key_event(connection, keysym, down):
     connection.sendall(struct.pack(">BBHI", 4, down, 0, keysym))
     time.sleep(0.035)
