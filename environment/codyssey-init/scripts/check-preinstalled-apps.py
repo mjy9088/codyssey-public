@@ -52,10 +52,10 @@ def main(workstation=False):
         if probe.returncode == 0:
             raise RuntimeError("Docker is already on the login PATH; use a fresh base")
     for binary, argument in zip(binaries, ("--version", "version", "version")):
-        result = subprocess.run([str(binary), argument], capture_output=True, text=True, timeout=20)
+        result = subprocess.run([str(binary), argument], capture_output=True, text=True, timeout=200)
         if result.returncode:
             raise RuntimeError("Bundled CLI version query failed: " + binary.name + ": " + result.stderr[-400:])
-    subprocess.run(["/usr/bin/swift", "--version"], check=True, capture_output=True, timeout=30)
+    subprocess.run(["/usr/bin/swift", "--version"], check=True, capture_output=True, timeout=300)
     path_check = "" if workstation else ", and missing Docker PATH"
     print("PASS: installed app identities, Gureum executable, bundled CLI execution, Swift"
           f"{path_check}; no engine started.")

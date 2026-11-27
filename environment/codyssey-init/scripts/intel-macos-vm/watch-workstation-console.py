@@ -47,7 +47,8 @@ def action_for(items, user, signed_in):
 
 def watch(vmcli, vmx, recognizer, port, user, image):
     password = guest_password()
-    deadline = time.monotonic() + 2400
+    # Allow for guest boot and staging before the one-hour workstation check.
+    deadline = time.monotonic() + 4800
     signed_in = False
     previous = None
     while time.monotonic() < deadline:

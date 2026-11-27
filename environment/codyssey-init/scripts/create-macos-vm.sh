@@ -130,7 +130,7 @@ transfer=
 if (( build_preinstalled )); then
   vm_exec /bin/bash "$guest_root/scripts/install-preinstalled-apps.sh" --disposable
 elif (( workstation )); then
-  vm_desktop_exec "$guest_root" 1200 /bin/bash "$guest_root/scripts/verify-macos-vm.sh" --disposable --workstation
+  vm_desktop_exec "$guest_root" 3600 /bin/bash "$guest_root/scripts/verify-macos-vm.sh" --disposable --workstation
 else
   if (( preinstalled )); then
     vm_exec /usr/bin/python3 "$guest_root/scripts/check-preinstalled-apps.py"
